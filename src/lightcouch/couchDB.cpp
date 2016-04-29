@@ -40,6 +40,10 @@ const ConstStrA CouchDB::POST("POST");
 const ConstStrA CouchDB::PUT("PUT");
 const ConstStrA CouchDB::DELETE("DELETE");
 
+const ConstStrA CouchDB::disableCache("disableCache");
+const ConstStrA CouchDB::refreshCache("refreshCache");
+const ConstStrA CouchDB::storeHeaders("storeHeaders");
+
 
 
 static JSON::PFactory createFactory(JSON::PFactory jfact) {
@@ -118,7 +122,30 @@ JSON::Value CouchDB::requestJson(ConstStrA method, ConstStrA path, JSON::Value p
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
 
-	bool storeHeaders = headers != null;
+	bool hasheaders = headers != null;
+	bool storehdrs = false;
+	bool usecache = true;
+	bool useseqnums = true;
+	JValue headersToSend = json.object();
+
+	ConstStrA cachePath;
+
+
+	if (hasheaders) {
+		for (JSON::Iterator iter = headers->getFwIter(); iter.hasItems();) {
+			const JSON::KeyValue &kv = iter.getNext();
+			ConstStrA str = kv->getStringUtf8();
+			if (str == disableCache) {
+				if (kv->getBool()) usecache = false;
+			} else if (str == refreshCache) {
+				if (kv->getBool()) useseqnums = false;
+			} else if (str == storeHeaders) {
+				if (kv->getBool()) storehdrs = false;
+			} else {
+				headersToSend->add(kv);
+			}
+		}
+	}
 
 	ConstStrA postDataStr;
 
@@ -127,8 +154,12 @@ JSON::Value CouchDB::requestJson(ConstStrA method, ConstStrA path, JSON::Value p
 	//path starting with slash is not relative to database, otherwise set prefix
 	if (path.head(1) != ConstStrA("/")) {
 		if (database.empty()) throw ErrorMessageException(THISLOCATION,"No database selected");
+		cachePath = path;
 		tmp = StringA(database+path);
 		path = tmp;
+	} else {
+		//disable caching for absolute path
+		usecache = false;
 	}
 
 
@@ -136,15 +167,14 @@ JSON::Value CouchDB::requestJson(ConstStrA method, ConstStrA path, JSON::Value p
 	Optional<QueryCache::CachedItem> cachedItem;
 
 	//use cache only for method GET, if cache is defined and postData are null
-	bool useCache = method == GET && cache && postData == null;
+	usecache = usecache && (method == GET) && cache;
 
-	if (useCache) {
-		cachedItem = cache->find(path);
+	if (usecache) {
+		cachedItem = cache->find(cachePath);
 		if (cachedItem->isDefined()) {
-			if (seqNumSlot && *seqNumSlot == cachedItem->seqNum)
+			if (seqNumSlot && *seqNumSlot == cachedItem->seqNum && useseqnums)
 				return cachedItem->value;
-			if (headers == null) headers=factory->object();
-			headers->add("If-None-Match",factory(cachedItem->etag));
+			headersToSend->add("If-None-Match",factory(cachedItem->etag));
 		}
 		postData = null;
 	} else if (method == GET) {
@@ -153,7 +183,7 @@ JSON::Value CouchDB::requestJson(ConstStrA method, ConstStrA path, JSON::Value p
 
 	if (postData != null) postDataStr = factory->toString(*postData);
 
-	HttpReq response(*this,method,path, postDataStr,headers);
+	HttpReq response(*this,method,path, postDataStr,headersToSend);
 	SeqFileInput in(response.getBody());
 	if (response.getStatus() == 304 && cachedItem != null) {
 		return cachedItem->value;
@@ -172,7 +202,7 @@ JSON::Value CouchDB::requestJson(ConstStrA method, ConstStrA path, JSON::Value p
 
 	JSON::Value v = factory->fromStream(in);;
 
-	if (storeHeaders) {
+	if (storehdrs) {
 		headers.clear();
 		response.enumHeaders([&](ConstStrA key, ConstStrA value) {
 			headers->add(key,factory->newValue(value));
@@ -180,24 +210,11 @@ JSON::Value CouchDB::requestJson(ConstStrA method, ConstStrA path, JSON::Value p
 		});
 	}
 
-	if (useCache){
+	if (usecache){
 		BredyHttpSrv::HeaderValue fld = response.getHeaderField(response.fldETag);
 		if (fld.defined) {
-			const JSON::INode *usq = v->getPtr("update_seq");
-			if (usq != 0) {
-				atomicValue useq = usq->getInt();
-				if (seqNumSlot) {
-					atomicValue p,q = *seqNumSlot;
-					do {
-						p = q;
-						if (useq < p) break;
-					} while ((q = lockCompareExchange(*seqNumSlot,p,useq)) != p);
-				}
-				cache->set(path, QueryCache::CachedItem(fld,useq, v));
-			} else {
-				atomicValue useq = seqNumSlot?*seqNumSlot:0;
-				cache->set(path, QueryCache::CachedItem(fld,useq, v));
-			}
+			atomicValue useq = seqNumSlot?*seqNumSlot:0;
+			cache->set(cachePath, QueryCache::CachedItem(fld,useq, v));
 		}
 	}
 
@@ -274,7 +291,7 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 	AutoArrayStream<char, SmallAlloc<1024> > gline;
 	StringA hlp;
 
-	JSON::Value nullVal = factory->newValue(null);
+	JSON::Value hdrs = json(refreshCache,true);
 
 
 	class WHandle: public INetworkResource::WaitHandler {
@@ -353,8 +370,7 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 				fmt("&%1=%2") << filter.args[i].key << (hlp=urlencode(filter.args[i].value));
 			}
 
-			//request with GET - put something as body to disable caching
-			JSON::Value v = requestJson(GET,gline.getArray(),nullVal);
+			JSON::Value v = requestJson(GET,gline.getArray(),null,hdrs);
 			JSON::Value results=v["results"];
 
 			natural lastSeq = v["last_seq"]->getUInt();
@@ -473,7 +489,7 @@ Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	allRevs->copy(confDoc.conflicts);
 	revList= urlencode(factory->toString(*allRevs));
 	fmt("%1?open_revs=%2") << docId << revList;
-	JSON::Value res = requestJson(GET,fmt.write(),null);
+	JSON::Value res = requestJson(GET,fmt.write());
 	Conflicts c;
 	for (JSON::Iterator iter = res->getFwIter(); iter.hasItems();) {
 		const JSON::KeyValue &kv = iter.getNext();
@@ -491,7 +507,7 @@ JSON::Value CouchDB::retrieveLocalDocument(ConstStrA localId) {
 	TextFormatBuff<char, StaticAlloc<256> > fmt;
 	StringA encdoc = urlencode(localId);
 	fmt("_local/%1") << encdoc;
-	return requestJson(GET,fmt.write(),seqNumSlot?factory->newValue(null):JSON::Value(null));
+	return requestJson(GET,fmt.write(),null,json(refreshCache,true));
 
 }
 
@@ -517,7 +533,7 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 		}
 	}
 
-	JSON::Value h = factory->object();
+	JSON::Value h = json(storeHeaders,true);
 	JSON::Value v = requestJson(PUT,urlline.getArray(), null, h);
 
 	UpdateFnResult r;

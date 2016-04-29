@@ -44,6 +44,30 @@ public:
 	static const ConstStrA PUT;
 	static const ConstStrA DELETE;
 
+	///specify this as metaheader for requestJson() - it disables caching for this request
+	/**
+	 * Specifying this header causes, that request will ignore cache and goes directly to the database. It will
+	 * also doesn't store result to the cache. It is equivalent to use CouchDB object without cache
+	 *
+	 * (CouchDB::disableCache, true)
+	 */
+	static const ConstStrA disableCache;
+	///specify this as metaheader for requestJson() - it always generates a request regardless on current seqNum
+	/**
+	 * Specifying this header causes, that request will be always performed regardless on, whether current seqNum
+	 * changed or not. Request will be performed with ETag and cache will be updated with the result if necesery
+	 *
+	 * (CouchDB::force, true)
+	 */
+	static const ConstStrA refreshCache;
+	///specify this as metaheader for requestJson() - header field will be replaced with output headers on return
+	/**
+	 * Response headers are not stored by default. If you need to read them, enable storeHeaders feature. This
+	 * causes, that original object will be replaced with response headers (including this header line).
+	 */
+	static const ConstStrA storeHeaders;
+
+
 	struct Config {
 		///Connection source that can open TCP connection to db's server and port
 		NetworkStreamSource connSource;
@@ -129,10 +153,12 @@ public:
 	 *
 	 * @param method request method (GET,POST,PUT,DELETE)
 	 * @param path path relative to the selected database. If path starts with '/',
-	 *         it is considered to be relative to server's root
-	 * @param postData data posted via JSON. Argument can be null for the method GET. However, if postData
-	 * is not null, function will not use cache. Content of data is ignored in this case
-	 * @param headers contains headers in form key value. Function replaces the object with received headers
+	 *         it is considered to be relative to server's root. Requests with absolute path are not cached!
+	 *         Always use relative path to activate cache
+	 * @param postData data posted via JSON. Argument can be null for the method GET.
+	 * @param headers contains headers in form key-value. It can also contain following meta-headers which are configures
+	 *  the behavior: disableCache, refreshCache, storeHeaders
+	 *
 	 * @return parsed JSON response
 	 */
 	JSON::Value requestJson(ConstStrA method, ConstStrA path, JSON::Value postData = null, JSON::Value headers = null);
