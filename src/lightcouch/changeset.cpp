@@ -59,16 +59,16 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 	for (JSON::Iterator iter = out->getFwIter(); iter.hasItems();) {
 		const JSON::KeyValue &kv = iter.getNext();
 
-		JSON::Value rev = kv.node->getPtr("rev");
+		JSON::Value rev = kv->getPtr("rev");
 		if (rev != null) docs[index]->replace("_rev",rev);
 
-		JSON::Value err = kv.node->getPtr("error");
+		JSON::Value err = kv->getPtr("error");
 		if (err != null) {
 			ErrorItem e;
-			e.errorDetails = kv.node;
+			e.errorDetails = kv;
 			e.document = docs[index];
 			e.errorType = err->getStringUtf8();
-			e.reason = kv.node->operator[]("reason").getStringUtf8();
+			e.reason = kv["reason"]->getStringUtf8();
 			errors.add(e);
 		}
 

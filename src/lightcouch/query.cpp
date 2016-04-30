@@ -221,7 +221,7 @@ JValue Query::exec(CouchDB &db) {
 		}
 		for (JSON::Iterator iter = args->getFwIter(); iter.hasItems();) {
 			const JSON::KeyValue &kv = iter.getNext();
-			appendCustomArg(urlformat,kv->getStringUtf8(), kv.node);
+			appendCustomArg(urlformat,kv->getStringUtf8(), kv);
 		}
 	}
 
@@ -349,12 +349,12 @@ Query::Result::Result(JSON::Value jsonResult)
 }
 
 const JValue& Query::Result::getNext() {
-	out = rowIter.getNext().node;
+	out = rowIter.getNext();
 	return out;
 }
 
 const JValue& Query::Result::peek() const {
-	out = rowIter.peek().node;
+	out = rowIter.peek();
 	return out;
 }
 

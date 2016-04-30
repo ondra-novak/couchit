@@ -90,7 +90,7 @@ HttpResponse &CouchDB::rawRequest_noErrorRetry(ConstStrA method, ConstStrA path,
 	if (headers!= null && headers->getType() == JSON::ndObject) {
 		for (JSON::Iterator iter = headers->getFwIter(); iter.hasItems();) {
 			const JSON::KeyValue &kv = iter.getNext();
-			ConstStrA key = kv.key->getString();
+			ConstStrA key = kv.key;
 			if (key != ctxLenStr) {
 				rq.setHeader(key, kv->getStringUtf8());
 				if (key == ctxTypeStr) hasCtxType = true;
@@ -378,7 +378,7 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 
 			bool cbok;
 			for (JSON::Iterator iter = results->getFwIter(); iter.hasItems();) {
-				ChangedDoc doc(iter.getNext().node);
+				ChangedDoc doc(iter.getNext());
 				fromSeq = doc.seqId;
 				cbok = cb.onChange(doc);
 				if (!cbok) break;
@@ -486,7 +486,7 @@ Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	StringA revList;
 	JSON::Value allRevs = factory->array();
 	allRevs->add(confDoc.allData["_rev"]);
-	allRevs->copy(confDoc.conflicts);
+	allRevs->copy(const_cast<JSON::INode *>(confDoc.conflicts));
 	revList= urlencode(factory->toString(*allRevs));
 	fmt("%1?open_revs=%2") << docId << revList;
 	JSON::Value res = requestJson(GET,fmt.write());
@@ -526,7 +526,7 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 			if (kv->getType() == JSON::ndString) {
 				tmp = urlencode(kv->getStringUtf8());
 			} else {
-				tmp = urlencode(factory->toString(*kv.node));
+				tmp = urlencode(factory->toString(*kv));
 			}
 			fmt("%1") <<tmp;
 			c = '&';
