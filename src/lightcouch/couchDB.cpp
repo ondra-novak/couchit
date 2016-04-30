@@ -90,7 +90,7 @@ HttpResponse &CouchDB::rawRequest_noErrorRetry(ConstStrA method, ConstStrA path,
 	if (headers!= null && headers->getType() == JSON::ndObject) {
 		for (JSON::Iterator iter = headers->getFwIter(); iter.hasItems();) {
 			const JSON::KeyValue &kv = iter.getNext();
-			ConstStrA key = kv.key;
+			ConstStrA key = kv.getStringKey();
 			if (key != ctxLenStr) {
 				rq.setHeader(key, kv->getStringUtf8());
 				if (key == ctxTypeStr) hasCtxType = true;
