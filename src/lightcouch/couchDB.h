@@ -38,12 +38,6 @@ class Document;
 class CouchDB {
 public:
 
-
-	static const ConstStrA GET;
-	static const ConstStrA POST;
-	static const ConstStrA PUT;
-	static const ConstStrA DELETE;
-
 	///specify this as metaheader for requestJson() - it disables caching for this request
 	/**
 	 * Specifying this header causes, that request will ignore cache and goes directly to the database. It will
