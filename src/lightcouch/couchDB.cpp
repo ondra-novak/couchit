@@ -35,11 +35,6 @@ using LightSpeed::INetworkServices;
 using LightSpeed::lockInc;
 namespace LightCouch {
 
-const ConstStrA CouchDB::GET("GET");
-const ConstStrA CouchDB::POST("POST");
-const ConstStrA CouchDB::PUT("PUT");
-const ConstStrA CouchDB::DELETE("DELETE");
-
 const ConstStrA CouchDB::disableCache("disableCache");
 const ConstStrA CouchDB::refreshCache("refreshCache");
 const ConstStrA CouchDB::storeHeaders("storeHeaders");

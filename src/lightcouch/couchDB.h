@@ -38,28 +38,9 @@ class Document;
 class CouchDB {
 public:
 
-	///specify this as metaheader for requestJson() - it disables caching for this request
-	/**
-	 * Specifying this header causes, that request will ignore cache and goes directly to the database. It will
-	 * also doesn't store result to the cache. It is equivalent to use CouchDB object without cache
-	 *
-	 * (CouchDB::disableCache, true)
-	 */
-	static const ConstStrA disableCache;
-	///specify this as metaheader for requestJson() - it always generates a request regardless on current seqNum
-	/**
-	 * Specifying this header causes, that request will be always performed regardless on, whether current seqNum
-	 * changed or not. Request will be performed with ETag and cache will be updated with the result if necesery
-	 *
-	 * (CouchDB::force, true)
-	 */
-	static const ConstStrA refreshCache;
-	///specify this as metaheader for requestJson() - header field will be replaced with output headers on return
-	/**
-	 * Response headers are not stored by default. If you need to read them, enable storeHeaders feature. This
-	 * causes, that original object will be replaced with response headers (including this header line).
-	 */
-	static const ConstStrA storeHeaders;
+	static const natural disableCache = 1;
+	static const natural refreshCache = 2;
+	static const natural storeHeaders = 4;
 
 
 	struct Config {
@@ -87,76 +68,55 @@ public:
 	CouchDB(const Config &cfg);
 	~CouchDB();
 
-	///Helper object to perform raw http requests to the cauchdb server
-	/** It could be useful to put or receive attachments
+
+	///Perform GET request from the database
+	/** GET request can be cached or complete returned from the cache
 	 *
-	 * This object reuses database connection. It also acquires internal lock
-	 * so no other thread can interrupt the connection until object is released.
-	 *
-	 * After object is released, connect is kept alive
-	 *
+	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
+	 * @param headers optional argument, headers sent with the request as key-value structure.
+	 *    if flag storeHeaders is set, function will store response's headers into
+	 *    object referenced by the argument. If object already contains a data,
+	 *    they will be deleted.
+	 * @param flags various flags that controls caching or behaviour
+	 * @return parsed response
 	 */
-	class HttpReq: public BredyHttpSrv::HeaderFieldDef {
-	public:
+	JSON::ConstValue jsonGET(ConstStrA path, JSON::Value headers = null, natural flags = 0);
+	///Performs POST request from the database
+	/** POST request are not cached.
+	 *
+	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
+	 * @param postData JSON data to send to the server
+	 * @param headers optional argument, headers sent with the request as key-value structure.
+	 *    if flag storeHeaders is set, function will store response's headers into
+	 *    object referenced by the argument. If object already contains a data,
+	 *    they will be deleted.
+	 * @param flags various flags that controls behaviour
+	 * @return parsed response
+	 */
+	JSON::ConstValue jsonPOST(ConstStrA path, JSON::ConstValue postData, JSON::Value headers = null, natural flags = 0);
+	///Performs PUT request from the database
+	/** PUT request are not cached.
+	 *
+	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
+	 * @param postData JSON data to send to the server
+	 * @param headers optional argument, headers sent with the request as key-value structure.
+	 *    if flag storeHeaders is set, function will store response's headers into
+	 *    object referenced by the argument. If object already contains a data,
+	 *    they will be deleted.
+	 * @param flags various flags that controls behaviour
+	 * @return parsed response
+	 */
+	JSON::ConstValue jsonPUT(ConstStrA path, JSON::ConstValue postData, JSON::Value headers = null, natural flags = 0);
 
-		///Constructs Http object and perform request
-		/**
-		 * @param db reference to database connection which will be used
-		 * @param method method of the request (for example CauchDB::GET)
-		 * @param path path relative to database's server root. Current chosen database
-		 *  is ignored here
-		 * @param body content of body if needed. For GET and DELETE should be empty
-		 * @param headers a json object contains key-value structure of custom request headers
-		 *
-		 * Once object is constructed, it can be used to read response
-		 */
-		HttpReq(CouchDB &db, ConstStrA method, ConstStrA path, ConstStrA body=ConstStrA(), JSON::Value headers=null);
-
-		///Destructor cleanup connection state.
-		~HttpReq();
-		///Retrieves a status code
-		natural getStatus() const;
-		///Retrieves status message
-		ConstStrA getStatusMessage() const;
-
-		///Retrieves header
-		BredyHttpSrv::HeaderValue getHeaderField(Field field) const;
-		///Retrieves header
-		BredyHttpSrv::HeaderValue getHeaderField(ConstStrA field) const;
-		natural getContentLength() const;
-
-		///Retrieves body of the response as a stream
-		/** @note there is no "unwind" once all data are read, they are lost.
-		 */
-		SeqFileInput getBody();
-
-		template<typename Fn>
-		bool enumHeaders(const Fn &fn) const {return response.enumHeaders(fn);}
-	protected:
-
-		HttpReq(const HttpReq &x);
-		Synchronized<FastLock> lock;
-		HttpResponse &response;
-		CouchDB &owner;
-
-	};
-
-
-	///Performs JSON request and response
+	///Performs DELETE request at database
 	/**
 	 *
-	 * @param method request method (GET,POST,PUT,DELETE)
-	 * @param path path relative to the selected database. If path starts with '/',
-	 *         it is considered to be relative to server's root. Requests with absolute path are not cached!
-	 *         Always use relative path to activate cache
-	 * @param postData data posted via JSON. Argument can be null for the method GET.
-	 * @param headers contains headers in form key-value. It can also contain following meta-headers which are configures
-	 *  the behavior: disableCache, refreshCache, storeHeaders
-	 *
-	 * @return parsed JSON response
+	 * @param path absolute path to the resource to delete
+	 * @param headers aditional headers
+	 * @param flags flags that controls behaviour
+	 * @return
 	 */
-	JSON::Value requestJson(ConstStrA method, ConstStrA path, JSON::Value postData = null, JSON::Value headers = null);
-
+	JSON::ConstValue jsonDELETE(ConstStrA path, JSON::Value headers = null, natural flags = 0);
 
 
 	///Retrieves UID using CouchDB
