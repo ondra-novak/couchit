@@ -8,10 +8,9 @@
 #ifndef ASSETEX_SRC_COUCHDB_H_BREDY_5205456032
 #define ASSETEX_SRC_COUCHDB_H_BREDY_5205456032
 
+#include <httpclient/httpClient.h>
 #include <lightspeed/base/streams/netio.h>
 #include <lightspeed/utils/json/json.h>
-#include <httpclient/httpStream.h>
-#include <lightspeed/mt/gate.h>
 
 #include "uid.h"
 #include "object.h"
@@ -19,6 +18,8 @@
 #include "ichangeNotify.h"
 
 #include "view.h"
+
+#include "lightspeed/mt/fastlock.h"
 namespace LightSpeed {
 class PoolAlloc;
 }
@@ -44,10 +45,7 @@ public:
 
 
 	struct Config {
-		///Connection source that can open TCP connection to db's server and port
-		NetworkStreamSource connSource;
-		///Relative path to from the server's root where database is mapped (optional)
-		ConstStrA pathPrefix;
+		ConstStrA baseUrl;
 		///name of database (optional) if set, object initializes self to work with database
 		ConstStrA databaseName;
 		///JSON factory to create JSON objects
@@ -298,56 +296,24 @@ public:
 	///Use json variable to build objects
 	const JBuilder json;
 
+	struct HttpConfig: BredyHttpClient::ClientConfig {
+		HttpConfig();
+	};
+
+	static HttpConfig httpConfig;
+
 protected:
 
 	mutable FastLock lock;
 
-	///Performs raw request
-	/**
-	 * Function performs a raw request with ability to reconnect the database in case
-	 * that keep-alive fails to keep connection open for longer time
-	 *
-	 * @param method request method (GET,POST,PUT,DELETE)
-	 * @param path path relative to the server's root. Current database selection doesn't affect this option
-	 * @param postData data to be post with the request. It applied only for methods POST an PUT
-	 * @param headers JSON-object which contains additional headers. It shoudl be object otherwise it is ignored
-	 * @return reference to HttpResponse object. This object is alredy initialized from the header,
-	 * you can use it to read response. Object also handles transfer encoding.
-	 *
-	 * @note Until all data are read, you cannot perform any other request on this object.
-	 * If you left a data in the stream, they are discarded.
-	 */
-	HttpResponse &rawRequest(ConstStrA method, ConstStrA path, ConstStrA postData, JSON::Value headers);
-
-	///Performs raw request
-	/**
-	 *
-	 * Function performs a raw request. It will not reconnect in case of I/O error
-	 *
-	 * @param method request method (GET,POST,PUT,DELETE)
-	 * @param path path relative to the server's root. Current database selection doesn't affect this option
-	 * @param postData data to be post with the request. It applied only for methods POST an PUT
-	 * @param headers JSON-object which contains additional headers. It shoudl be object otherwise it is ignored
-	 * @return reference to HttpResponse object. This object is alredy initialized from the header,
-	 * you can use it to read response. Object also handles transfer encoding.
-	 *
-	 *  @note Until all data are read, you cannot perform any other request on this object.
-	 * If you left a data in the stream, they are discarded.
-	 *
-	 */
-
-	HttpResponse &rawRequest_noErrorRetry(ConstStrA method, ConstStrA path, ConstStrA postData, JSON::Value headers);
 
 
-	typedef NetworkStream<> NStream;
 
 	friend class ChangeFeed;
 
-	NetworkStreamSource connSource;
-	StringA pathPrefix;
+	StringA baseUrl;
 	StringA database;
-	Optional<NStream> stream;
-	Optional<HttpResponse> response;
+	HttpClient http;
 	JSON::PFactory factory;
 	natural lastStatus;
 	bool listenExitFlag;
@@ -357,8 +323,25 @@ protected:
 	StringA lastConnectError;
 
 
+
 	natural listenChangesInternal(IChangeNotify &cb,  natural fromSeq, const Filter &filter, ListenMode lm);
 
+	template<typename C>
+	void reqPathToFullPath(ConstStrA reqPath, C &output) {
+		output.append(baseUrl);
+		if (reqPath.head(1) == ConstStrA('/')) {
+			output.append(reqPath);
+		} else {
+			if (database.empty()) throw ErrorMessageException(THISLOCATION,"No database selected");
+
+			output.append(ConstStrA('/'));
+			output.append(database);
+			output.append(ConstStrA('/'));
+			output.append(reqPath);
+		}
+	}
+
+	JSON::ConstValue jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::Value postData, JSON::Value headers, natural flags);
 public:
 
 

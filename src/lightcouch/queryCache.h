@@ -35,7 +35,7 @@ public:
 	struct CachedItem {
 		const StringA etag;
 		atomicValue seqNum;
-		const JSON::Value value;
+		const JSON::ConstValue value;
 
 		CachedItem() {}
 		///Create cached item

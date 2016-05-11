@@ -35,11 +35,13 @@ using LightSpeed::INetworkServices;
 using LightSpeed::lockInc;
 namespace LightCouch {
 
-const ConstStrA CouchDB::disableCache("disableCache");
-const ConstStrA CouchDB::refreshCache("refreshCache");
-const ConstStrA CouchDB::storeHeaders("storeHeaders");
+CouchDB::HttpConfig::HttpConfig() {
+	this->keepAlive = true;
+	this->useHTTP10 = false;
+	this->userAgent = ConstStrA("LightCouch/1.0 (+https://github.com/ondra-novak/lightcouch)");
+}
 
-
+CouchDB::HttpConfig CouchDB::httpConfig;
 
 static JSON::PFactory createFactory(JSON::PFactory jfact) {
 	if (jfact != null) return jfact;
@@ -47,175 +49,176 @@ static JSON::PFactory createFactory(JSON::PFactory jfact) {
 }
 
 CouchDB::CouchDB(const Config& cfg)
-	:json(createFactory(cfg.factory)),connSource(cfg.connSource), pathPrefix(cfg.pathPrefix),factory(json.factory)
+	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),http(httpConfig),factory(json.factory)
 	,cache(cfg.cache),seqNumSlot(0)
 {
 	if (!cfg.databaseName.empty()) use(cfg.databaseName);
 	listenExitFlag = false;
 }
 
-HttpResponse &CouchDB::rawRequest(ConstStrA method, ConstStrA path, ConstStrA postData, JSON::Value headers) {
-	try {
-		return rawRequest_noErrorRetry(method,path,postData,headers);
-	} catch (std::exception &e) {
-		lastConnectError = e.what();
-		stream = nil;
-		return rawRequest_noErrorRetry(method,path,postData,headers);
-	}
 
-}
-
-HttpResponse &CouchDB::rawRequest_noErrorRetry(ConstStrA method, ConstStrA path, ConstStrA postData, JSON::Value headers) {
-	if (stream == nil) {
-		stream = Constructor1<NStream, PNetworkStream>(connSource.getNext());
-	} else {
-		if (response != nil) {
-			response->skipRemainBody();
-		}
-	}
-
-	StringA wholePath = pathPrefix+path;
-	HttpRequest rq(stream->getOutput(),wholePath,method);
-
-	bool hasCtxType = false;
-
-	ConstStrA ctxLenStr =rq.getHeaderFieldName(HttpRequest::fldContentLength);
-	ConstStrA ctxTypeStr =rq.getHeaderFieldName(HttpRequest::fldContentType);
-
-	if (headers!= null && headers->getType() == JSON::ndObject) {
-		for (JSON::Iterator iter = headers->getFwIter(); iter.hasItems();) {
-			const JSON::KeyValue &kv = iter.getNext();
-			ConstStrA key = kv.getStringKey();
-			if (key != ctxLenStr) {
-				rq.setHeader(key, kv->getStringUtf8());
-				if (key == ctxTypeStr) hasCtxType = true;
-			}
-		}
-	}
-
-	if (method == "POST" || method == "PUT") {
-		rq.setContentLength(postData.length());
-		if (!hasCtxType)
-			rq.setHeader(HttpRequest::fldContentType,"application/json");
-		rq.writeAll(postData.data(),postData.length());
-	}
-	rq.closeOutput();
-
-
-	response = Constructor1<HttpResponse, IInputStream *>(stream->getInput());
-	response->setStaticObj();
-	response->readHeaders();
-	return response;
-
-}
-
-
-JSON::Value CouchDB::requestJson(ConstStrA method, ConstStrA path, JSON::Value postData, JSON::Value headers) {
-
-
+JSON::ConstValue CouchDB::jsonGET(ConstStrA path, JSON::Value headers, natural flags) {
 	if (headers != null && headers->getType() != JSON::ndObject) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
 
-	bool hasheaders = headers != null;
-	bool storehdrs = false;
-	bool usecache = true;
-	bool useseqnums = true;
-	JValue headersToSend = json.object();
+	AutoArray<char, SmallAlloc<4096> > requestUrl;
+	reqPathToFullPath(path,requestUrl);
 
-	ConstStrA cachePath;
-
-
-	if (hasheaders) {
-		for (JSON::Iterator iter = headers->getFwIter(); iter.hasItems();) {
-			const JSON::KeyValue &kv = iter.getNext();
-			ConstStrA str = kv->getStringUtf8();
-			if (str == disableCache) {
-				if (kv->getBool()) usecache = false;
-			} else if (str == refreshCache) {
-				if (kv->getBool()) useseqnums = false;
-			} else if (str == storeHeaders) {
-				if (kv->getBool()) storehdrs = false;
-			} else {
-				headersToSend->add(kv);
-			}
-		}
-	}
-
-	ConstStrA postDataStr;
-
-	StringA tmp;
-
-	//path starting with slash is not relative to database, otherwise set prefix
-	if (path.head(1) != ConstStrA("/")) {
-		if (database.empty()) throw ErrorMessageException(THISLOCATION,"No database selected");
-		cachePath = path;
-		tmp = StringA(database+path);
-		path = tmp;
-	} else {
-		//disable caching for absolute path
-		usecache = false;
-	}
-
+	bool usecache = (flags & disableCache) == 0;
+	if (path.head(1) == ConstStrA('/')) usecache = false;
+	if (!cache) usecache = false;
 
 	//there will be stored cached item
 	Optional<QueryCache::CachedItem> cachedItem;
 
-	//use cache only for method GET, if cache is defined and postData are null
-	usecache = usecache && (method == GET) && cache;
-
 	if (usecache) {
-		cachedItem = cache->find(cachePath);
+		cachedItem = cache->find(path);
 		if (cachedItem->isDefined()) {
-			if (seqNumSlot && *seqNumSlot == cachedItem->seqNum && useseqnums)
+			if (seqNumSlot && *seqNumSlot == cachedItem->seqNum && (flags & refreshCache) == 0)
 				return cachedItem->value;
-			headersToSend->add("If-None-Match",factory(cachedItem->etag));
 		}
-		postData = null;
-	} else if (method == GET) {
-		postData = null;
 	}
 
-	if (postData != null) postDataStr = factory->toString(*postData);
+	Synchronized<FastLock> _(lock);
+	http.open(HttpClient::mGET, requestUrl);
+	http.setHeader(HttpClient::fldAccept,"application/json");
+	if (cachedItem != nil) {
+		http.setHeader(HttpClient::fldIfNoneMatch, cachedItem->etag);
+	}
+	headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
+		this->http.setHeader(key,nd->getStringUtf8());
+		return false;
+	}));
 
-	HttpReq response(*this,method,path, postDataStr,headersToSend);
-	SeqFileInput in(response.getBody());
-	if (response.getStatus() == 304 && cachedItem != null) {
+	SeqFileInput response = http.send();
+	if (http.getStatus() == 304 && cachedItem != null) {
+		http.close();
 		return cachedItem->value;
 	}
-	if (response.getStatus()/100 != 2) {
+	if (http.getStatus()/100 != 2) {
 
 		JSON::Value errorVal;
 		try{
-			errorVal = factory->fromStream(in);
+			errorVal = factory->fromStream(response);
 		} catch (...) {
 
 		}
-		throw RequestError(THISLOCATION,response.getStatus(), response.getStatusMessage(), errorVal);
-	}
-	lastStatus = response.getStatus();
-
-	JSON::Value v = factory->fromStream(in);;
-
-	if (storehdrs) {
-		headers.clear();
-		response.enumHeaders([&](ConstStrA key, ConstStrA value) {
-			headers->add(key,factory->newValue(value));
-			return true;
-		});
-	}
-
-	if (usecache){
-		BredyHttpSrv::HeaderValue fld = response.getHeaderField(response.fldETag);
-		if (fld.defined) {
-			atomicValue useq = seqNumSlot?*seqNumSlot:0;
-			cache->set(cachePath, QueryCache::CachedItem(fld,useq, v));
+		http.close();
+		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+	} else {
+		JSON::Value v = factory->fromStream(response);
+		if (usecache) {
+			BredyHttpSrv::HeaderValue fld = http.getHeader(HttpClient::fldETag);
+			if (fld.defined) {
+				atomicValue useq = seqNumSlot?*seqNumSlot:0;
+				cache->set(path, QueryCache::CachedItem(fld,useq, v));
+			}
 		}
+		if (flags & storeHeaders && headers != null) {
+			headers->clear();
+			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
+				headers->add(key, this->factory->newValue(value));
+				return false;
+			});
+		}
+		http.close();
+		return v;
+	}
+}
+
+
+JSON::ConstValue CouchDB::jsonDELETE(ConstStrA path, JSON::Value headers, natural flags) {
+	if (headers != null && headers->getType() != JSON::ndObject) {
+		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
 
+	AutoArray<char, SmallAlloc<4096> > requestUrl;
+	reqPathToFullPath(path,requestUrl);
 
-	return v;
+	Synchronized<FastLock> _(lock);
+	http.open(HttpClient::mDELETE, requestUrl);
+	http.setHeader(HttpClient::fldAccept,"application/json");
+	headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
+		this->http.setHeader(key,nd->getStringUtf8());
+		return false;
+	}));
 
+	SeqFileInput response = http.send();
+	if (http.getStatus()/100 != 2) {
+
+		JSON::Value errorVal;
+		try{
+			errorVal = factory->fromStream(response);
+		} catch (...) {
+
+		}
+		http.close();
+		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+	} else {
+		JSON::Value v = factory->fromStream(response);
+		if (flags & storeHeaders && headers != null) {
+			headers->clear();
+			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
+				headers->add(key, this->factory->newValue(value));
+				return false;
+			});
+		}
+		http.close();
+		return v;
+	}
+}
+
+JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::Value data, JSON::Value headers, natural flags) {
+	if (headers != null && headers->getType() != JSON::ndObject) {
+		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
+	}
+
+	AutoArray<char, SmallAlloc<4096> > requestUrl;
+	reqPathToFullPath(path,requestUrl);
+
+	Synchronized<FastLock> _(lock);
+	http.open(method, requestUrl);
+	http.setHeader(HttpClient::fldAccept,"application/json");
+	http.setHeader(HttpClient::fldContentType,"application/json");
+	headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
+		this->http.setHeader(key,nd->getStringUtf8());
+		return false;
+	}));
+
+	SeqFileOutput out = http.beginBody(HttpClient::psoDefault);
+	if (data != null) factory->toStream(*data, out);
+	SeqFileInput response = http.send();
+	if (http.getStatus()/100 != 2) {
+
+		JSON::Value errorVal;
+		try{
+			errorVal = factory->fromStream(response);
+		} catch (...) {
+
+		}
+		http.close();
+		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+	} else {
+		JSON::Value v = factory->fromStream(response);
+		if (flags & storeHeaders && headers != null) {
+			headers->clear();
+			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
+				headers->add(key, this->factory->newValue(value));
+				return false;
+			});
+		}
+		http.close();
+		return v;
+	}
+}
+
+
+JSON::ConstValue CouchDB::jsonPUT(ConstStrA path, JSON::ConstValue postData, JSON::Value headers, natural flags) {
+	return jsonPUTPOST(HttpClient::mPUT,path,postData,headers,flags);
+}
+JSON::ConstValue CouchDB::jsonPOST(ConstStrA path, JSON::ConstValue postData, JSON::Value headers, natural flags) {
+	return jsonPUTPOST(HttpClient::mPOST,path,postData,headers,flags);
 }
 
 
@@ -224,7 +227,7 @@ UIDIterator CouchDB::genUID(natural count) {
 	TextFormatBuff<char, StaticAlloc<32> > fmt;
 
 	fmt("/_uuids?count=%1") << count;
-	JSON::Value uidlist = requestJson(GET,fmt.write());
+	JSON::ConstValue uidlist = jsonGET(fmt.write());
 	return UIDIterator(uidlist["uuids"]);
 
 }
@@ -257,11 +260,11 @@ LocalUID CouchDB::genUIDFast() {
 }
 
 void CouchDB::use(ConstStrA database) {
-	this->database = ConstStrA("/") + database+ConstStrA("/");
+	this->database = database;
 }
 
 ConstStrA CouchDB::getCurrentDB() const {
-	return database.crop(1,1);
+	return database;
 }
 
 StringA CouchDB::urlencode(ConstStrA text) {
@@ -269,11 +272,11 @@ StringA CouchDB::urlencode(ConstStrA text) {
 }
 
 void CouchDB::createDatabase() {
-	requestJson(PUT,ConstStrA(),null);
+	jsonPUT(ConstStrA(),null);
 }
 
 void CouchDB::deleteDatabase() {
-	requestJson(DELETE,ConstStrA(),null);
+	jsonDELETE(ConstStrA(),null);
 }
 
 CouchDB::~CouchDB() {
@@ -283,7 +286,7 @@ enum ListenExceptionStop {listenExceptionStop};
 
 natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const Filter &filter, ListenMode lm) {
 
-	AutoArrayStream<char, SmallAlloc<1024> > gline;
+	AutoArrayStream<char, SmallAlloc<4096> > gline;
 	StringA hlp;
 
 	JSON::Value hdrs = json(refreshCache,true);
@@ -313,88 +316,96 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 
 	};
 
-	WHandle whandle(listenExitFlag);
-
-	if (stream == nil) {
-		stream = Constructor1<NStream, PNetworkStream>(connSource.getNext());
-	}
 
 
 
-	if (lm != lmNoWait)
-		stream->getHandle()->setWaitHandler(&whandle);
+	bool rep = true;
+	do {
 
-	try {
+		if (listenExitFlag) break;
 
-		bool rep = true;
-		do {
-
-			if (listenExitFlag) break;
-
-			gline.clear();
-			TextOut<AutoArrayStream<char, SmallAlloc<1024> > &, StaticAlloc<256> > fmt(gline);
-			fmt("%1_changes?since=%2") << database << fromSeq;
-			if (!filter.viewPath.empty()) {
-				if (filter.flags & Filter::isView) {
-					fmt("&filter=_view&view=%1") << (hlp=urlencode(filter.viewPath));
-				}else{
-					fmt("&filter=%1") << (hlp=urlencode(filter.viewPath));
-				}
-							}
-			if(filter.flags & Filter::allConflicts) {
-				fmt("&style=all_docs");
+		gline.clear();
+		TextOut<AutoArrayStream<char, SmallAlloc<4096> > &, StaticAlloc<256> > fmt(gline);
+		fmt("%1/%2/_changes?since=%2") << baseUrl << database << fromSeq;
+		if (!filter.viewPath.empty()) {
+			if (filter.flags & Filter::isView) {
+				fmt("&filter=_view&view=%1") << (hlp=urlencode(filter.viewPath));
+			}else{
+				fmt("&filter=%1") << (hlp=urlencode(filter.viewPath));
 			}
-			if (filter.flags & Filter::includeDocs) {
-				fmt("&include_docs=true");
-				if (filter.flags & Filter::attachments) {
-					fmt("&attachments=true");
-				}
-				if (filter.flags & Filter::conflicts) {
-					fmt("&conflicts=true");
-				}
-				if (filter.flags & Filter::attEncodingInfo) {
-					fmt("&att_encoding_info=true");
-				}
-			}
-			if (filter.flags & Filter::reverseOrder) {
-				fmt("&descending=true");
-			}
-			if (lm  != lmNoWait) fmt("&feed=longpoll");
-
-			for (natural i = 0; i<filter.args.length(); i++) {
-				fmt("&%1=%2") << filter.args[i].key << (hlp=urlencode(filter.args[i].value));
-			}
-
-			JSON::Value v = requestJson(GET,gline.getArray(),null,hdrs);
-			JSON::Value results=v["results"];
-
-			natural lastSeq = v["last_seq"]->getUInt();
-			if (seqNumSlot) *seqNumSlot = lastSeq;
-
-			bool cbok;
-			for (JSON::Iterator iter = results->getFwIter(); iter.hasItems();) {
-				ChangedDoc doc(iter.getNext());
-				fromSeq = doc.seqId;
-				cbok = cb.onChange(doc);
-				if (!cbok) break;
-			}
-
-			fromSeq =  lastSeq;
-
-			rep = lm == lmForever && listenExitFlag == false && cbok;
+						}
+		if(filter.flags & Filter::allConflicts) {
+			fmt("&style=all_docs");
 		}
-		while (rep);
-		stream->getHandle()->setWaitHandler(0);
-		listenExitFlag = false;
-	} catch (ListenExceptionStop &) {
-		listenExitFlag = false;
-		stream=nil;
-		return fromSeq;
-	} catch (...) {
-		if (stream != nil) stream->getHandle()->setWaitHandler(0);
-		listenExitFlag = false;
-		throw;
+		if (filter.flags & Filter::includeDocs) {
+			fmt("&include_docs=true");
+			if (filter.flags & Filter::attachments) {
+				fmt("&attachments=true");
+			}
+			if (filter.flags & Filter::conflicts) {
+				fmt("&conflicts=true");
+			}
+			if (filter.flags & Filter::attEncodingInfo) {
+				fmt("&att_encoding_info=true");
+			}
+		}
+		if (filter.flags & Filter::reverseOrder) {
+			fmt("&descending=true");
+		}
+		if (lm  != lmNoWait) fmt("&feed=longpoll");
+
+		for (natural i = 0; i<filter.args.length(); i++) {
+			fmt("&%1=%2") << filter.args[i].key << (hlp=urlencode(filter.args[i].value));
+		}
+
+		JSON::Value v;
+		{
+			Synchronized<FastLock> _(lock);
+			WHandle whandle(listenExitFlag);
+			http.open(HttpClient::mGET,gline.getArray());
+			http.setHeader(HttpClient::fldAccept,"application/json");
+			SeqFileInput in = http.send();
+			PNetworkStream conn = http.getConnection();
+
+			if (lm != lmNoWait)
+				conn->setWaitHandler(&whandle);
+
+			try {
+				JSON::Value v = factory->fromStream(in);
+			} catch (ListenExceptionStop &) {
+				listenExitFlag = false;
+				http.closeConnection();
+				return fromSeq;
+			} catch (...) {
+				listenExitFlag = false;
+				http.closeConnection();
+				throw;
+			}
+
+			if (lm != lmNoWait)
+				conn->setWaitHandler(0);
+			http.close();
+		}
+
+
+		JSON::Value results=v["results"];
+
+		natural lastSeq = v["last_seq"]->getUInt();
+		if (seqNumSlot) *seqNumSlot = lastSeq;
+
+		bool cbok;
+		for (JSON::Iterator iter = results->getFwIter(); iter.hasItems();) {
+			ChangedDoc doc(iter.getNext());
+			fromSeq = doc.seqId;
+			cbok = cb.onChange(doc);
+			if (!cbok) break;
+		}
+
+		fromSeq =  lastSeq;
+
+		rep = lm == lmForever && listenExitFlag == false && cbok;
 	}
+	while (rep);
 
 	return fromSeq;
 }
@@ -412,50 +423,11 @@ JSON::IFactory &CouchDB::getJsonFactory() {
 }
 
 
-CouchDB::HttpReq::HttpReq(CouchDB& db, ConstStrA method, ConstStrA path, ConstStrA body, JSON::Value headers)
-	:lock(db.lock)
-	,response(db.rawRequest(method,path,body,headers))
-	,owner(db)
-{
-
-}
-
-natural CouchDB::HttpReq::getStatus() const {
-	return response.getStatus();
-}
-
-ConstStrA CouchDB::HttpReq::getStatusMessage() const {
-	return response.getStatusMessage();
-}
-
-BredyHttpSrv::HeaderValue CouchDB::HttpReq::getHeaderField(Field field) const {
-	return response.getHeaderField(field);
-}
-
-BredyHttpSrv::HeaderValue CouchDB::HttpReq::getHeaderField(ConstStrA field) const {
-	return response.getHeaderField(field);
-}
-
-natural CouchDB::HttpReq::getContentLength() const {
-	return response.getContentLength();
-}
-
-SeqFileInput CouchDB::HttpReq::getBody() {
-	SeqFileInBuff<512> buffered(&response);
-	return buffered;
-}
 
 void CouchDB::stopListenChanges() {
 	listenExitFlag = true;
 }
 
-CouchDB::HttpReq::~HttpReq() {
-	try {
-		response.skipRemainBody();
-	} catch (...) {
-		owner.stream = nil;
-	}
-}
 
 natural CouchDB::getLastSeqNumber() {
 	Filter::ListArg arg;
@@ -484,7 +456,7 @@ Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	allRevs->copy(const_cast<JSON::INode *>(confDoc.conflicts));
 	revList= urlencode(factory->toString(*allRevs));
 	fmt("%1?open_revs=%2") << docId << revList;
-	JSON::Value res = requestJson(GET,fmt.write());
+	JSON::Value res = jsonGET(fmt.write());
 	Conflicts c;
 	for (JSON::Iterator iter = res->getFwIter(); iter.hasItems();) {
 		const JSON::KeyValue &kv = iter.getNext();
@@ -502,7 +474,7 @@ JSON::Value CouchDB::retrieveLocalDocument(ConstStrA localId) {
 	TextFormatBuff<char, StaticAlloc<256> > fmt;
 	StringA encdoc = urlencode(localId);
 	fmt("_local/%1") << encdoc;
-	return requestJson(GET,fmt.write(),null,json(refreshCache,true));
+	return jsonGET(fmt.write(),null,refreshCache);
 
 }
 
@@ -528,8 +500,8 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 		}
 	}
 
-	JSON::Value h = json(storeHeaders,true);
-	JSON::Value v = requestJson(PUT,urlline.getArray(), null, h);
+	JSON::Value h = json.object();
+	JSON::Value v = jsonPUT(urlline.getArray(), null, h, storeHeaders);
 
 	UpdateFnResult r;
 	const JSON::INode *n = h->getPtr("X-Couch-Update-NewRev");
