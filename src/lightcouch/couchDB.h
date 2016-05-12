@@ -91,7 +91,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	JSON::ConstValue jsonPOST(ConstStrA path, JSON::ConstValue postData, JSON::Value headers = null, natural flags = 0);
+	JSON::ConstValue jsonPOST(ConstStrA path, JSON::ConstValue postData, JSON::Container headers = null, natural flags = 0);
 	///Performs PUT request from the database
 	/** PUT request are not cached.
 	 *
@@ -104,7 +104,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	JSON::ConstValue jsonPUT(ConstStrA path, JSON::ConstValue postData, JSON::Value headers = null, natural flags = 0);
+	JSON::ConstValue jsonPUT(ConstStrA path, JSON::ConstValue postData, JSON::Container headers = null, natural flags = 0);
 
 	///Performs DELETE request at database
 	/**
@@ -341,7 +341,7 @@ protected:
 		}
 	}
 
-	JSON::ConstValue jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::Value postData, JSON::Value headers, natural flags);
+	JSON::ConstValue jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags);
 public:
 
 

@@ -12,7 +12,7 @@ namespace LightCouch {
 
 
 
-UIDIterator::UIDIterator(JSON::Value data)
+UIDIterator::UIDIterator(JSON::ConstValue data)
 	:data(data),iter(data->getFwIter())
 {
 

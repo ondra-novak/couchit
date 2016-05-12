@@ -125,7 +125,7 @@ public:
 		ConstStrA errorType;
 		ConstStrA reason;
 		JSON::Value document;
-		JSON::Value errorDetails;
+		JSON::ConstValue errorDetails;
 	};
 
 	///easy chain all changes with operator()

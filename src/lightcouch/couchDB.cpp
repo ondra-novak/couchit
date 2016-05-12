@@ -169,7 +169,7 @@ JSON::ConstValue CouchDB::jsonDELETE(ConstStrA path, JSON::Value headers, natura
 	}
 }
 
-JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::Value data, JSON::Value headers, natural flags) {
+JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::ConstValue data, JSON::Container headers, natural flags) {
 	if (headers != null && headers->getType() != JSON::ndObject) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
@@ -202,9 +202,10 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 	} else {
 		JSON::Value v = factory->fromStream(response);
 		if (flags & storeHeaders && headers != null) {
-			headers->clear();
+			headers.clear();
+			auto hb = json.object(headers);
 			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
-				headers->add(key, this->factory->newValue(value));
+				hb(key, value);
 				return false;
 			});
 		}
@@ -214,10 +215,10 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 }
 
 
-JSON::ConstValue CouchDB::jsonPUT(ConstStrA path, JSON::ConstValue postData, JSON::Value headers, natural flags) {
+JSON::ConstValue CouchDB::jsonPUT(ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPUT,path,postData,headers,flags);
 }
-JSON::ConstValue CouchDB::jsonPOST(ConstStrA path, JSON::ConstValue postData, JSON::Value headers, natural flags) {
+JSON::ConstValue CouchDB::jsonPOST(ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPOST,path,postData,headers,flags);
 }
 
@@ -456,11 +457,11 @@ Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	allRevs->copy(const_cast<JSON::INode *>(confDoc.conflicts));
 	revList= urlencode(factory->toString(*allRevs));
 	fmt("%1?open_revs=%2") << docId << revList;
-	JSON::Value res = jsonGET(fmt.write());
+	JSON::ConstValue res = jsonGET(fmt.write());
 	Conflicts c;
-	for (JSON::Iterator iter = res->getFwIter(); iter.hasItems();) {
-		const JSON::KeyValue &kv = iter.getNext();
-		JSON::Value doc = kv->getPtr("ok");
+	for (JSON::ConstIterator iter = res->getFwIter(); iter.hasItems();) {
+		const JSON::ConstKeyValue &kv = iter.getNext();
+		JSON::ConstValue doc = kv["ok"];
 		if (doc != null) c.add(Document(doc));
 	}
 	return c;
@@ -470,7 +471,7 @@ Query CouchDB::createQuery(natural viewFlags) {
 	return createQuery(v);
 }
 
-JSON::Value CouchDB::retrieveLocalDocument(ConstStrA localId) {
+JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId) {
 	TextFormatBuff<char, StaticAlloc<256> > fmt;
 	StringA encdoc = urlencode(localId);
 	fmt("_local/%1") << encdoc;

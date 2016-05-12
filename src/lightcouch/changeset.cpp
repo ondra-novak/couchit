@@ -50,19 +50,19 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 	if (docs->empty()) return *this;
 	if (all_or_nothing)
 		json.object(wholeRequest)("all_or_nothing",true);
-	JSON::Value out = db.jsonPOST("_bulk_docs", wholeRequest);
+	JSON::ConstValue out = db.jsonPOST("_bulk_docs", wholeRequest);
 
 
 	AutoArray<ErrorItem> errors;
 
 	natural index = 0;
-	for (JSON::Iterator iter = out->getFwIter(); iter.hasItems();) {
-		const JSON::KeyValue &kv = iter.getNext();
+	for (JSON::ConstIterator iter = out->getFwIter(); iter.hasItems();) {
+		const JSON::ConstKeyValue &kv = iter.getNext();
 
-		JSON::Value rev = kv->getPtr("rev");
-		if (rev != null) docs[index]->replace("_rev",rev);
+		JSON::ConstValue rev = kv["rev"];
+		if (rev != null) json.object(docs[index])("_rev",rev);
 
-		JSON::Value err = kv->getPtr("error");
+		JSON::ConstValue err = kv["error"];
 		if (err != null) {
 			ErrorItem e;
 			e.errorDetails = kv;

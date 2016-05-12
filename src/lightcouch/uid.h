@@ -22,7 +22,7 @@ using namespace LightSpeed;
 class UIDIterator: public IteratorBase<ConstStrA, UIDIterator> {
 public:
 
-	UIDIterator(JSON::Value data);
+	UIDIterator(JSON::ConstValue data);
 
 	const ConstStrA &getNext();
 	const ConstStrA &peek() const;
@@ -32,8 +32,8 @@ public:
 
 protected:
 
-	JSON::Value data;
-	JSON::Iterator iter;
+	JSON::ConstValue data;
+	JSON::ConstIterator iter;
 	mutable ConstStrA tmp;
 };
 

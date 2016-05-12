@@ -14,24 +14,25 @@ namespace LightCouch {
 
 using namespace LightSpeed;
 
-class Document {
+template<typename V>
+class DocumentT {
 public:
 
 	///contains whole document as json
-	const JSON::Value allData;
+	const V allData;
 
 	const ConstStrA id;
 
 	const ConstStrA revision;
 
-	const JSON::INode *conflicts;
+	const V conflicts;
 
-	const JSON::INode *attachments;
+	const V attachments;
 
 	const JSON::INode &operator[](ConstStrA key) const;
 
 
-	Document(JSON::Value allData);
+	DocumentT(JSON::Value allData);
 
 protected:
 
