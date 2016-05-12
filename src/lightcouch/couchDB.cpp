@@ -452,9 +452,9 @@ Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	TextFormatBuff<char, StaticAlloc<256> > fmt;
 	StringA docId = urlencode(confDoc.id);
 	StringA revList;
-	JSON::Value allRevs = factory->array();
-	allRevs->add(confDoc.allData["_rev"]);
-	allRevs->copy(const_cast<JSON::INode *>(confDoc.conflicts));
+	JSON::Container allRevs = factory->array();
+	allRevs.add(confDoc["_rev"]);
+	allRevs.load(confDoc.conflicts);
 	revList= urlencode(factory->toString(*allRevs));
 	fmt("%1?open_revs=%2") << docId << revList;
 	JSON::ConstValue res = jsonGET(fmt.write());
@@ -462,7 +462,7 @@ Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	for (JSON::ConstIterator iter = res->getFwIter(); iter.hasItems();) {
 		const JSON::ConstKeyValue &kv = iter.getNext();
 		JSON::ConstValue doc = kv["ok"];
-		if (doc != null) c.add(Document(doc));
+		if (doc != null) c.add(ConstDocument(doc));
 	}
 	return c;
 }

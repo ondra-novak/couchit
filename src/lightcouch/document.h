@@ -14,31 +14,42 @@ namespace LightCouch {
 
 using namespace LightSpeed;
 
-template<typename V>
-class DocumentT {
+///Base class for Document and ConstDocument
+template<typename V, typename W>
+class DocumentBase: public V {
 public:
 
-	///contains whole document as json
-	const V allData;
 
 	const ConstStrA id;
 
 	const ConstStrA revision;
 
-	const V conflicts;
+	const W conflicts;
 
-	const V attachments;
-
-	const JSON::INode &operator[](ConstStrA key) const;
+	const W attachments;
 
 
-	DocumentT(JSON::Value allData);
+	DocumentBase(const V &allData);
 
 protected:
 
 };
 
-class Conflicts: public AutoArray<Document> {
+class Document: public DocumentBase<JSON::Value, JSON::Container> {
+public:
+	Document(const JSON::Value &allData);
+};
+
+class ConstDocument: public DocumentBase<JSON::ConstValue, JSON::ConstValue> {
+public:
+	ConstDocument(const JSON::ConstValue &allData);
+
+	///Makes copy of const document for editing
+	Document getEditable(const JSON::Builder &json) const;
+};
+
+
+class Conflicts: public AutoArray<ConstDocument> {
 public:
 	Iterator findRevision(ConstStrA revision) const;
 };

@@ -46,14 +46,14 @@ public:
 	 *
 	 * @note after updating, revision id of the document will be changed
 	 */
-	Changeset &update(JSON::Value document);
+	Changeset &update(const JSON::Container &document);
 
 	///Erases document from database
 	/**
 	 * @param document document to erase
 	 * @return reference to Changeset to allow create chains
 	 */
-	Changeset &erase(JSON::Value document);
+	Changeset &erase(JSON::Container document);
 
 	///Inserts new document to the database
 	/**
@@ -61,7 +61,7 @@ public:
 	 * @param id pointer to variable, which receives ID of document (optional)
 	 * @return referenc to Changeset to allow create chains
 	 */
-	Changeset &insert(JSON::Value document, ConstStrA *id = 0);
+	Changeset &insert(JSON::Container document, ConstStrA *id = 0);
 
 	///Commints all changes in the database
 	/**
@@ -113,18 +113,14 @@ public:
 	 * @param conflicts The Conflict object which containing details about the conflict. You
 	 *  can obtain this object by calling the function CouchDB::loadConflicts
 	 *
-	 * @param mergedDocument result document created by combining of the all conflicts. You can
-	 * however choose winning revision instead
-	 * @param merge true if mergedDocument refers to new revision, which must be stored
-	 * to the database. Specify false, when you just picked winner without modifying it. When
-	 * merge is false, function just deletes other revision keeping the winning one
+	 * @param mergedDocument result document created by combining of the all conflicts.
 	 */
-	Changeset &resolveConflict(const Conflicts &conflicts, JSON::Value mergedDocument, bool merge=true);
+	Changeset &resolveConflict(const Conflicts &conflicts, JSON::Container mergedDocument);
 
 	struct ErrorItem {
 		ConstStrA errorType;
 		ConstStrA reason;
-		JSON::Value document;
+		JSON::ConstValue document;
 		JSON::ConstValue errorDetails;
 	};
 
@@ -151,8 +147,8 @@ public:
 	const JSON::Builder json;
 protected:
 
-	JSON::Value docs;
-	JSON::Value wholeRequest;
+	JSON::Container docs;
+	JSON::Container wholeRequest;
 	CouchDB &db;
 
 	void init();

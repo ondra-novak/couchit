@@ -19,29 +19,28 @@ Changeset::Changeset(CouchDB &db):json(db.json), db(db) {
 }
 
 
-Changeset& Changeset::insert(JSON::Value document, ConstStrA *id) {
+Changeset& Changeset::insert(JSON::Container document, ConstStrA *id) {
 
-	JSON::Value v = document->getPtr("_id");
+	JSON::ConstValue v = document["_id"];
 	if (v == nil) {
 		v = json(ConstStrA(CouchDB::genUIDFast()));
-		document->add("_id",v);
+		document.set("_id",v);
 	}
 
 	if (id) *id = v->getStringUtf8();
-	docs->add(document);
+	docs.add(document);
 	return *this;
 }
 
-Changeset& Changeset::update(JSON::Value document) {
-	document["_id"];
-	docs->add(document);
+Changeset& Changeset::update(const JSON::Container &document) {
+	docs.add(document);
 	return *this;
 }
 
-Changeset& Changeset::erase(JSON::Value document) {
+Changeset& Changeset::erase(JSON::Container document) {
 
 	json.object(document)("_deleted", true);
-	docs->add(document);
+	docs.add(document);
 	return *this;
 }
 
@@ -85,16 +84,14 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 Changeset::Changeset(const Changeset& other):json(other.json),db(other.db) {
 }
 
-Changeset &Changeset::resolveConflict(const Conflicts& conflicts, JSON::Value mergedDocument, bool merge) {
-	ConstStrA mergedRev = mergedDocument["_rev"]->getStringUtf8();
+Changeset &Changeset::resolveConflict(const Conflicts& conflicts, JSON::Container mergedDocument) {
+	ConstStrA mergedRev = mergedDocument["_rev"].getStringA();
 	for (Conflicts::Iterator iter = conflicts.getFwIter(); iter.hasItems(); ){
-		const Document &doc = iter.getNext();
-		if (doc.revision != mergedRev) erase(json("_id",doc.allData["_id"])
-											     ("_rev",doc.allData["_rev"]));
+		const ConstDocument &doc = iter.getNext();
+		if (doc.revision != mergedRev) erase(json("_id",doc["_id"])
+											     ("_rev",doc["_rev"]));
 	}
-	if (merge) {
-		update(mergedDocument);
-	}
+	update(mergedDocument);
 	return *this;
 
 }
@@ -105,10 +102,10 @@ natural Changeset::mark() const {
 
 void Changeset::revert(natural mark) {
 	if (mark == 0) {
-		docs->clear();
+		docs.clear();
 	} else {
 		while (docs->length() != mark) {
-			docs->erase(docs->length()-1);
+			docs.erase(docs->length()-1);
 		}
 	}
 }
@@ -116,7 +113,7 @@ void Changeset::revert(natural mark) {
 void Changeset::revert(JValue doc) {
 	for (natural i = 0, cnt = docs->length(); i < cnt; i++) {
 		if (docs[i] == doc) {
-			docs->erase(i);
+			docs.erase(i);
 			break;
 		}
 	}

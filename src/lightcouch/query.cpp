@@ -42,7 +42,7 @@ Query& Query::selectKey(JCValue key) {
 	if (keys== nil) {
 		keys = json.array();
 	}
-	keys->add(key);
+	keys.add(key);
 	return *this;
 
 }

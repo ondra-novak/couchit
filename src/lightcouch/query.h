@@ -260,8 +260,8 @@ protected:
 	CouchDB &db;
 	View viewDefinition;
 
-	AutoArray<JSON::Value,SmallAlloc<9> > curKeySet;
-	JSON::Value startkey, endkey, keys;
+	AutoArray<JSON::Container,SmallAlloc<9> > curKeySet;
+	JSON::Container startkey, endkey, keys;
 	enum Mode {
 		mdKeys,
 		mdStart,
@@ -292,7 +292,7 @@ protected:
 
 	JSON::Value args;
 
-	JSON::Value buildKey(ConstStringT<JSON::Value> values);
+	JSON::ConstValue buildKey(ConstStringT<JSON::ConstValue> values);
 
 
 

@@ -283,7 +283,7 @@ public:
 	 * @note if sequence numbers are tracked, function disables caching, because
 	 * sequence numbers are not updated when local document is stored
 	 */
-	JSON::Value retrieveLocalDocument(ConstStrA localId);
+	JSON::ConstValue retrieveLocalDocument(ConstStrA localId);
 
 
 	struct UpdateFnResult {
