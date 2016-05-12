@@ -38,7 +38,7 @@ Query& Query::reset() {
 }
 
 
-Query& Query::selectKey(JSON::Value key) {
+Query& Query::selectKey(JCValue key) {
 	if (keys== nil) {
 		keys = json.array();
 	}
@@ -47,14 +47,14 @@ Query& Query::selectKey(JSON::Value key) {
 
 }
 
-Query& Query::fromKey(JSON::Value key) {
+Query& Query::fromKey(JCValue key) {
 	keys = nil;
 	startkey = key;
 	return *this;
 
 }
 
-Query& Query::toKey(JSON::Value key) {
+Query& Query::toKey(JCValue key) {
 	keys = nil;
 	endkey = key;
 	return *this;
@@ -85,7 +85,7 @@ Query& Query::operator ()(double key) {
 	return *this;
 }
 
-Query& Query::operator ()(JSON::Value key) {
+Query& Query::operator ()(JCValue key) {
 	curKeySet.add(key);
 	return *this;
 }
@@ -166,7 +166,7 @@ void Query::appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode 
 	}
 }
 
-JValue Query::exec(CouchDB &db) {
+JCValue Query::exec(CouchDB &db) {
 	finishCurrent();
 
 	StringA hlp;
@@ -240,17 +240,17 @@ JValue Query::exec(CouchDB &db) {
 			urlformat(descent?"&startkey=%1":"&endkey=%1") << (hlp=CouchDB::urlencode(json.factory->toString(*endkey)));
 		}
 
-		return db.requestJson("GET",urlline.getArray(),nil);
+		return db.jsonGET(urlline.getArray());
 	} else if (keys->length() == 1) {
 		urlformat("&key=%1") << (hlp=CouchDB::urlencode(json.factory->toString(*(keys[0]))));
-		return db.requestJson("GET",urlline.getArray(),nil);
+		return db.jsonGET(urlline.getArray());
 	} else {
 		if (viewDefinition.flags & View::forceGETMethod) {
 			urlformat("&keys=%1") << (hlp=CouchDB::urlencode(json.factory->toString(*keys)));
-			return db.requestJson("GET",urlline.getArray(),nil);
+			return db.jsonGET(urlline.getArray());
 		} else {
 			JSON::Value req = json("keys",keys);
-			return db.requestJson("POST",urlline.getArray(), req);
+			return db.jsonPOST(urlline.getArray(), req);
 		}
 	}
 
@@ -338,7 +338,7 @@ void Query::finishCurrent()
 }
 
 
-Query::Result::Result(JSON::Value jsonResult)
+Query::Result::Result(JCValue jsonResult)
 :rows(jsonResult["rows"])
 ,rowIter(jsonResult["rows"]->getFwIter())
 {
@@ -348,12 +348,12 @@ Query::Result::Result(JSON::Value jsonResult)
 	if (joffset) offset = joffset->getUInt(); else offset = 0;
 }
 
-const JValue& Query::Result::getNext() {
+const JCValue& Query::Result::getNext() {
 	out = rowIter.getNext();
 	return out;
 }
 
-const JValue& Query::Result::peek() const {
+const JCValue& Query::Result::peek() const {
 	out = rowIter.peek();
 	return out;
 }
@@ -388,7 +388,7 @@ static ConstStrA getIDFromRow(const JValue& jrow) {
 	else return ConstStrA();
 }
 
-Query::Row::Row(const JValue& jrow)
+Query::Row::Row(const JCValue& jrow)
 	:key(jrow->getPtr("key"))
 	,value(jrow->getPtr("value"))
 	,doc(jrow->getPtr("doc"))
@@ -401,7 +401,7 @@ JSON::Value Query::initArgs() {
 }
 
 
-JValue Query::exec() {
+JCValue Query::exec() {
 	return exec(db);
 }
 Query::~Query() {

@@ -15,6 +15,7 @@
 #include "lightspeed/base/containers/stringKey.h"
 #include "lightspeed/base/containers/map.h"
 
+#include "object.h"
 namespace LightCouch {
 
 using namespace LightSpeed;
@@ -35,7 +36,7 @@ public:
 	struct CachedItem {
 		const StringA etag;
 		atomicValue seqNum;
-		const JSON::ConstValue value;
+		const JCValue value;
 
 		CachedItem() {}
 		///Create cached item
@@ -45,7 +46,7 @@ public:
 		 * @param seqNum seq. number known when value is stored
 		 * @param value value to store
 		 */
-		CachedItem(StringA etag, natural seqNum, JSON::Value value)
+		CachedItem(StringA etag, natural seqNum, JCValue value)
 			:etag(etag),seqNum(seqNum), value(value) {}
 		bool isDefined() const {return value != null;}
 	};

@@ -93,11 +93,11 @@ public:
 	 * @note function removes prepared range, because select and range
 	 * is mutually exclusive
 	 */
-	Query &selectKey(JSON::Value key);
+	Query &selectKey(JCValue key);
 	///define range search
-	Query &fromKey(JSON::Value key);
+	Query &fromKey(JCValue key);
 	///define range search
-	Query &toKey(JSON::Value key);
+	Query &toKey(JCValue key);
 
 	template<typename T>
 	Query &select(const T &key);
@@ -155,13 +155,13 @@ public:
 	Query &operator ()(integer key);
 	Query &operator ()(int key);
 	Query &operator ()(double key);
-	Query &operator ()(JSON::Value key);
+	Query &operator ()(JCValue key);
 	Query &operator ()(bool key);
 	Query &operator ()(const char *key);
 	Query &operator ()(MetaValue metakey);
 
-	JValue exec(CouchDB &db);
-	JValue exec();
+	JCValue exec(CouchDB &db);
+	JCValue exec();
 
 	///Apply reduce on the result
 	/**
@@ -216,23 +216,23 @@ public:
 	class Row {
 	public:
 		///contains key
-		const JValue key;
+		const JCValue key;
 		///contains value
-		const JValue value;
+		const JCValue value;
 		///contains document - will be nil, if documents are not requested in the query
-		const JValue doc;
+		const JCValue doc;
 		///contains source document ID
 		const ConstStrA id;
 
-		Row(const JValue &jrow);
+		Row(const JCValue &jrow);
 	};
 
-	class Result: public IteratorBase<JValue, Result> {
+	class Result: public IteratorBase<JCValue, Result> {
 	public:
-		Result(JSON::Value jsonResult);
+		Result(JCValue jsonResult);
 
-		const JValue &getNext();
-		const JValue &peek() const;
+		const JCValue &getNext();
+		const JCValue &peek() const;
 		bool hasItems() const;
 
 		natural getTotal() const;
@@ -242,9 +242,9 @@ public:
 		void rewind();
 	protected:
 
-		JSON::Value rows;
-		JSON::Iterator rowIter;
-		mutable JValue out;
+		JCValue rows;
+		JSON::ConstIterator rowIter;
+		mutable JCValue out;
 		natural total;
 		natural offset;
 	};

@@ -13,6 +13,7 @@ namespace LightCouch {
 
 
 typedef LightSpeed::JSON::Value JValue;
+typedef LightSpeed::JSON::ConstValue JCValue;
 typedef LightSpeed::JSON::Builder JBuilder;
 
 }
