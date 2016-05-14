@@ -110,7 +110,7 @@ void Changeset::revert(natural mark) {
 	}
 }
 
-void Changeset::revert(JValue doc) {
+void Changeset::revert(Value doc) {
 	for (natural i = 0, cnt = docs->length(); i < cnt; i++) {
 		if (docs[i] == doc) {
 			docs.erase(i);

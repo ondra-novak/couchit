@@ -501,8 +501,8 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 		}
 	}
 
-	JSON::Value h = json.object();
-	JSON::Value v = jsonPUT(urlline.getArray(), null, h, storeHeaders);
+	JSON::Container h = json.object();
+	JSON::ConstValue v = jsonPUT(urlline.getArray(), null, h, storeHeaders);
 
 	UpdateFnResult r;
 	const JSON::INode *n = h->getPtr("X-Couch-Update-NewRev");

@@ -23,17 +23,17 @@ class ChangedDoc {
 
 public:
 	///contains whole changeset as it was received from the feed
-	const JValue allData;
+	const Value allData;
 	///sequence number
 	const natural seqId;
 	///document id
 	const ConstStrA id;
 	///list of revisions changed
-	const JValue revisions;
+	const Value revisions;
 	///true, if document has been deleted
 	const bool deleted;
 	///document, if requested, or null if not available
-	const JValue doc;
+	const Value doc;
 	ChangedDoc(const JSON::Value &allData);
 };
 

@@ -93,11 +93,11 @@ public:
 	 * @note function removes prepared range, because select and range
 	 * is mutually exclusive
 	 */
-	Query &selectKey(JCValue key);
+	Query &selectKey(ConstValue key);
 	///define range search
-	Query &fromKey(JCValue key);
+	Query &fromKey(ConstValue key);
 	///define range search
-	Query &toKey(JCValue key);
+	Query &toKey(ConstValue key);
 
 	template<typename T>
 	Query &select(const T &key);
@@ -155,13 +155,13 @@ public:
 	Query &operator ()(integer key);
 	Query &operator ()(int key);
 	Query &operator ()(double key);
-	Query &operator ()(JCValue key);
+	Query &operator ()(ConstValue key);
 	Query &operator ()(bool key);
 	Query &operator ()(const char *key);
 	Query &operator ()(MetaValue metakey);
 
-	JCValue exec(CouchDB &db);
-	JCValue exec();
+	ConstValue exec(CouchDB &db);
+	ConstValue exec();
 
 	///Apply reduce on the result
 	/**
@@ -216,23 +216,23 @@ public:
 	class Row {
 	public:
 		///contains key
-		const JCValue key;
+		const ConstValue key;
 		///contains value
-		const JCValue value;
+		const ConstValue value;
 		///contains document - will be nil, if documents are not requested in the query
-		const JCValue doc;
+		const ConstValue doc;
 		///contains source document ID
 		const ConstStrA id;
 
-		Row(const JCValue &jrow);
+		Row(const ConstValue &jrow);
 	};
 
-	class Result: public IteratorBase<JCValue, Result> {
+	class Result: public IteratorBase<ConstValue, Result> {
 	public:
-		Result(JCValue jsonResult);
+		Result(ConstValue jsonResult);
 
-		const JCValue &getNext();
-		const JCValue &peek() const;
+		const ConstValue &getNext();
+		const ConstValue &peek() const;
 		bool hasItems() const;
 
 		natural getTotal() const;
@@ -242,9 +242,9 @@ public:
 		void rewind();
 	protected:
 
-		JCValue rows;
+		ConstValue rows;
 		JSON::ConstIterator rowIter;
-		mutable JCValue out;
+		mutable ConstValue out;
 		natural total;
 		natural offset;
 	};
@@ -253,15 +253,16 @@ public:
 	const CouchDB &getDatabase() const {return db;}
 
 
-	const JBuilder json;
+	const Json json;
 
 protected:
 
 	CouchDB &db;
 	View viewDefinition;
 
-	AutoArray<JSON::Container,SmallAlloc<9> > curKeySet;
-	JSON::Container startkey, endkey, keys;
+	AutoArray<JSON::ConstValue,SmallAlloc<9> > curKeySet;
+	JSON::ConstValue startkey, endkey;
+	JSON::Container keys;
 	enum Mode {
 		mdKeys,
 		mdStart,
@@ -292,7 +293,7 @@ protected:
 
 	JSON::Value args;
 
-	JSON::ConstValue buildKey(ConstStringT<JSON::ConstValue> values);
+	JSON::Container buildKey(ConstStringT<JSON::ConstValue> values);
 
 
 

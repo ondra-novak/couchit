@@ -106,7 +106,7 @@ public:
 	 * sequential scan. If you want to revert recent changes, use mark-revert
 	 * couple to achieve this.
 	 */
-	void revert(JValue doc);
+	void revert(Value doc);
 
 	///Resolves conflict
 	/**

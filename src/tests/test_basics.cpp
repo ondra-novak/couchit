@@ -31,7 +31,7 @@ static void couchConnect(PrintTextA &print) {
 
 	CouchDB db(getTestCouch());
 
-	JSON::Value v = db.requestJson(CouchDB::GET,"/",null);
+	ConstValue v = db.jsonGET("/");
 		print("%1") << v["couchdb"]->getStringUtf8();
 }
 
@@ -212,9 +212,10 @@ static void couchCaching(PrintTextA &a) {
 					<<row.value[0]->getUInt()
 					<<row.value[1]->getUInt();
 
+			Container &mutval = const_cast<Container &>(static_cast<const Container &>(row.value));
 			//modify cache, so we can detect, that caching is working
-			row.value->erase(0);
-			row.value->add(db.getJsonFactory().newValue(100));
+			mutval.erase(0);
+			mutval.add(db.json(100));
 		}
 	}
 
@@ -229,7 +230,7 @@ static void couchCaching2(PrintTextA &a) {
 	db.use(DATABASENAME);
 	db.trackSeqNumbers();
 	ConstStrA killDocName = "Owen Dillard";
-	JSON::Value killDoc;
+	JSON::Container killDoc;
 
 
 	for (natural i = 0; i < 3; i++) {
@@ -255,11 +256,12 @@ static void couchCaching2(PrintTextA &a) {
 					<<row.value[1]->getUInt();
 
 			//modify cache, so we can detect, that caching is working
-			row.value->erase(0);
-			row.value->add(db.getJsonFactory().newValue(100));
+			Container &mutval = const_cast<Container &>(static_cast<const Container &>(row.value));
+			mutval.erase(0);
+			mutval.add(db.json(100));
 			//remember values of what to erase
 			if (killDocName == row.key[0]->getStringUtf8()) {
-				killDoc = row.doc;
+				killDoc = db.json.object(row.doc);
 
 			}
 		}
@@ -391,7 +393,7 @@ static void couchChangesStopWait(PrintTextA &a) {
 		return true;
 	});
 
-	JSON::Value v = db.requestJson(CouchDB::GET,"/",null);
+	ConstValue v = db.jsonGET("/");
 	a("%1") << v["couchdb"]->getStringUtf8();
 }
 

@@ -14,7 +14,7 @@ using namespace LightSpeed;
 CouchDB::Config getTestCouch() {
 	NetworkStreamSource src(NetworkAddress("localhost",5984),naturalNull, 10000,10000);
 	CouchDB::Config cfg;
-	cfg.connSource = src;
+	cfg.baseUrl = "http://localhost:5984/";
 	return cfg;
 
 }

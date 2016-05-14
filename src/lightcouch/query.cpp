@@ -38,7 +38,7 @@ Query& Query::reset() {
 }
 
 
-Query& Query::selectKey(JCValue key) {
+Query& Query::selectKey(ConstValue key) {
 	if (keys== nil) {
 		keys = json.array();
 	}
@@ -47,14 +47,14 @@ Query& Query::selectKey(JCValue key) {
 
 }
 
-Query& Query::fromKey(JCValue key) {
+Query& Query::fromKey(ConstValue key) {
 	keys = nil;
 	startkey = key;
 	return *this;
 
 }
 
-Query& Query::toKey(JCValue key) {
+Query& Query::toKey(ConstValue key) {
 	keys = nil;
 	endkey = key;
 	return *this;
@@ -85,7 +85,7 @@ Query& Query::operator ()(double key) {
 	return *this;
 }
 
-Query& Query::operator ()(JCValue key) {
+Query& Query::operator ()(ConstValue key) {
 	curKeySet.add(key);
 	return *this;
 }
@@ -106,14 +106,18 @@ Query& Query::operator()(MetaValue metaValue) {
 	switch (metaValue) {
 	case any: {
 		forceArray=true;
-			switch(mode) {
+		JSON::Container s,e;
+
+		switch(mode) {
 				case mdKeys:
 					startkey = endkey = keys = null;
 					if (curKeySet.empty()) return *this;
-					endkey = buildKey(curKeySet);
-					startkey = buildKey(curKeySet);
-					startkey->add(json(null));
-					endkey->add(json("\xEF\xBF\xBF",null));
+					e = buildKey(curKeySet);
+					s = buildKey(curKeySet);
+					s.add(json(null));
+					e.add(json("\xEF\xBF\xBF",null));
+					startkey = s;
+					endkey = e;
 					curKeySet.clear();
 					return *this;
 				case mdStart:
@@ -166,7 +170,7 @@ void Query::appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode 
 	}
 }
 
-JCValue Query::exec(CouchDB &db) {
+ConstValue Query::exec(CouchDB &db) {
 	finishCurrent();
 
 	StringA hlp;
@@ -261,8 +265,10 @@ Query& Query::group(natural level) {
 	return *this;
 }
 
-JSON::Value Query::buildKey(ConstStringT<JSON::Value> values) {
-	if (!forceArray && values.length() == 1) return values[0];
+JSON::Container Query::buildKey(ConstStringT<ConstValue> values) {
+	if (!forceArray && values.length() == 1) {
+		return json(values[0]);
+	}
 	else return json(values);
 }
 
@@ -313,7 +319,7 @@ void Query::finishCurrent()
 {
 	if (curKeySet.empty())
 		return;
-	JSON::Value arr = buildKey(curKeySet);
+	JSON::ConstValue arr = buildKey(curKeySet);
 	curKeySet.clear();
 	switch (mode) {
 		case mdKeys: {
@@ -321,7 +327,7 @@ void Query::finishCurrent()
 				startkey = endkey = nil;
 				keys = json.array();
 			}
-			keys->add(arr);
+			keys.add(arr);
 			return;
 		}
 		case mdStart: {
@@ -338,7 +344,7 @@ void Query::finishCurrent()
 }
 
 
-Query::Result::Result(JCValue jsonResult)
+Query::Result::Result(ConstValue jsonResult)
 :rows(jsonResult["rows"])
 ,rowIter(jsonResult["rows"]->getFwIter())
 {
@@ -348,12 +354,12 @@ Query::Result::Result(JCValue jsonResult)
 	if (joffset) offset = joffset->getUInt(); else offset = 0;
 }
 
-const JCValue& Query::Result::getNext() {
+const ConstValue& Query::Result::getNext() {
 	out = rowIter.getNext();
 	return out;
 }
 
-const JCValue& Query::Result::peek() const {
+const ConstValue& Query::Result::peek() const {
 	out = rowIter.peek();
 	return out;
 }
@@ -382,13 +388,13 @@ void Query::Result::rewind() {
 	rowIter = rows->getFwIter();
 }
 
-static ConstStrA getIDFromRow(const JValue& jrow) {
+static ConstStrA getIDFromRow(const Value& jrow) {
 	const JSON::INode *nd = jrow->getPtr("id");
 	if (nd) return nd->getStringUtf8();
 	else return ConstStrA();
 }
 
-Query::Row::Row(const JCValue& jrow)
+Query::Row::Row(const ConstValue& jrow)
 	:key(jrow->getPtr("key"))
 	,value(jrow->getPtr("value"))
 	,doc(jrow->getPtr("doc"))
@@ -401,7 +407,7 @@ JSON::Value Query::initArgs() {
 }
 
 
-JCValue Query::exec() {
+ConstValue Query::exec() {
 	return exec(db);
 }
 Query::~Query() {

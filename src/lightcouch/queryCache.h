@@ -36,7 +36,7 @@ public:
 	struct CachedItem {
 		const StringA etag;
 		atomicValue seqNum;
-		const JCValue value;
+		const ConstValue value;
 
 		CachedItem() {}
 		///Create cached item
@@ -46,7 +46,7 @@ public:
 		 * @param seqNum seq. number known when value is stored
 		 * @param value value to store
 		 */
-		CachedItem(StringA etag, natural seqNum, JCValue value)
+		CachedItem(StringA etag, natural seqNum, ConstValue value)
 			:etag(etag),seqNum(seqNum), value(value) {}
 		bool isDefined() const {return value != null;}
 	};

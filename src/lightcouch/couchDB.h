@@ -161,6 +161,7 @@ public:
 
 	};
 
+
 	///Starts listening for changes processed by a filter
 	/** Function block while it process all changes for indefinite time. Every
 	 * change is passed to the callback. During this process, this object cannot process
@@ -287,14 +288,14 @@ public:
 
 
 	struct UpdateFnResult {
-		JSON::Value response;
+		JSON::ConstValue response;
 		StringA newRevID;
 	};
 
 	UpdateFnResult callUpdateFn(ConstStrA updateFnPath, ConstStrA documentId, JSON::Value arguments);
 
 	///Use json variable to build objects
-	const JBuilder json;
+	const Json json;
 
 	struct HttpConfig: BredyHttpClient::ClientConfig {
 		HttpConfig();
@@ -330,11 +331,11 @@ protected:
 	void reqPathToFullPath(ConstStrA reqPath, C &output) {
 		output.append(baseUrl);
 		if (reqPath.head(1) == ConstStrA('/')) {
-			output.append(reqPath);
+			output.append(reqPath.offset(1));
 		} else {
 			if (database.empty()) throw ErrorMessageException(THISLOCATION,"No database selected");
 
-			output.append(ConstStrA('/'));
+//			output.append(ConstStrA('/'));
 			output.append(database);
 			output.append(ConstStrA('/'));
 			output.append(reqPath);
