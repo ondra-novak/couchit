@@ -24,6 +24,7 @@ Changeset& Changeset::insert(Document &document) {
 	document.edit(json)("_id",db.genUIDFast());
 	document.unset("_rev");
 	docs.add(document);
+	return *this;
 }
 
 Changeset& Changeset::update(Document &document) {

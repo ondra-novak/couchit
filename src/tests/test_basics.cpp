@@ -4,6 +4,7 @@
  *  Created on: 19. 3. 2016
  *      Author: ondra
  */
+#include "../lightcouch/document.h"
 #include "../lightcouch/queryCache.h"
 #include "../lightcouch/changeset.h"
 #include <lightspeed/base/text/textstream.tcc>
@@ -76,16 +77,17 @@ static void couchLoadData(PrintTextA &print) {
 	db.use(DATABASENAME);
 
 
-	AutoArray<JSON::Value, SmallAlloc<50> > savedDocs;
+	AutoArray<Document, SmallAlloc<50> > savedDocs;
 
 	Changeset chset(db.createChangeset());
 	JSON::Value data = db.getJsonFactory().fromString(strdata);
 	for (JSON::Iterator iter = data->getFwIter(); iter.hasItems();) {
 		const JSON::KeyValue &kv= iter.getNext();
-		JSON::Value doc = db.getJsonFactory().object()
-				->add("name",&kv->operator [](0))
-				->add("age",&kv->operator[](1))
-				->add("height",&kv->operator[](2));
+		Document doc;
+		doc.edit(db.json)
+				("name",kv[0])
+				("age",kv[1])
+				("height",kv[2]);
 		savedDocs.add(doc);
 		chset.insert(doc);
 	}
@@ -109,8 +111,9 @@ static void couchConflicted(PrintTextA &print) {
 	try {
 		Changeset chset(db.createChangeset());
 		for (natural i = 0; i < countof(designs); i++) {
-			JSON::Value data = db.getJsonFactory().fromString(designs[i]);
-			chset.insert(data);
+
+			Document doc(db.getJsonFactory().fromString(designs[i]));
+			chset.insert(doc);
 		}
 		chset.commit(db,false);
 		print("failed");
@@ -127,8 +130,8 @@ static void couchLoadDesign(PrintTextA &) {
 
 	Changeset chset(db.createChangeset());
 	for (natural i = 0; i < countof(designs); i++) {
-		JSON::Value data = db.getJsonFactory().fromString(designs[i]);
-		chset.insert(data);
+		Document doc(db.getJsonFactory().fromString(designs[i]));
+		chset.insert(doc);
 	}
 	chset.commit(db);
 }
@@ -230,7 +233,7 @@ static void couchCaching2(PrintTextA &a) {
 	db.use(DATABASENAME);
 	db.trackSeqNumbers();
 	ConstStrA killDocName = "Owen Dillard";
-	JSON::Container killDoc;
+	Document killDoc;
 
 
 	for (natural i = 0; i < 3; i++) {
@@ -261,8 +264,7 @@ static void couchCaching2(PrintTextA &a) {
 			mutval.add(db.json(100));
 			//remember values of what to erase
 			if (killDocName == row.key[0]->getStringUtf8()) {
-				killDoc = db.json.object(row.doc);
-
+				killDoc = row.doc;
 			}
 		}
 	}
@@ -307,8 +309,9 @@ static void loadSomeDataThread(ConstStrA locId) {
 
 	Thread::sleep(1000);
 	Changeset chset = db.createChangeset();
-	JSON::Builder json;
-	chset.update(json("_id",locId)("aaa",100));
+	Document doc;
+	doc.edit(chset.json)("_id",locId)("aaa",100);
+	chset.update(doc);
 	chset.commit(db);
 }
 
@@ -342,8 +345,9 @@ static void loadSomeDataThread3(ConstStrA locId) {
 
 	for (natural i = 0; i < 3; i++) {
 		Changeset chset = db.createChangeset();
-		JSON::Builder json;
-		chset.update(json("_id",locId)("aaa",100));
+		Document doc;
+		doc.edit(chset.json)("_id",locId)("aaa",100);
+		chset.update(doc);
 		chset.commit(db);
 		locId = locId.offset(1);
 		Thread::sleep(nil);
