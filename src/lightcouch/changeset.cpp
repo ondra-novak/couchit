@@ -19,25 +19,20 @@ Changeset::Changeset(CouchDB &db):json(db.json), db(db) {
 }
 
 
-Changeset& Changeset::insert(JSON::Container document, ConstStrA *id) {
+Changeset& Changeset::insert(Document &document) {
 
-	JSON::ConstValue v = document["_id"];
-	if (v == nil) {
-		v = json(ConstStrA(CouchDB::genUIDFast()));
-		document.set("_id",v);
-	}
+	document.edit(json)("_id",db.genUIDFast());
+	document.unset("_rev");
+	docs.add(document);
+}
 
-	if (id) *id = v->getStringUtf8();
+Changeset& Changeset::update(Document &document) {
+	if (!document.dirty()) return *this;
 	docs.add(document);
 	return *this;
 }
 
-Changeset& Changeset::update(const JSON::Container &document) {
-	docs.add(document);
-	return *this;
-}
-
-Changeset& Changeset::erase(JSON::Container document) {
+Changeset& Changeset::erase(Document &document) {
 
 	json.object(document)("_deleted", true);
 	docs.add(document);
@@ -84,12 +79,13 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 Changeset::Changeset(const Changeset& other):json(other.json),db(other.db) {
 }
 
-Changeset &Changeset::resolveConflict(const Conflicts& conflicts, JSON::Container mergedDocument) {
+Changeset &Changeset::resolveConflict(const Conflicts& conflicts, Document &mergedDocument) {
 	ConstStrA mergedRev = mergedDocument["_rev"].getStringA();
 	for (Conflicts::Iterator iter = conflicts.getFwIter(); iter.hasItems(); ){
-		const ConstDocument &doc = iter.getNext();
-		if (doc.revision != mergedRev) erase(json("_id",doc["_id"])
-											     ("_rev",doc["_rev"]));
+		Document doc = iter.getNext();
+		if (doc.getRev() != mergedRev) {
+			erase(doc);
+		}
 	}
 	update(mergedDocument);
 	return *this;
@@ -143,6 +139,12 @@ void Changeset::UpdateException::message(ExceptionMsg& msg) const {
 Changeset& Changeset::commit(bool all_or_nothing) {
 	return commit(db,all_or_nothing);
 }
+
+Changeset& Changeset::insert(ConstStrA id, Document& document) {
+	document.edit(json)("_id",id);
+	return update(document);
+}
+
 
 } /* namespace assetex */
 

@@ -388,7 +388,7 @@ void Query::Result::rewind() {
 	rowIter = rows->getFwIter();
 }
 
-static ConstStrA getIDFromRow(const Value& jrow) {
+static ConstStrA getIDFromRow(const ConstValue & jrow) {
 	const JSON::INode *nd = jrow->getPtr("id");
 	if (nd) return nd->getStringUtf8();
 	else return ConstStrA();

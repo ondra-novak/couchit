@@ -11,44 +11,43 @@
 namespace LightCouch {
 
 
-
-
-template<typename V, typename W>
-DocumentBase<V,W>::DocumentBase(const V &allData):V(allData)
-	,id(allData["_id"].getOrDefault(ConstStrA()))
-	,revision(allData["_rev"].getOrDefault(ConstStrA()))
-	,conflicts(allData["_conflicts"])
-	,attachments(allData["_attachments"])
-{
+Document::Document(const ConstValue& base):ConstValue(base),base(base) {
 }
 
-Conflicts::Iterator Conflicts::findRevision(ConstStrA revision) const {
-
+Document::Document(const Value& editableBase):ConstValue(editableBase),base(editableBase),editing(editableBase) {
 }
 
-ConstDocument::ConstDocument(const JSON::ConstValue& allData)
-:DocumentBase<JSON::ConstValue,JSON::ConstValue>(allData)
-{
+ConstStrA Document::getID() const {
+	ConstValue v = (*this)["_id"];
+	if (v != null) return v.getStringA();
+	else return ConstStrA();
 }
 
-Document::Document(const JSON::Value& allData)
-	:DocumentBase<JSON::Value,JSON::Container>(allData) {
+ConstStrA Document::getRev() const {
+	ConstValue v = (*this)["_rev"];
+	if (v != null) return v.getStringA();
+	else return ConstStrA();
 }
 
-Document ConstDocument::getEditable(const JSON::Builder &json) const {
-
-	JSON::Value out = json.object();
-
-	safeGet()->enumEntries(JSON::IEntryEnum::lambda([&out,&json](const JSON::INode *nd, ConstStrA key,natural){
-		if (key.head(1) == ConstStrA('_')) {
-			if (key != "_id" && key != "_rev") return false;
-		}
-		out.set(key,JSON::Value(nd->copy(json.factory)));
-		return false;
-	}));
-
-	return Document(out);
+Document &Document::set(ConstStrA key, const Value& value) {
+	editing.set(key,value);
+	return *this;
 }
+
+void Document::revert() {
+	editing = null;
+	*this = base;
+}
+
+Json::Object Document::edit(const Json& json) {
+	if (editing == null) {
+		if (base == null) editing = json.object();
+		else editing = base->copy(json.factory);
+		*this = editing;
+	}
+	return json.object(editing);
+}
+
+
 
 } /* namespace LightCouch */
-

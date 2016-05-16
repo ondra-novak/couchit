@@ -26,42 +26,46 @@ public:
 	Changeset(const Changeset& other);
 
 
-	///Updates document in the CouchDB
-	/** Function can be used for ether simple updating, or insert or deleting the document.
-	 * It depends on which attributes are included.
+
+	///Updates document in database
+	/** Function schedules document for update. Once document is scheduled, Document instance can
+	 * be destroyed, because document is kept inside of changeset. Changes are applied by function commit()
 	 *
-	 * If document has no _rev attribute, it will be inserted. However, the document must have
-	 * the attribute "_id", otherwise an exception is thrown.
+	 * @param document document to schedule for update
+	 * @return reference to this
 	 *
-	 * If document has attribute _deleted:true, it will be deleted.
+	 * @note Document should have ID otherwise function fails. To insert new document, use insert(). You
+	 * can also specify ID manually and then call update()
 	 *
-	 * In all cases expect creation, the document must have _rev. This attribute is presented
-	 * at current version of document - you have to download the document before it can be
-	 * updated.
-	 *
-	 * You can also use insert() to insert document to the database. You can also use erase()
-	 * to erase document
-	 *
-	 * @param document document to update
-	 *
-	 * @note after updating, revision id of the document will be changed
 	 */
-	Changeset &update(const JSON::Container &document);
+	Changeset &update(Document &document);
 
 	///Erases document from database
 	/**
-	 * @param document document to erase
+	 * @param document document to erase. Note document will switched to editable, because deleting
+	 * is implemented by creating new special revision
+	 *
 	 * @return reference to Changeset to allow create chains
 	 */
-	Changeset &erase(JSON::Container document);
+	Changeset &erase(Document &document);
 
 	///Inserts new document to the database
 	/**
-	 * @param document document to insert
-	 * @param id pointer to variable, which receives ID of document (optional)
-	 * @return referenc to Changeset to allow create chains
+	 * @param document document to insert. Note that document is always inserted as new. New ID will
+	 * be always generated. You can retrieve the ID by method getID();
+	 *
+	 * @return reference to Changeset to allow create chains
 	 */
-	Changeset &insert(JSON::Container document, ConstStrA *id = 0);
+	Changeset &insert(Document &document);
+
+	///Inserts new document to the database
+	/**
+	 * @param id document id
+	 * @param document document to insert.
+	 *
+	 * @return reference to Changeset to allow create chains
+	 */
+	Changeset &insert(ConstStrA id, Document &document);
 
 	///Commints all changes in the database
 	/**
@@ -115,7 +119,7 @@ public:
 	 *
 	 * @param mergedDocument result document created by combining of the all conflicts.
 	 */
-	Changeset &resolveConflict(const Conflicts &conflicts, JSON::Container mergedDocument);
+	Changeset &resolveConflict(const Conflicts &conflicts, Document &mergedDocument);
 
 	struct ErrorItem {
 		ConstStrA errorType;
@@ -123,11 +127,6 @@ public:
 		JSON::ConstValue document;
 		JSON::ConstValue errorDetails;
 	};
-
-	///easy chain all changes with operator()
-	Changeset &operator()(JSON::Value &v) {
-		return update(v);
-	}
 
 	CouchDB &getDatabase() {return db;}
 	const CouchDB &getDatabase() const {return db;}
