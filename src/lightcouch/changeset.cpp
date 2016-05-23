@@ -11,7 +11,7 @@
 
 #include "lightspeed/base/containers/autoArray.tcc"
 
-#include "validator.h"
+//#include "validator.h"
 namespace LightCouch {
 
 Changeset::Changeset(CouchDB &db):json(db.json), db(db) {
@@ -46,6 +46,7 @@ Changeset& Changeset::erase(Document &document) {
 Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 	if (docs->empty()) return *this;
 	///if validator is not present, do not run empty cycle.
+	/*
 	const Validator *v;
 	if ((v = db.getValidator())!=0) {
 		docs->enumEntries(JSON::IEntryEnum::lambda([v](const JSON::INode *nd, ConstStrA, natural){
@@ -53,7 +54,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 			if (!r) throw ValidationFailedException(THISLOCATION,r);
 			return false;
 		}));
-	}
+	}*/
 	if (all_or_nothing)
 		json.object(wholeRequest)("all_or_nothing",true);
 	JSON::ConstValue out = db.jsonPOST("_bulk_docs", wholeRequest);

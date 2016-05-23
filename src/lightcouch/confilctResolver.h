@@ -76,7 +76,6 @@ protected:
 	 * @param path path to the value (key name)
 	 * @param oldValue current value in the top document. The variable is nil, if newValue is inserted
 	 * @param newValue new value. The variable is nil, if key is being erased
-	 * @param baseValue value common for both revisions
 	 * @return Value to store at given key. Set to nil, if you want to erase the key.
 	 *
 	 * Default implementation will return newValue. If both values are objects, function performs recursive
@@ -85,7 +84,7 @@ protected:
 	 * @note you can modify document if you need. On each call, document contains updated version
 	 * as the function processes for each key in document
 	 */
-	virtual ConstValue mergeValue(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue, const ConstValue &baseValue);
+	virtual Value mergeValue(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
 
 
 	///Compares oldValue and newValue and returns null or a difference
@@ -99,7 +98,20 @@ protected:
 	 * @param newValue new value
 	 * @return If old value and new value are equal, function should return null. Otherwise
 	 * function can return anything which will help to perform merge through the function mergeValue.
-	 * Default implementation simply returns new value.
+	 * Default implementation simply returns new value for non-object and non-array values. For object,
+	 * special diff-object is created. Arrays can be also subjects of diff, in this case, special array
+	 * is created
+	 *
+	 * @code
+	 * ["__array_diff__", l, //l = null - length changed, l = number - length unchanged (and value contains length of array) - need to detect type of array
+	 *			   a,  //skip _a_ items - they are unchanged in both arrays
+	 *             true,<value>, //insert <value> at position (added at end, if array is smaller)
+	 *             false,<value>, //delete <value> at position (skipped, if failed)
+	 *             ]
+	 *
+	 * @endcode
+	 *
+	 *
 	 */
 	virtual ConstValue diffValue(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
 
@@ -108,9 +120,11 @@ protected:
 
 	Value mergeObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue, const ConstValue &baseValue);
 
-	JSON::ConstValue makeDiff(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+	ConstValue makeDiff(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+	Value patchDiff(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
 
 	ConstValue deletedItem;
+	ConstValue arrayDiff;
 };
 
 } /* namespace LightCouch */
