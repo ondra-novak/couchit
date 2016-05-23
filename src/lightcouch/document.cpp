@@ -34,6 +34,11 @@ Document &Document::set(ConstStrA key, const Value& value) {
 	return *this;
 }
 
+Document &Document::unset(ConstStrA key) {
+	editing.unset(key);
+	return *this;
+}
+
 void Document::revert() {
 	editing = null;
 	*this = base;

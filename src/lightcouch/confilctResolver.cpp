@@ -28,10 +28,14 @@ ConstValue ConfilctResolver::mergeValue(Document& doc,const Path& path, const Co
 		const ConstValue& newValue, const ConstValue& baseValue) {
 }
 
+ConstValue ConfilctResolver::diffValue(Document& doc, const Path& path,
+		const ConstValue& oldValue, const ConstValue& newValue) {
+}
+
 Value ConfilctResolver::mergeObject(Document& doc, const Path& path,const ConstValue& oldValue,
 		const ConstValue& newValue,const ConstValue& baseValue) {
 
-
+/*
 	Value diff = db.json.object();
 	AutoArray<ConstStrA, SmallAlloc<32> > delItems;
 	JSON::ConstIterator o = oldValue->getFwConstIter();
@@ -53,7 +57,35 @@ Value ConfilctResolver::mergeObject(Document& doc, const Path& path,const ConstV
 
 		}
 	}
+*/
 
+}
+
+JSON::ConstValue ConfilctResolver::makeDiff(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
+	if (deletedItem == null) deletedItem = db.json("deleted");
+	Container diff = db.json.object();
+
+	JSON::ConstIterator o = oldValue->getFwConstIter();
+	JSON::ConstIterator n = newValue->getFwConstIter();
+
+	while (n.hasItems() && b.hasItems()) {
+		const JSON::ConstKeyValue &nkv = n.peek();
+		const JSON::ConstKeyValue &okv = o.peek();
+		ConstStrA nk = nkv.getStringKey();
+		ConstStrA ok = okv.getStringKey();
+		if (nk < ok) {
+			diff.set(nk, nkv);
+			n.skip();
+		} else if (nk > ok) {
+			diff.set(ok, deletedItem);
+			b.skip();
+		} else {
+			ConstValue x= diffValue(doc,Path(path,nk),okv,nkv);
+			if (x != nil)
+				diff.set(nk, x);
+		}
+	}
+	return diff;
 
 }
 

@@ -88,10 +88,29 @@ protected:
 	virtual ConstValue mergeValue(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue, const ConstValue &baseValue);
 
 
+	///Compares oldValue and newValue and returns null or a difference
+	/** Note that default implementation just compares two values. If they are equal
+	 * function returns null. Otherwise, it returns a newValue. Function can compare also
+	 * arrays and object. Result value is later put as newValue to the function mergeValue.
+	 *
+	 * @param doc relate document. Note that document can be empty now
+	 * @param path path to the value
+	 * @param oldValue old value
+	 * @param newValue new value
+	 * @return If old value and new value are equal, function should return null. Otherwise
+	 * function can return anything which will help to perform merge through the function mergeValue.
+	 * Default implementation simply returns new value.
+	 */
+	virtual ConstValue diffValue(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+
 	CouchDB &db;
 
 
 	Value mergeObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue, const ConstValue &baseValue);
+
+	JSON::ConstValue makeDiff(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+
+	ConstValue deletedItem;
 };
 
 } /* namespace LightCouch */

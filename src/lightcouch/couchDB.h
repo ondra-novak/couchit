@@ -35,6 +35,7 @@ class Changeset;
 class QueryCache;
 class Conflicts;
 class Document;
+class Validator;
 
 class CouchDB {
 public:
@@ -61,6 +62,11 @@ public:
 		 * can reduce time by skipping data transfering and parsing
 		 */
 		Pointer<QueryCache> cache;
+		///Pointer to object validator
+		/** Everytime anything is being put into database, validator is called. Failed
+		 * validation is thrown as exception.
+		 */
+		Pointer<Validator> validator;
 	};
 
 	CouchDB(const Config &cfg);
@@ -287,6 +293,14 @@ public:
 	JSON::ConstValue retrieveLocalDocument(ConstStrA localId);
 
 
+	///Retrieves pointer to validator
+	/**
+	 * @return function returns null, when validator is not defined. Otherwise function
+	 * returns pointer to current validator
+	 */
+	Pointer<Validator> getValidator() const {return validator;}
+
+
 	struct UpdateFnResult {
 		JSON::ConstValue response;
 		StringA newRevID;
@@ -297,11 +311,17 @@ public:
 	///Use json variable to build objects
 	const Json json;
 
+
+
+
 	struct HttpConfig: BredyHttpClient::ClientConfig {
 		HttpConfig();
 	};
 
 	static HttpConfig httpConfig;
+
+
+
 
 protected:
 
@@ -318,7 +338,8 @@ protected:
 	JSON::PFactory factory;
 	natural lastStatus;
 	bool listenExitFlag;
-	QueryCache *cache;
+	Pointer<QueryCache> cache;
+	Pointer<Validator> validator;
 	atomicValue *seqNumSlot;
 
 	StringA lastConnectError;
