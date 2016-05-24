@@ -105,9 +105,10 @@ protected:
 	 * @code
 	 * ["__array_diff__", l, //l = null - length changed, l = number - length unchanged (and value contains length of array) - need to detect type of array
 	 *			   a,  //skip _a_ items - they are unchanged in both arrays
-	 *             true,<value>, //insert <value> at position (added at end, if array is smaller)
-	 *             false,<value>, //delete <value> at position (skipped, if failed)
-	 *             ]
+	 *			   "add", item
+	 *			   "replace", oldItem,newItem
+	 *			   "erase", item
+	 *
 	 *
 	 * @endcode
 	 *
@@ -125,6 +126,16 @@ protected:
 
 	ConstValue deletedItem;
 	ConstValue arrayDiff;
+	ConstValue strAdd;
+	ConstValue strReplace;
+	ConstValue strErase;
+
+
+	class ArrDiffOpBase;
+	class ArrDiffOpAdd;
+	class ArrDiffOpReplace;
+	class ArrDiffOpErase;
+	class ArrDiffOpSkip;
 };
 
 } /* namespace LightCouch */

@@ -55,41 +55,77 @@ Value ConfilctResolver::mergeObject(Document& doc, const Path& path,const ConstV
 
 	ConstValue diff = makeDiff(doc,path, newValue, baseValue);
 	return patchDiff(doc,path,oldValue, diff);
-
 }
 
-struct DiffPath {
-	const natural indexPrev;
-	const bool erase;
-	const ConstValue v;
 
-	DiffPath(natural indexPrev,bool erase,const ConstValue &v):indexPrev(indexPrev),erase(erase),v(v) {}
-};
+class ConfilctResolver::ArrDiffOpBase {
+public:
+	virtual Container createDiff(ConfilctResolver &resolver) const = 0;
+	virtual natural getPrice() const {return price;}
 
-struct DiffState : public ComparableLess<DiffState> {
-	const natural oindex;
-	const natural nindex;
-	const natural navindex;
+	ArrDiffOpBase(const ArrDiffOpBase *prev):prev(prev),price(prev?prev->getPrice():0) {}
+	virtual ~ArrDiffOpBase() {}
+
+protected:
+	const SharedPtr<ArrDiffOpBase> prev;
 	const natural price;
 
-	DiffState(natural oindex,natural nindex,natural navIndex,natural price)
-		:oindex(oindex),nindex(nindex),navindex(navIndex),price(price) {}
-	bool lessThan(DiffState &other) const {
-		return price > other.price;
+	Container getContainer(ConfilctResolver &resolver) {
+		return prev?prev->createDiff(resolver):Container(resolver.db.json.array());
 	}
+};
+
+class ConfilctResolver::ArrDiffOpAdd: public ArrDiffOpBase  {
+public:
+	virtual Container createDiff(ConfilctResolver &resolver) const {
+		Container x = getContainer(json);
+		x.add(resolver.strAdd);
+		x.add(v);
+		return x;
+	}
+	virtual natural getPrice() const {return price + 1;}
+
+	ArrDiffOpAdd( const ConstValue &v,const ArrDiffOpBase *prev):ArrDiffOpBase(prev),v(v) {}
+
+protected:
+	ConstValue v;
+};
+
+
+class ConfilctResolver::ArrDiffOpReplace: public ArrDiffOpBase  {
+public:
+	virtual Container createDiff(ConfilctResolver &resolver) const {
+		Container x = getContainer(json);
+		x.add(resolver.strAdd);
+		x.add(v);
+		return x;
+	}
+	virtual natural getPrice() const {return price + 1;}
+
+	ArrDiffOpReplace( const ConstValue &oldv, const ConstValue &v,const ArrDiffOpBase *prev):ArrDiffOpBase(prev),oldv(oldv),v(v) {}
+
+protected:
+	ConstValue v;
+	ConstValue oldv;
 };
 
 
 JSON::ConstValue ConfilctResolver::makeDiff(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
+
+	typedef std::pair<natural,natural> State;
+
 	if (oldValue->getType() != newValue->getType()) return newValue;
 	if (oldValue->isArray()) {
 		if (arrayDiff == null) arrayDiff = db.json("__array_diff__");
+		if (strAdd == null) strAdd = db.json("add");
+		if (strReplace == null) strReplace = db.json("replace");
+		if (strErase == null) strErase = db.json("erase");
 		//path (organised from target to start)
 		AutoArray<DiffPath> diffPath;
 		//queue of opened states
 		PriorityQueue<DiffState> stateQueue;
 		//already processed stateds
-		Set<std::pair<natural,natural> > processed;
+		Set<State> processed;
 
 		//push initial state
 		stateQueue.push(DiffState(0,0,naturalNull,0));
@@ -104,7 +140,7 @@ JSON::ConstValue ConfilctResolver::makeDiff(Document& doc, const Path& path, con
 			//we will try to stop this branch, if already solved
 			bool stopBranch = false;
 			//try to lock the state
-			processed.insert(std::make_pair(x.oindex,x.nindex),&stopBranch);
+			processed.insert(State(x.oindex,x.nindex),&stopBranch);
 
 			//if state is locked, we can stop this branch now
 			if (stopBranch)
@@ -260,7 +296,7 @@ Value ConfilctResolver::patchDiff(Document& doc, const Path& path, const ConstVa
 			if (nk < ok) {
 				if (nkv != deletedItem) {
 					if (nkv->isArray() || nkv->isObject())
-						res.set(nk,patchDiff(doc,Path(path,nk),json.object(),nkv));
+						res.set(nk,patchDiff(doc,Path(path,nk),db.json.object(),nkv));
 					else {
 						res.set(nk, nkv->copy(db.json.factory));
 					}
