@@ -19,6 +19,17 @@ ConfilctResolver::ConfilctResolver(CouchDB& db):db(db) {
 }
 
 Document ConfilctResolver::resolve(const ConstStrA& docId) {
+
+	TextFormatBuff<char, SmallAlloc<256> > fmt;
+	fmt("%1?revs=true&conflicts=true") << docId;
+	Document headRev = db.jsonGET(fmt.write(),null);
+	ConstValue revisions = headRev["_revisions"];
+	ConstValue conflicts = headRev["_conflicts"];
+	if (conflicts == null) return headRev;
+
+
+
+
 }
 
 Value ConfilctResolver::merge3w(const ConstValue& topdoc,const ConstValue& conflict, const ConstValue& base) {
@@ -26,13 +37,13 @@ Value ConfilctResolver::merge3w(const ConstValue& topdoc,const ConstValue& confl
 	return mergeObject(doc,Path(""), topdoc, conflict, base);
 }
 
-Value ConfilctResolver::merge2w(const ConstValue& doc,const ConstValue& conflict) {
+Value ConfilctResolver::merge2w(const ConstValue& ,const ConstValue& ) {
 	return nil;
 }
 
 Value ConfilctResolver::mergeValue(Document& doc,const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
-	if (oldValue->getType() == newValue->getType() && (oldValue->isArray() || oldValue->isObject()))
-		return patchDiff(doc,path,oldValue,newValue);
+	if (oldValue->getType() == newValue->getType() && oldValue->isObject())
+		return patchObject(doc,path,oldValue,newValue);
 	else
 		return newValue->copy(db.json.factory);
 
@@ -42,207 +53,24 @@ ConstValue ConfilctResolver::diffValue(Document& doc, const Path& path, const Co
 	//different types, use new value
 	if (oldValue->getType() != newValue->getType()) return newValue;
 	//make diff
-	if (oldValue->isObject() || oldValue->isArray()) {
-		ConstValue diff = makeDiff(doc, path, oldValue,newValue);
-		if (diff.empty()) return nil;
-	}
+	if (oldValue->isObject()) return makeDiffObject(doc, path, oldValue,newValue);
 	if (oldValue->operator == (*newValue)) return nil;
-	else return newValue;
+	return newValue;
 }
 
 Value ConfilctResolver::mergeObject(Document& doc, const Path& path,const ConstValue& oldValue,
 		const ConstValue& newValue,const ConstValue& baseValue) {
 
-	ConstValue diff = makeDiff(doc,path, newValue, baseValue);
-	return patchDiff(doc,path,oldValue, diff);
+	ConstValue diff = makeDiffObject(doc,path, newValue, baseValue);
+	return patchObject(doc,path,oldValue, diff);
 }
 
 
-class ConfilctResolver::ArrDiffOpBase {
-public:
-	virtual Container createDiff(ConfilctResolver &resolver) const = 0;
-	virtual natural getPrice() const {return price;}
-
-	ArrDiffOpBase(const ArrDiffOpBase *prev):prev(prev),price(prev?prev->getPrice():0) {}
-	virtual ~ArrDiffOpBase() {}
-
-protected:
-	const SharedPtr<ArrDiffOpBase> prev;
-	const natural price;
-
-	Container getContainer(ConfilctResolver &resolver) {
-		return prev?prev->createDiff(resolver):Container(resolver.db.json.array());
-	}
-};
-
-class ConfilctResolver::ArrDiffOpAdd: public ArrDiffOpBase  {
-public:
-	virtual Container createDiff(ConfilctResolver &resolver) const {
-		Container x = getContainer(json);
-		x.add(resolver.strAdd);
-		x.add(v);
-		return x;
-	}
-	virtual natural getPrice() const {return price + 1;}
-
-	ArrDiffOpAdd( const ConstValue &v,const ArrDiffOpBase *prev):ArrDiffOpBase(prev),v(v) {}
-
-protected:
-	ConstValue v;
-};
 
 
-class ConfilctResolver::ArrDiffOpReplace: public ArrDiffOpBase  {
-public:
-	virtual Container createDiff(ConfilctResolver &resolver) const {
-		Container x = getContainer(json);
-		x.add(resolver.strAdd);
-		x.add(v);
-		return x;
-	}
-	virtual natural getPrice() const {return price + 1;}
-
-	ArrDiffOpReplace( const ConstValue &oldv, const ConstValue &v,const ArrDiffOpBase *prev):ArrDiffOpBase(prev),oldv(oldv),v(v) {}
-
-protected:
-	ConstValue v;
-	ConstValue oldv;
-};
+JSON::ConstValue ConfilctResolver::makeDiffObject(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
 
 
-JSON::ConstValue ConfilctResolver::makeDiff(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
-
-	typedef std::pair<natural,natural> State;
-
-	if (oldValue->getType() != newValue->getType()) return newValue;
-	if (oldValue->isArray()) {
-		if (arrayDiff == null) arrayDiff = db.json("__array_diff__");
-		if (strAdd == null) strAdd = db.json("add");
-		if (strReplace == null) strReplace = db.json("replace");
-		if (strErase == null) strErase = db.json("erase");
-		//path (organised from target to start)
-		AutoArray<DiffPath> diffPath;
-		//queue of opened states
-		PriorityQueue<DiffState> stateQueue;
-		//already processed stateds
-		Set<State> processed;
-
-		//push initial state
-		stateQueue.push(DiffState(0,0,naturalNull,0));
-
-		//repeat
-		while (true) {
-			//pop state
-			DiffState x = stateQueue.top();
-			stateQueue.pop();
-			//store index of next step
-			natural nxtStepIdx = diffPath.length();
-			//we will try to stop this branch, if already solved
-			bool stopBranch = false;
-			//try to lock the state
-			processed.insert(State(x.oindex,x.nindex),&stopBranch);
-
-			//if state is locked, we can stop this branch now
-			if (stopBranch)
-				//continue with next state
-				continue;
-
-			//if there is no items to process
-			if (x.nindex >= newValue.length() && x.oindex >= oldValue.length()) {
-				//finalize search
-				Stack<natural> revNav;
-				//collect path (in reverse order) to the stack
-				natural p = x.navindex;
-				while (p != naturalNull) {
-					revNav.push(p);
-					p = diffPath[p].indexPrev;
-				}
-				//create final result
-				Container diff = db.json.array();
-				//add magic
-				diff.add(arrayDiff);
-				//if lengths of arrays are equal
-				if (oldValue.length() == newValue.length())
-					//store the length
-					diff.add(db.json(oldValue.length()));
-				else
-					//if not equal, we do not care about it, store nil
-					diff.add(db.json(nil));
-
-				//accumulates count of skip steps
-				natural accum = 0;
-				//pick steps from the stack until end
-				while (!revNav.empty()) {
-					p = revNav.top();
-					revNav.pop();
-					//p - index into path
-					//if v is null - this is skip item, accumulate ot
-					if (diffPath[p].v == null) accum++;
-					else {
-						//if there is accumulated items, write number to the output
-						if (accum) {
-							//write number
-							diff.add(db.json(accum));
-							//reset accumulator
-							accum = 0;
-						}
-						//write erase status
-						diff.add(db.json(diffPath[p].erase));
-						//write value
-						diff.add(diffPath[p].v);
-					}
-				}
-
-				//in case, that diff has two items, arrays was same
-				if (diff.length() == 2) return nil;
-				return diff;
-
-			} else if (x.nindex >= newValue.length()) {
-				//if there is no new items, we have to remove rest of items in old array
-				diffPath.add(DiffPath(x.navindex,true,oldValue[x.oindex]));
-				//push next state
-				stateQueue.push(DiffState(x.oindex+1,x.nindex, nxtStepIdx,x.price+2));
-			} else if (x.oindex >= oldValue.length()) {
-				//if there is no old items, we have to append rest of items from new array
-				diffPath.add(DiffPath(x.navindex,false,newValue[x.nindex]));
-				//push next state
-				stateQueue.push(DiffState(x.oindex,x.nindex+1, nxtStepIdx,x.price+2));
-			} else {
-				//ok, we need to compare following two items
-				const ConstValue &ov = oldValue[x.oindex];
-				const ConstValue &nv = newValue[x.nindex];
-				//compare items
-				ConstValue d = diffValue(doc,Path(path,""),ov,nv);
-				//above function should return  old or new value or nil
-				//if nil or old value is returned,  assume, that values are equal or unchanged
-				if (d == nil || d == ov) {
-					//add unchange state
-					diffPath.add(DiffPath(x.navindex,false,null));
-					//continue next state
-					stateQueue.push(DiffState(x.oindex+1,x.nindex+1, nxtStepIdx, x.price+1));
-				//if new value posted?
-				} else if (d == nv) {
-					//now, we don't know, whether value has been replaced, inserted, or removed old value
-					//replace is encoded by insert+remove
-					//
-					//add appned state with value
-					diffPath.add(DiffPath(x.navindex,false,nv));
-					//
-					stateQueue.push(DiffState(x.oindex,x.nindex+1, nxtStepIdx, x.price+2));
-					nxtStepIdx = diffPath.length();
-					diffPath.add(DiffPath(x.navindex,true,ov));
-					stateQueue.push(DiffState(x.oindex+1,x.nindex, nxtStepIdx, x.price+2));
-				} else {
-					diffPath.add(DiffPath(nxtStepIdx,false,d));
-					natural nextNav2 = diffPath.length();
-					diffPath.add(DiffPath(x.navindex,true,ov));
-					stateQueue.push(DiffState(x.oindex,x.nindex+1, nextNav2, x.price+4+d.length()));
-				}
-			}
-		}
-
-
-	} else if (oldValue->isObject()) {
 		if (deletedItem == null) deletedItem = db.json("deleted");
 		Container diff = db.json.object();
 
@@ -254,7 +82,11 @@ JSON::ConstValue ConfilctResolver::makeDiff(Document& doc, const Path& path, con
 			const JSON::ConstKeyValue &okv = o.peek();
 			ConstStrA nk = nkv.getStringKey();
 			ConstStrA ok = okv.getStringKey();
-			if (nk < ok) {
+			if (nk.head(1) == ConstStrA("_")) {
+				n.skip();
+			} else if (ok.head(1) == ConstStrA("_")) {
+				o.skip();
+			} else if (nk < ok) {
 				diff.set(nk, nkv);
 				n.skip();
 			} else if (nk > ok) {
@@ -268,18 +100,23 @@ JSON::ConstValue ConfilctResolver::makeDiff(Document& doc, const Path& path, con
 				o.skip();
 			}
 		}
+		while (n.hasItems()) {
+			const JSON::ConstKeyValue &nkv = n.getNext();
+			diff.set(nkv.getStringKey(), nkv);
+		}
+		while (o.hasItems()) {
+			const JSON::ConstKeyValue &okv = o.getNext();
+			diff.set(okv.getStringKey(), deletedItem);
+		}
+
+		if (diff.empty()) return null;
+		diff.set("_diff",db.json(true));
 		return diff;
-	} else {
-		return newValue;
-	}
 
 }
 
-Value ConfilctResolver::patchDiff(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
-	if (oldValue.getType() != newValue.getType()) return oldValue->copy(db.json.factory);
-	if (oldValue->isArray()) {
-		//patch array
-	} else if (oldValue->isObject()) {
+Value ConfilctResolver::patchObject(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
+	if (isObjectDiff(newValue)) {
 		Value res = db.json.object();
 
 		JSON::ConstIterator o = oldValue->getFwConstIter();
@@ -293,13 +130,13 @@ Value ConfilctResolver::patchDiff(Document& doc, const Path& path, const ConstVa
 
 			ConstStrA nk = nkv.getStringKey();
 			ConstStrA ok = okv.getStringKey();
-			if (nk < ok) {
-				if (nkv != deletedItem) {
-					if (nkv->isArray() || nkv->isObject())
-						res.set(nk,patchDiff(doc,Path(path,nk),db.json.object(),nkv));
-					else {
+			if (nk.head(1) == ConstStrA("_")) {
+				n.skip();
+			} else if (ok.head(1) == ConstStrA("_")) {
+				o.skip();
+			} else if (nk < ok) {
+				if (nkv != deletedItem && !isObjectDiff(nkv)) {
 						res.set(nk, nkv->copy(db.json.factory));
-					}
 				}
 				n.skip();
 			} else if (nk > ok) {
@@ -307,8 +144,8 @@ Value ConfilctResolver::patchDiff(Document& doc, const Path& path, const ConstVa
 				o.skip();
 			} else {
 				if (nkv != deletedItem) {
-					if (nkv->isArray() || nkv->isObject())
-						res.set(nk,patchDiff(doc,Path(path,nk),okv,nkv));
+					if (nkv->isObject())
+						res.set(nk,patchObject(doc,Path(path,nk),okv,nkv));
 					else {
 						res.set(nk, nkv->copy(db.json.factory));
 					}
@@ -317,6 +154,16 @@ Value ConfilctResolver::patchDiff(Document& doc, const Path& path, const ConstVa
 				o.skip();
 			}
 		}
+		while (n.hasItems()) {
+			const JSON::ConstKeyValue &nkv = n.getNext();
+			if (nkv != deletedItem && !isObjectDiff(nkv)) {
+				res.set(nkv.getStringKey(), nkv->copy(db.json.factory));
+			}
+		}
+		while ( o.hasItems()) {
+			const JSON::ConstKeyValue &okv = o.getNext();
+			res.set(okv.getStringKey(), okv->copy(db.json.factory));
+		}
 		return res;
 	} else {
 		return newValue->copy(db.json.factory);
@@ -324,5 +171,107 @@ Value ConfilctResolver::patchDiff(Document& doc, const Path& path, const ConstVa
 
 
 }
+
+ConstValue ConfilctResolver::resolveConflict(Document& doc, const Path& path,const ConstValue& leftValue, const ConstValye& rightValue) {
+	if (rightValue == deletedItem) return rightValue;
+	else return leftValue;
+}
+
+Container ConfilctResolver::mergeDiffs(Document& doc, const Path& path, const ConstValue& leftValue, const ConstValue& rightValue) {
+	Container res = db.json.object();
+
+	//retrieve iterators
+	JSON::ConstIterator l = leftValue->getFwConstIter();
+	JSON::ConstIterator r = rightValue->getFwConstIter();
+
+	//while both have vales (they are ordered)
+	while (r.hasItems() && l.hasItems()) {
+		//pick right key-value
+		const JSON::ConstKeyValue &rkv = r.peek();
+		//pick left key-value
+		const JSON::ConstKeyValue &lkv = l.peek();
+
+		//pick right key
+		ConstStrA rk = rkv.getStringKey();
+		//pick left key
+		ConstStrA lk = lkv.getStringKey();
+		//right key goes first
+		if (rk < lk) {
+			//add it to result
+			res.set(rk, rkv);
+			//skip to next
+			r.skip();
+		//left key goes first
+		} else if (rk > lk) {
+			//add it to result
+			res.set(lk, lkv);
+			//skip to next
+			l.skip();
+		//both are equal
+		} else {
+			//we found conflict
+			//create path
+			Path p(path,rk);
+			//if they both are objects - we can try to resolve conflict now
+			if (rkv->isObject() && lkv->isObject()) {
+				//determine, which is diff (they don't need to be diff, especialy when both doesn't exist in base revision)
+				bool drkv = isObjectDiff(rkv);
+				bool dlkv = isObjectDiff(lkv);
+				//right is diff
+				if (drkv) {
+					//left is diff
+					if (dlkv) {
+						//resolve it by merging diffs
+						res.set(rk,mergeDiffs(doc,p,lkv,rkv));
+					} else {
+						//if left is not diff, patch right diff to the left object
+						//however, this is conflict, so we must report this issue
+						//merged object is put left, because default implementation will use it
+						res.set(rk,resolveConflict(doc,p,patchObject(doc,p,lkv,rkv),lkv));
+					}
+					//if right is not diff
+				} else if (dlkv) {
+					//patch right object and ask to resolution
+					res.set(rk,resolveConflict(doc,p,patchObject(doc,p,rkv,lkv),rkv));
+				} else {
+					//if boths objects are not diffs and are not same
+					if (*rkv != *lkv) {
+						//ask to resolve conflict
+						res.set(rk,resolveConflict(doc,p,lkv,rkv));
+					}
+				}
+			//for other types
+			} else {
+				//are they same
+				if (*rkv != *lkv) {
+					//if not, ask for resolution
+					res.set(rk,resolveConflict(doc,p,lkv,rkv));
+				}
+			}
+			//skip both sides
+			r.skip();
+			l.skip();
+			//continue here
+		}
+	}
+	//finish right values
+	while (r.hasItems()) {
+		const JSON::ConstKeyValue &rkv = r.getNext();
+		res.set(rkv.getStringKey(),rkv);
+	}
+	//finish left values
+	while (l.hasItems()) {
+		const JSON::ConstKeyValue &lkv = l.getNext();
+		res.set(lkv.getStringKey(),lkv);
+	}
+
+	return res;
+}
+
+bool ConfilctResolver::isObjectDiff(const ConstValue &v) {
+	ConstValue isdiff = v["diff"];
+	return isdiff != null && isdiff.getBool() == true;
+}
+
 
 } /* namespace LightCouch */

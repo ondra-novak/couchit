@@ -98,44 +98,43 @@ protected:
 	 * @param newValue new value
 	 * @return If old value and new value are equal, function should return null. Otherwise
 	 * function can return anything which will help to perform merge through the function mergeValue.
-	 * Default implementation simply returns new value for non-object and non-array values. For object,
-	 * special diff-object is created. Arrays can be also subjects of diff, in this case, special array
-	 * is created
+	 * Default implementation simply returns new value for non-object values. For object,
+	 * special diff-object is created.
 	 *
-	 * @code
-	 * ["__array_diff__", l, //l = null - length changed, l = number - length unchanged (and value contains length of array) - need to detect type of array
-	 *			   a,  //skip _a_ items - they are unchanged in both arrays
-	 *			   "add", item
-	 *			   "replace", oldItem,newItem
-	 *			   "erase", item
-	 *
-	 *
-	 * @endcode
-	 *
-	 *
+	 * Diff-object contains field: "_diff:true". Diff will skip fields starting by underscore because
+	 * thiese fields are reserved for couchDB. Function cannot make diff for arrays, however, you can handle
+	 * them by yourself
 	 */
 	virtual ConstValue diffValue(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+
+	///Called when conflict is detected at signle attribute
+	/** During 3-way merge, each side generates a diff. Both diffs are compared and merged. If there
+	 * is attribute on both diffs with different value, the resolveConflict() function is called. Function
+	 * have to resolve, which attribute will be used. Default implementation gives priority to
+	 * deleted attributes (so deleted attributes are deleted). Otherwise left value is used.
+	 * @param doc source document, contains base revision
+	 * @param path path to the attribute
+	 * @param leftValue left value of conflict
+	 * @param rightValue right value of conflict
+	 * @return won value. However, function can merge values somehow and return merged version
+	 */
+	virtual ConstValue resolveConflict(Document &doc, const Path &path, const ConstValue &leftValue, const ConstValye &rightValue);
 
 	CouchDB &db;
 
 
 	Value mergeObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue, const ConstValue &baseValue);
+	Container mergeDiffs(Document &doc, const Path &path, const ConstValue &leftValue, const ConstValue &rightValue);
 
-	ConstValue makeDiff(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
-	Value patchDiff(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+	ConstValue makeDiffObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+	Value patchObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
 
 	ConstValue deletedItem;
-	ConstValue arrayDiff;
-	ConstValue strAdd;
-	ConstValue strReplace;
-	ConstValue strErase;
+
+	static bool isObjectDiff(const ConstValue &v);
 
 
-	class ArrDiffOpBase;
-	class ArrDiffOpAdd;
-	class ArrDiffOpReplace;
-	class ArrDiffOpErase;
-	class ArrDiffOpSkip;
+
 };
 
 } /* namespace LightCouch */
