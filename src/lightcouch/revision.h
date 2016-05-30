@@ -7,9 +7,10 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_REVISION_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_REVISION_H_
-#include <lightspeed/base/compare.h>
+#include "lightspeed/base/memory/staticAlloc.h"
+#include "lightspeed/base/compare.h"
 #include "lightspeed/base/containers/autoArray.h"
-
+#include "lightspeed/base/containers/string.h"
 namespace LightCouch {
 
 using namespace LightSpeed;
@@ -23,6 +24,10 @@ public:
 	natural getRevId() const {return revId;}
 	ConstStrA getTag() const {return tag;}
 
+	static natural getRevId(ConstStrA rev);
+	static ConstStrA getTag(ConstStrA rev);
+
+
 	StringA toString() const;
 
 
@@ -31,6 +36,7 @@ public:
 protected:
 	natural revId;
 	AutoArray<char, StaticAlloc<32> > tag;
+
 };
 
 }

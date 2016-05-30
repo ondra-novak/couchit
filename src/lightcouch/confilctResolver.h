@@ -118,7 +118,7 @@ protected:
 	 * @param rightValue right value of conflict
 	 * @return won value. However, function can merge values somehow and return merged version
 	 */
-	virtual ConstValue resolveConflict(Document &doc, const Path &path, const ConstValue &leftValue, const ConstValye &rightValue);
+	virtual ConstValue resolveConflict(Document &doc, const Path &path, const ConstValue &leftValue, const ConstValue &rightValue);
 
 	CouchDB &db;
 

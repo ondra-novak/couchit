@@ -172,7 +172,7 @@ Value ConfilctResolver::patchObject(Document& doc, const Path& path, const Const
 
 }
 
-ConstValue ConfilctResolver::resolveConflict(Document& doc, const Path& path,const ConstValue& leftValue, const ConstValye& rightValue) {
+ConstValue ConfilctResolver::resolveConflict(Document& doc, const Path& path,const ConstValue& leftValue, const ConstValue& rightValue) {
 	if (rightValue == deletedItem) return rightValue;
 	else return leftValue;
 }
