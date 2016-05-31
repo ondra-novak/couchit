@@ -15,6 +15,7 @@ namespace LightCouch {
 using LightSpeed::JSON::Value;
 using LightSpeed::JSON::ConstValue;
 using LightSpeed::JSON::Container;
+using LightSpeed::JSON::Path;
 typedef LightSpeed::JSON::Builder Json;
 }
 

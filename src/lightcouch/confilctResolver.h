@@ -38,14 +38,6 @@ public:
 
 protected:
 
-	struct Path {
-		const ConstStrA key;
-		const Path *parent;
-
-		Path(ConstStrA key):key(key),parent(0) {}
-		Path(const Path &parent, ConstStrA key):key(key),parent(&parent) {}
-
-	};
 
 	///Perform 3way merge. You can overwrite function specify own rules
 	/** Function by default merges conflicty to the document by writting changed values relative to base

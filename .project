@@ -3,11 +3,11 @@
 	<name>lightcouch</name>
 	<comment></comment>
 	<projects>
+		<project>lightspeed</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
 			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
-			<triggers>clean,full,incremental,</triggers>
 			<arguments>
 			</arguments>
 		</buildCommand>

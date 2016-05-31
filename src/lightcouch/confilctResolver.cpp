@@ -5,15 +5,14 @@
  *      Author: ondra
  */
 
-#include <lightspeed/base/containers/stack.tcc>
 #include <lightspeed/base/containers/autoArray.tcc>
-#include <lightspeed/base/containers/priorityQueue.tcc>
 #include "couchDB.h"
 #include "document.h"
 #include "confilctResolver.h"
 
-#include "lightspeed/base/containers/set.h"
 namespace LightCouch {
+
+
 
 ConfilctResolver::ConfilctResolver(CouchDB& db):db(db) {
 }
@@ -30,11 +29,13 @@ Document ConfilctResolver::resolve(const ConstStrA& docId) {
 
 
 
+
+
 }
 
 Value ConfilctResolver::merge3w(const ConstValue& topdoc,const ConstValue& conflict, const ConstValue& base) {
 	Document doc(topdoc);
-	return mergeObject(doc,Path(""), topdoc, conflict, base);
+	return mergeObject(doc,Path::root, topdoc, conflict, base);
 }
 
 Value ConfilctResolver::merge2w(const ConstValue& ,const ConstValue& ) {
@@ -65,7 +66,39 @@ Value ConfilctResolver::mergeObject(Document& doc, const Path& path,const ConstV
 	return patchObject(doc,path,oldValue, diff);
 }
 
+template<typename Fn>
+void mergeTwoObjects(const ConstValue &left, const ConstValue &right,const Fn &resFn) {
+	JSON::ConstIterator l = left->getFwConstIter();
+	JSON::ConstIterator r = right->getFwConstIter();
+	JSON::ConstKeyValue n(0,ConstStrA(),null);
 
+	while (l.hasItems() && r.hasItems()) {
+		const JSON::ConstKeyValue &lkv = l.peek();
+		const JSON::ConstKeyValue &rkv = r.peek();
+		ConstStrA lk = lkv.getStringKey();
+		ConstStrA rk = rkv.getStringKey();
+
+		if (lk < rk) {
+			resFn(lkv, JSON::ConstKeyValue(0,rk,n));
+			l.skip();
+		} else if (lk > rk) {
+			resFn(n, rkv);
+			r.skip();
+		} else {
+			resFn(lkv,rkv);
+			l.skip();
+			r.skip();
+		}
+	}
+	while (l.hasItems()) {
+		const JSON::ConstKeyValue &lkv = l.getNext();
+		resFn(lkv, n);
+	}
+	while (r.hasItems()) {
+		const JSON::ConstKeyValue &rkv = r.getNext();
+		resFn(n, rkv);
+	}
+}
 
 
 JSON::ConstValue ConfilctResolver::makeDiffObject(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
@@ -73,6 +106,23 @@ JSON::ConstValue ConfilctResolver::makeDiffObject(Document& doc, const Path& pat
 
 		if (deletedItem == null) deletedItem = db.json("deleted");
 		Container diff = db.json.object();
+
+		mergeTwoObjects(oldValue,newValue,[&](const JSON::ConstKeyValue &oldv, const JSON::ConstKeyValue &newv) {
+			if (newv == null) {
+				if (oldv.getStringKey().head(1) != ConstStrA("_")) {
+					diff.set(oldv.getStringKey(), deletedItem);
+				}
+			} else if (oldv == null) {
+				if (newv.getStringKey().head(1) != ConstStrA("_")) {
+					diff.set(newv.getStringKey(), newv);
+				}
+			} else {
+				ConstValue x= diffValue(doc,Path(path,newv.getStringKey()),oldv,newv);
+				if (x != nil)
+					diff.set(newv, x);
+			}
+		});
+/*
 
 		JSON::ConstIterator o = oldValue->getFwConstIter();
 		JSON::ConstIterator n = newValue->getFwConstIter();
@@ -108,7 +158,7 @@ JSON::ConstValue ConfilctResolver::makeDiffObject(Document& doc, const Path& pat
 			const JSON::ConstKeyValue &okv = o.getNext();
 			diff.set(okv.getStringKey(), deletedItem);
 		}
-
+*/
 		if (diff.empty()) return null;
 		diff.set("_diff",db.json(true));
 		return diff;
@@ -119,7 +169,25 @@ Value ConfilctResolver::patchObject(Document& doc, const Path& path, const Const
 	if (isObjectDiff(newValue)) {
 		Value res = db.json.object();
 
-		JSON::ConstIterator o = oldValue->getFwConstIter();
+		mergeTwoObjects(oldValue,newValue,[&](const JSON::ConstKeyValue &oldv, const JSON::ConstKeyValue &newv) {
+			if (oldv == null) {
+				if (newv != deletedItem && !isObjectDiff(newv))
+					res.set(newv.getStringKey(), newv->copy(db.json.factory));
+			} else if (newv == null) {
+				res.set(oldv.getStringKey(), oldv->copy(db.json.factory));
+			} else {
+				if (newv != deletedItem) {
+					if (newv->isObject()) {
+						res.set(newv.getStringKey(), patchObject(doc,Path(path,newv.getStringKey()),oldv,newv));
+					} else {
+						res.set(newv.getStringKey(), newv->copy(db.json.factory));
+					}
+				}
+			}
+		});
+
+
+/*		JSON::ConstIterator o = oldValue->getFwConstIter();
 		JSON::ConstIterator n = newValue->getFwConstIter();
 
 		while (n.hasItems() && o.hasItems()) {
@@ -165,14 +233,14 @@ Value ConfilctResolver::patchObject(Document& doc, const Path& path, const Const
 			res.set(okv.getStringKey(), okv->copy(db.json.factory));
 		}
 		return res;
+		*/
 	} else {
 		return newValue->copy(db.json.factory);
 	}
 
-
 }
 
-ConstValue ConfilctResolver::resolveConflict(Document& doc, const Path& path,const ConstValue& leftValue, const ConstValue& rightValue) {
+ConstValue ConfilctResolver::resolveConflict(Document& , const Path& ,const ConstValue& leftValue, const ConstValue& rightValue) {
 	if (rightValue == deletedItem) return rightValue;
 	else return leftValue;
 }
