@@ -26,12 +26,14 @@ Changeset& Changeset::insert(Document &document) {
 	document.edit(json)("_id",db.genUIDFast());
 	document.unset("_rev");
 	docs.add(document);
+
 	return *this;
 }
 
 Changeset& Changeset::update(Document &document) {
 	if (!document.dirty()) return *this;
 	docs.add(document);
+	eraseConflicts(document["_id"], document.getConflictsToDelete());
 	return *this;
 }
 
@@ -39,6 +41,7 @@ Changeset& Changeset::erase(Document &document) {
 
 	json.object(document)("_deleted", true);
 	docs.add(document);
+	eraseConflicts(document["_id"], document.getConflictsToDelete());
 	return *this;
 }
 
@@ -92,19 +95,6 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 Changeset::Changeset(const Changeset& other):json(other.json),db(other.db) {
 }
 
-Changeset &Changeset::resolveConflict(const Conflicts& conflicts, Document &mergedDocument) {
-	ConstStrA mergedRev = mergedDocument["_rev"].getStringA();
-	for (Conflicts::Iterator iter = conflicts.getFwIter(); iter.hasItems(); ){
-		Document doc = iter.getNext();
-		if (doc.getRev() != mergedRev) {
-			erase(doc);
-		}
-	}
-	update(mergedDocument);
-	return *this;
-
-}
-
 natural Changeset::mark() const {
 	return docs->length();
 }
@@ -156,6 +146,19 @@ Changeset& Changeset::commit(bool all_or_nothing) {
 Changeset& Changeset::insert(ConstStrA id, Document& document) {
 	document.edit(json)("_id",id);
 	return update(document);
+}
+
+Changeset& Changeset::erase(ConstValue docId, ConstValue revId) {
+	docs.add(json("_id",docId)("_rev",revId)("_deleted",true));
+	return *this;
+}
+
+void Changeset::eraseConflicts(ConstValue docId, ConstValue conflictList) {
+	if (conflictList != null)
+		conflictList->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA, natural ){
+		erase(docId, v);
+		return false;
+	}));
 }
 
 

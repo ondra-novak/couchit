@@ -10,6 +10,7 @@
 #include "document.h"
 #include "confilctResolver.h"
 
+#include "revision.h"
 namespace LightCouch {
 
 
@@ -17,25 +18,103 @@ namespace LightCouch {
 ConfilctResolver::ConfilctResolver(CouchDB& db):db(db) {
 }
 
+static StringA getBaseRev(ConstStrA revStr, natural start, ConstValue ids) {
+	Revision crev(revStr);
+
+	natural revid = crev.getRevId()-1;
+	natural pos = (start - revid);
+	if (pos < ids.length()) {
+		return Revision(revid, ids[pos].getStringA()).toString();
+	} else {
+		return StringA();
+	}
+}
+
 Document ConfilctResolver::resolve(const ConstStrA& docId) {
 
-	TextFormatBuff<char, SmallAlloc<256> > fmt;
+	//buffer to format url-requests
+	AutoArrayStream<char, SmallAlloc<256> > buffer;
+	//url formatter
+	TextOut<AutoArrayStream<char, SmallAlloc<256> >  &, SmallAlloc<256> > fmt(buffer);
+
+	//format <docId>?revs=true&conflicts=true
+	//we can retrieve main line document and all revision and conflicts
 	fmt("%1?revs=true&conflicts=true") << docId;
-	Document headRev = db.jsonGET(fmt.write(),null);
+	Document headRev = db.jsonGET(buffer.getArray(),null,CouchDB::disableCache);
+
+	//Get list of revisions
 	ConstValue revisions = headRev["_revisions"];
+	//parse start revision
+	natural start = revisions["start"];
+	//retrieve array of ids
+	ConstValue ids = revisions["ids"];
+	//retrieve conflicts
 	ConstValue conflicts = headRev["_conflicts"];
-	if (conflicts == null) return headRev;
+
+	//if no conflicts found,
+	if (conflicts == null || conflicts.empty()) return headRev;
+	Map<ConstStrA, ConstValue> openedRevs;
 
 
+	conflicts->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA , natural ){
+		ConstStrA revStr= v.getStringA();
+		StringA baseRevStr = getBaseRev(revStr,start,ids);
+		if (!baseRevStr.empty())
+			openedRevs(baseRevStr) = null;
+		return false;
+	}));
 
+	buffer.clear();
+	ConstStrA sep = "[%22";
+	fmt("%1?open_revs=") << docId;
+	for (auto iter = openedRevs.getFwIter(); iter.hasItems();) {
+		fmt("%1%%2") << sep << iter.getNext().key;
+		sep = "%22,%22";
+	}
+	fmt("%22]");
+	ConstValue revlist = db.jsonGET(buffer.getArray(),null,CouchDB::disableCache);
+	revlist->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA , natural ){
+		ConstValue obj = v["ok"];
+		if (obj != null) {
+			ConstStrA rev = obj["_rev"].getStringA();
+			openedRevs(rev) = obj;
+		}
+		return false;
+	}));
 
+	conflicts->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA , natural ){
+		ConstStrA revStr= v.getStringA();
+		const ConstValue *r = openedRevs.find(revStr);
+		if (r) {
+			StringA baseRevStr = getBaseRev(revStr,start,ids);
+			if (!baseRevStr.empty()) {
+				const ConstValue *b = openedRevs.find(baseRevStr);
+				if (b) {
+					Value merged = merge3w(headRev, *r,*b);
+					if (merged != null) headRev.setRevision(merged);
 
+				} else {
+					Value merged = merge2w(headRev,*r);
+					if (merged != null) headRev.setRevision(merged);
+				}
+			} else {
+				Value merged = merge2w(headRev,*r);
+				if (merged != null) headRev.setRevision(merged);
+			}
+		}
+		return false;
+	}));
+	return headRev;
 
 }
 
 Value ConfilctResolver::merge3w(const ConstValue& topdoc,const ConstValue& conflict, const ConstValue& base) {
 	Document doc(topdoc);
-	return mergeObject(doc,Path::root, topdoc, conflict, base);
+	ConstValue mainDiff = makeDiffObject(doc,Path::root,base,doc);
+	ConstValue conflictDiff = makeDiffObject(doc,Path::root,base,conflict);
+	ConstValue mergedDiffs = mergeDiffs(doc,Path::root,mainDiff,conflictDiff);
+	Value mergedDoc = patchObject(doc,Path::root,base,mergedDiffs);
+	return mergedDoc;
 }
 
 Value ConfilctResolver::merge2w(const ConstValue& ,const ConstValue& ) {
@@ -232,8 +311,8 @@ Value ConfilctResolver::patchObject(Document& doc, const Path& path, const Const
 			const JSON::ConstKeyValue &okv = o.getNext();
 			res.set(okv.getStringKey(), okv->copy(db.json.factory));
 		}
-		return res;
 		*/
+		return res;
 	} else {
 		return newValue->copy(db.json.factory);
 	}

@@ -49,6 +49,19 @@ public:
 	 */
 	Changeset &erase(Document &document);
 
+	///Erases document defined only by documentId and revisionId. Useful to erase conflicts
+	/**
+	 * @param docId document id as JSON-string. you can use doc["_id"] directly without parsing and composing
+	 * @param revId revision id as JSON-string. you can use dic["_rev"] directly without parsing and composing
+	 *
+	 * @return reference to Changeset to allow create chains
+	 *
+	 * @note erasing document without its content causes, that minimal tombstone will be created, however
+	 * any filters that triggers on contenr will not triggered. This is best for erasing conflicts because they are
+	 * no longer valid.
+	 */
+	Changeset &erase(ConstValue docId, ConstValue revId);
+
 	///Inserts new document to the database
 	/**
 	 * @param document document to insert. Note that document is always inserted as new. New ID will
@@ -112,14 +125,8 @@ public:
 	 */
 	void revert(Value doc);
 
-	///Resolves conflict
-	/**
-	 * @param conflicts The Conflict object which containing details about the conflict. You
-	 *  can obtain this object by calling the function CouchDB::loadConflicts
-	 *
-	 * @param mergedDocument result document created by combining of the all conflicts.
-	 */
-	Changeset &resolveConflict(const Conflicts &conflicts, Document &mergedDocument);
+
+
 
 	struct ErrorItem {
 		ConstStrA errorType;
@@ -151,6 +158,8 @@ protected:
 	CouchDB &db;
 
 	void init();
+
+	void eraseConflicts(ConstValue docId, ConstValue conflictList);
 
 };
 

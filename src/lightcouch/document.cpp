@@ -49,10 +49,41 @@ Json::Object Document::edit(const Json& json) {
 		if (base == null) editing = json.object();
 		else editing = base->copy(json.factory);
 		*this = editing;
+		cleanup();
 	}
 	return json.object(editing);
 }
 
+void Document::resolveConflicts() {
+	conflictsToDelete = base["_conflicts"];
+}
+
+void LightCouch::Document::setRevision(const Json& json, const ConstValue& v) {
+	editing = v->copy(json.factory);
+	*this = editing;
+	cleanup();
+}
+
+
+ConstValue Document::getConflictsToDelete() const {
+	return conflictsToDelete;
+}
+
+void Document::cleanup() {
+	//remove all couchDB reserved items
+	for(auto iter = editing->getFwIter(); iter.hasItems();) {
+		const JSON::KeyValue &kv = iter.getNext();
+		ConstStrA name = kv.getStringKey();
+		if (name.head(1) == ConstStrA("_")) editing->erase(name);
+	}
+
+	//resture _id and _rev
+	ConstValue id = base["_id"];
+	ConstValue rev = base["_rev"];
+	if (id != null) editing.set("_id",static_cast<Value &>(id));
+	if (rev != null) editing.set("_rev",static_cast<Value &>(rev));
+}
 
 
 } /* namespace LightCouch */
+

@@ -77,11 +77,35 @@ public:
 
 	bool dirty() const {return editing != null;}
 
+
+	///Sets complete revision from value
+	/**
+	 * @param v new document replaces old one. However, you cannot change _id and _revision (which are
+	 * restored from base revision)
+	 */
+	void setRevision(const Value &v) {editing = v;*this = v;cleanup();}
+
+	void setRevision(const Json &json, const ConstValue &v);
+
+
+	///States, that document resolved all conflicts so conflicts can be deleted during update
+	/** This state can be cleared by revert()
+	 *
+	 * Function simply put _conflicts into separate field
+	 *
+	 *  */
+	void resolveConflicts();
+
+	ConstValue getConflictsToDelete() const;
+
 protected:
 	ConstValue base;
 	Value editing;
+	ConstValue conflictsToDelete;
 
+	void cleanup();
 };
+
 
 
 class Conflicts: public  AutoArray<Document> {
