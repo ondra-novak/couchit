@@ -78,6 +78,8 @@ public:
 	bool dirty() const {return editing != null;}
 
 
+
+
 	///Sets complete revision from value
 	/**
 	 * @param v new document replaces old one. However, you cannot change _id and _revision (which are
@@ -85,8 +87,53 @@ public:
 	 */
 	void setRevision(const Value &v) {editing = v;*this = v;cleanup();}
 
+	///Sets revision from another const document, it creates copy
+	/**
+	 *
+	 * @param json JSON factory that provides new value creation
+	 * @param v new revision - it will replace current editing revision
+	 *
+	 */
 	void setRevision(const Json &json, const ConstValue &v);
 
+	///Sets document deleted
+	/** Document marked as deleted updated through Changeset object will be deleted. You
+	 * can specify which fields will be kept.
+	 * @param json JSON factory that provides new value creation
+	 * @param fieldsToKept list of fields tath will be kept. It is important for filtered replication.
+	 * It is not good idea to keep whole document, because it still wastes a space
+	 *
+	 * Deleted document has always timestamp enabled
+	 */
+	void setDeleted(const Json &json, ConstStringT<ConstStrA> fieldsToKept = ConstStringT<ConstStrA>());
+
+	///Enables timestamping of changes
+	/** Document with timestamps carries field, which contains timestamp of last update. Once this is
+	 * enabled, timestamp is updated everytime document is changed. This is behaviour of lightcouch. If
+	 * document is modified outside of lightcouch, timestamp is not automatically updated.
+	 *
+	 * Timestamp is stored in "!timestamp" field.
+	 *
+	 * Deleted documents have always timestamp to be able to retrive time of deletion for tombstone cleanup.
+	 * You can use filtered "changes" to receive very old tombstones
+	 *
+	  @param json json object that provides new value creation
+
+	  @note timestamp is stored in CouchDB::fldTimestamp
+	 */
+	void enableTimestamp(const Json &json);
+
+	///Enables tracking revision tree
+	/** By default couchDb traces only revisions of main branch while side revision are considered
+	 * as conflicts without history. Enabling revision tracking causes that special field will
+	 * contain ID of previous revision. This is done by Changeset object before document is updated.
+     *
+	 * @param json json object that provides new value creation
+	 *
+	 * @note previous revision is stored in CouchDB::fldPrevRevision.
+	 * First revision has this field equal to null
+	 */
+	void enableRevTracking(const Json &json);
 
 	///States, that document resolved all conflicts so conflicts can be deleted during update
 	/** This state can be cleared by revert()

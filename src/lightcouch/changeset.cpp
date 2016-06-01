@@ -21,33 +21,33 @@ Changeset::Changeset(CouchDB &db):json(db.json), db(db) {
 }
 
 
-Changeset& Changeset::insert(Document &document) {
-
-	document.edit(json)("_id",db.genUIDFast());
-	document.unset("_rev");
-	docs.add(document);
-
-	return *this;
-}
-
 Changeset& Changeset::update(Document &document) {
 	if (!document.dirty()) return *this;
-	docs.add(document);
+	if (document["_id"] == null) {
+		document.set("_id",json(db.getUID()));
+	}
+	docs.add(document.getEditing());
 	eraseConflicts(document["_id"], document.getConflictsToDelete());
 	return *this;
 }
 
-Changeset& Changeset::erase(Document &document) {
-
-	json.object(document)("_deleted", true);
-	docs.add(document);
-	eraseConflicts(document["_id"], document.getConflictsToDelete());
-	return *this;
-}
 
 
 Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 	if (docs->empty()) return *this;
+
+	Value now = json(TimeStamp::now().asUnix());
+	for (JSON::Iterator iter = docs->getFwIter(); iter.hasItems();) {
+		JSON::KeyValue doc = iter.getNext();
+		if (doc[CouchDB::fldTimestamp] != null) {
+			doc.set(CouchDB::fldTimestamp, now);
+		}
+		if (doc[CouchDB::fldPrevRevision] != null) {
+			Value rev = doc["_rev"];
+			if (rev != null) doc.set(CouchDB::fldPrevRevision,rev);
+		}
+	}
+
 	///if validator is not present, do not run empty cycle.
 	/*
 	const Validator *v;
@@ -143,13 +143,12 @@ Changeset& Changeset::commit(bool all_or_nothing) {
 	return commit(db,all_or_nothing);
 }
 
-Changeset& Changeset::insert(ConstStrA id, Document& document) {
-	document.edit(json)("_id",id);
-	return update(document);
-}
-
 Changeset& Changeset::erase(ConstValue docId, ConstValue revId) {
-	docs.add(json("_id",docId)("_rev",revId)("_deleted",true));
+	docs.add(json("_id",static_cast<const Value &>(docId))
+			("_rev",static_cast<const Value &>(revId))
+			("_deleted",true)
+			("+timestamp", TimeStamp::now().getFloat()));
+
 	return *this;
 }
 

@@ -42,18 +42,35 @@ CouchDB::HttpConfig::HttpConfig() {
 }
 
 CouchDB::HttpConfig CouchDB::httpConfig;
+ConstStrA CouchDB::fldTimestamp("!timestamp");
+ConstStrA CouchDB::fldPrevRevision("!prevRev");
 
 static JSON::PFactory createFactory(JSON::PFactory jfact) {
 	if (jfact != null) return jfact;
 	else return JSON::create();
 }
 
+static lnatural getRandom() {
+	SecureRandom srand;
+	natural out;
+	srand.blockRead(&out,sizeof(out));
+	return out;
+}
+
+
 CouchDB::CouchDB(const Config& cfg)
-	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),http(httpConfig),factory(json.factory)
+	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),serverid(cfg.serverid),http(httpConfig),factory(json.factory)
 	,cache(cfg.cache),seqNumSlot(0)
 {
 	if (!cfg.databaseName.empty()) use(cfg.databaseName);
 	listenExitFlag = false;
+	if (serverid.empty()) {
+		//generate server id
+		lnatural rnd = getRandom();
+		TextFormatBuff<char, SmallAlloc<256> > fmt;
+		fmt("%1") << setBase(62) << rnd;
+		serverid = fmt.write();
+	}
 }
 
 
@@ -223,42 +240,7 @@ JSON::ConstValue CouchDB::jsonPOST(ConstStrA path, JSON::ConstValue postData, JS
 }
 
 
-UIDIterator CouchDB::genUID(natural count) {
 
-	TextFormatBuff<char, StaticAlloc<32> > fmt;
-
-	fmt("/_uuids?count=%1") << count;
-	JSON::ConstValue uidlist = jsonGET(fmt.write());
-	return UIDIterator(uidlist["uuids"]);
-
-}
-
-static lnatural getRandom() {
-	SecureRandom srand;
-	natural out;
-	srand.blockRead(&out,sizeof(out));
-	return out;
-}
-
-static atomic counter = 0;
-
-LocalUID CouchDB::genUIDFast() {
-
-	static lnatural randomNumber = getRandom();
-
-	TimeStamp t = TimeStamp::now();
-	TextFormatBuff<char, StaticAlloc<256> > fmt;
-	fmt.setBase(62);
-	atomicValue v = lockInc(counter);
-	fmt("%{03}1%%{05}2%%{06}3%%{011}4%")
-		<< t.getDay()
-		<< t.getTime()
-		<< (Bin::natural32)(v & 0x3FFFFFFF)
-		<< randomNumber;
-	return LocalUID(fmt.write().head(25));
-
-
-}
 
 void CouchDB::use(ConstStrA database) {
 	this->database = database;
@@ -513,6 +495,14 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 	return r;
 
 
+}
+
+UID CouchDB::getUID() {
+	return UID(serverid,ConstStrA());
+}
+
+UID CouchDB::getUID(ConstStrA suffix) {
+	return UID(serverid,suffix);
 }
 
 

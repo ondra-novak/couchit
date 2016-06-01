@@ -44,6 +44,9 @@ public:
 	static const natural refreshCache = 2;
 	static const natural storeHeaders = 4;
 
+	static ConstStrA fldTimestamp;
+	static ConstStrA fldPrevRevision;
+
 
 	struct Config {
 		ConstStrA baseUrl;
@@ -67,6 +70,8 @@ public:
 		 * validation is thrown as exception.
 		 */
 		Pointer<Validator> validator;
+		///Server's id. If empty, server will generate own
+		StringA serverid;
 	};
 
 	CouchDB(const Config &cfg);
@@ -123,23 +128,37 @@ public:
 	JSON::ConstValue jsonDELETE(ConstStrA path, JSON::Value headers = null, natural flags = 0);
 
 
-	///Retrieves UID using CouchDB
-	UIDIterator genUID(natural count = 1);
-
-
 	///Retrieves UID generated localy
 	/** UID is generated from
-	 * |utc|counter|random
+	 * |time|counter|dbsuffix
 	 *
 	 * it uses numbers base 62 (0-9A-Za-z)
 	 *
-	 * where UTC is time in miliseconds
-	 * random is random string generted when applications starts (from secure generator)
-	 * counter is local counter increased everytime when UID is generated
+	 * where @b time is time in seconds.
+	 * @b counter is value increased for every object created inside single process.
+	 * @b dbsuffix is global suffix defined by database. Each separate process should have
+	 * own unique. By default it is random number generated on every start
 	 *
 	 * @return
 	 */
-	static LocalUID genUIDFast();
+	UID getUID();
+
+	///Retrieves UID generated localy
+	/** UID is generated from
+	 * |time|counter|dbsuffix|suffix
+	 *
+	 * it uses numbers base 62 (0-9A-Za-z)
+	 *
+	 * where @b time is time in seconds.
+	 * @b counter is value increased for every object created inside single process.
+	 * @b dbsuffix is global suffix defined by database. Each separate process should have
+	 * own unique. By default it is random number generated on every start
+	 * @b suffix can be defined by user. You can use this string as type identificator
+	 *
+	 * @return
+	 */
+
+	UID getUID(ConstStrA suffix);
 
 
 	///Changes current database
@@ -334,6 +353,7 @@ protected:
 
 	StringA baseUrl;
 	StringA database;
+	StringA serverid;
 	HttpClient http;
 	JSON::PFactory factory;
 	natural lastStatus;

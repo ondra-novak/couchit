@@ -34,20 +34,11 @@ public:
 	 * @param document document to schedule for update
 	 * @return reference to this
 	 *
-	 * @note Document should have ID otherwise function fails. To insert new document, use insert(). You
-	 * can also specify ID manually and then call update()
+	 * @note If document has no _id, it is created automatically by this function,so you can
+	 * immediatelly read it.
 	 *
 	 */
 	Changeset &update(Document &document);
-
-	///Erases document from database
-	/**
-	 * @param document document to erase. Note document will switched to editable, because deleting
-	 * is implemented by creating new special revision
-	 *
-	 * @return reference to Changeset to allow create chains
-	 */
-	Changeset &erase(Document &document);
 
 	///Erases document defined only by documentId and revisionId. Useful to erase conflicts
 	/**
@@ -62,23 +53,6 @@ public:
 	 */
 	Changeset &erase(ConstValue docId, ConstValue revId);
 
-	///Inserts new document to the database
-	/**
-	 * @param document document to insert. Note that document is always inserted as new. New ID will
-	 * be always generated. You can retrieve the ID by method getID();
-	 *
-	 * @return reference to Changeset to allow create chains
-	 */
-	Changeset &insert(Document &document);
-
-	///Inserts new document to the database
-	/**
-	 * @param id document id
-	 * @param document document to insert.
-	 *
-	 * @return reference to Changeset to allow create chains
-	 */
-	Changeset &insert(ConstStrA id, Document &document);
 
 	///Commints all changes in the database
 	/**
@@ -153,7 +127,7 @@ public:
 	const JSON::Builder json;
 protected:
 
-	JSON::Container docs;
+	JSON::Value docs;
 	JSON::Container wholeRequest;
 	CouchDB &db;
 

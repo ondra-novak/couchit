@@ -8,39 +8,21 @@
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_UID_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_UID_H_
 #include <lightspeed/base/containers/constStr.h>
-#include <lightspeed/utils/json/json.h>
-#include "lightspeed/base/iter/iterator.h"
+#include "lightspeed/base/containers/autoArray.h"
 
-#include "lightspeed/base/containers/carray.h"
-using LightSpeed::IteratorBase;
-
+#include "lightspeed/base/memory/smallAlloc.h"
 
 
 namespace LightCouch {
 using namespace LightSpeed;
 
-class UIDIterator: public IteratorBase<ConstStrA, UIDIterator> {
+
+class UID: public AutoArray<char, SmallAlloc<32> > {
 public:
 
-	UIDIterator(JSON::ConstValue data);
+	UID(ConstStrA dbsuffix, ConstStrA userSuffix);
 
-	const ConstStrA &getNext();
-	const ConstStrA &peek() const;
-	bool hasItems() const;
-	natural getRemain() const;
-
-
-protected:
-
-	JSON::ConstValue data;
-	JSON::ConstIterator iter;
-	mutable ConstStrA tmp;
 };
-
-
-
-typedef CArray<char,25> LocalUID;
-
 
 }
 

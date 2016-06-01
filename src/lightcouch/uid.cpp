@@ -7,39 +7,33 @@
 
 #include "uid.h"
 
+#include <time.h>
+#include "lightspeed/base/containers/autoArray.tcc"
+#include <lightspeed/base/text/textOut.tcc>
+#include <lightspeed/mt/linux/atomic.h>
+
+
 namespace LightCouch {
 
 
-
-
-UIDIterator::UIDIterator(JSON::ConstValue data)
-	:data(data),iter(data->getFwIter())
-{
-
-}
-
-const ConstStrA& UIDIterator::getNext() {
-	tmp = iter.getNext()->getStringUtf8();
-	return tmp;
-}
-
-const ConstStrA& UIDIterator::peek() const {
-	tmp = iter.peek()->getStringUtf8();
-	return tmp;
-}
-
-bool UIDIterator::hasItems() const {
-	return iter.hasItems();
-}
-
-natural UIDIterator::getRemain() const {
-	return iter.getRemain();
-}
+static atomic counter = 0;
 
 
 
+
+UID::UID(ConstStrA dbsuffix, ConstStrA userSuffix) {
+
+	time_t tval;
+	time(&tval);
+	TextOut<UID::WriteIter, SmallAlloc<256> > fmt(getWriteIterator());
+	fmt.setBase(62);
+	atomicValue v = lockInc(counter);
+	fmt("%{08}1%%{06}2%%3%%4")
+		<< (lnatural)tval
+		<< (Bin::natural32)(v & 0x3FFFFFFF)
+		<< dbsuffix << userSuffix;
 
 }
 
-
+}
 
