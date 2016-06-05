@@ -17,6 +17,7 @@
 namespace LightCouch {
 
 
+
 ///View with similar features created in memory
 /** This view works very similar as classical CouchDB's view. However it is
  * created whole in memory of the application's memory; there is no communication with the CouchDB. The view
@@ -29,13 +30,15 @@ namespace LightCouch {
  * every start in order to recreate the LocalView
  *
  */
-class LocalView: public QueryBase {
+class LocalView {
 public:
 	LocalView();
+	LocalView(const Json &json);
 	virtual ~LocalView();
 
-	///Execute a query on the view (using Query interface)
-	ConstValue exec();
+
+	class Query;
+
 
 	///Update document
 	/**
@@ -88,7 +91,20 @@ public:
 	 */
 	ConstValue getDocument(const ConstStrA docId) const;
 
+
+	class Query: public QueryBase {
+	public:
+		Query(const LocalView &lview, const Json &json, natural viewFlags);
+
+		virtual ConstValue exec() override;
+
+	protected:
+		const LocalView &lview;
+	};
+
 protected:
+
+	const Json &json;
 
 	struct KeyAndDocId: public Comparable<KeyAndDocId> {
 		ConstValue key;
@@ -117,7 +133,7 @@ protected:
 	 * introduce new key. Note that emitting the same key twice for the same document is not allowed (unsupported),
 	 * however, two documents are allowd to emit the same key and create duplicated keys.
 	 */
-	virtual void map(const ConstValue &doc);
+	virtual void map(const ConstValue &doc) ;
 
 	///Perform reduce operation
 	/**
@@ -133,7 +149,7 @@ protected:
 	 * @note currently function is not optimized and will not store reduced subresults. Everytime the reduce
 	 * is required, the function is called again and again
 	 */
-	virtual ConstValue reduce(const ConstStringT<KeyAndDocId>  &keys, const ConstStringT<ConstValue> &values, bool rereduce);
+	virtual ConstValue reduce(const ConstStringT<KeyAndDocId>  &keys, const ConstStringT<ConstValue> &values, bool rereduce) const;
 
 
 	///Emit key and value
@@ -162,7 +178,7 @@ protected:
 
 
 	///RW lock for MT access
-	RWLock lock;
+	mutable RWLock lock;
 
 	typedef Synchronized<RWLock::ReadLock> Shared;
 	typedef Synchronized<RWLock::WriteLock> Exclusive;
@@ -195,7 +211,14 @@ protected:
 	void updateDocLk(const ConstValue &doc);
 
 
+	ConstValue searchKeys(const ConstValue &keys, natural groupLevel) const;
+	ConstValue searchOneKey(const ConstValue &key) const;
+	ConstValue searchRange(const ConstValue &startKey, const ConstValue &endKey,
+			natural groupLevel, bool descending, natural offset, natural limit, ConstStrA offsetDoc,
+			bool excludeEnd) const;
 
+
+	ConstValue runReduce(const ConstValue &rows) const;
 };
 
 } /* namespace LightCouch */

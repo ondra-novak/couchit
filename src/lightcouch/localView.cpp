@@ -10,19 +10,20 @@
 
 #include "couchDB.h"
 
+#include "lightspeed/base/containers/autoArray.tcc"
 namespace LightCouch {
 
-LocalView::LocalView():QueryBase(Json(JSON::create().get()),0) {
-	// TODO Auto-generated constructor stub
+LocalView::LocalView():json(JSON::create()) {
+
+}
+
+LocalView::LocalView(const Json &json):json(json) {
 
 }
 
 LocalView::~LocalView() {
-	// TODO Auto-generated destructor stub
 }
 
-ConstValue LocalView::exec() {
-}
 
 void LocalView::updateDoc(const ConstValue& doc) {
 	Exclusive _(lock);
@@ -39,7 +40,7 @@ void LocalView::updateDocLk(const ConstValue& doc) {
 	}
 }
 
-void LocalView::map(const ConstValue& doc) {
+void LocalView::map(const ConstValue& doc)  {
 	emit();
 }
 
@@ -66,8 +67,8 @@ void LocalView::eraseDocLk( ConstStrA docId) {
 }
 
 void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
-	Query q = db.createQuery(view);
-	Query::Result res = q.select(Query::any).exec();
+	LightCouch::Query q = db.createQuery(view);
+	LightCouch::Query::Result res = q.select(Query::any).exec();
 
 	Exclusive _(lock);
 
@@ -84,7 +85,7 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 			//otherwise if there is no document
 			if (doc == null) {
 				//create fake one to store docId
-				doc = json("_id",row.id);
+				doc = db.json("_id",row.id);
 			}
 			//add this document
 			addDocLk(doc,row.key,row.value);
@@ -108,7 +109,7 @@ void LocalView::addDoc(const ConstValue& doc, const ConstValue& key,
 }
 
 ConstValue LocalView::getDocument(const ConstStrA docId) const {
-	Shared _(static_cast<RWLock::ReadLock &>(lock));
+	Shared _(lock);
 	DocToKey::ListIter iter = docToKeyMap.find(docId);
 	if (iter.hasItems()) {
 		const ValueAndDoc *v = keyToValueMap.find(KeyAndDocId(iter.getNext(),docId));
@@ -118,7 +119,7 @@ ConstValue LocalView::getDocument(const ConstStrA docId) const {
 }
 
 
-ConstValue LocalView::reduce(const ConstStringT<KeyAndDocId>&,const ConstStringT<ConstValue>&, bool rereduce) {
+ConstValue LocalView::reduce(const ConstStringT<KeyAndDocId>&,const ConstStringT<ConstValue>&, bool rereduce) const {
 	return nil;
 }
 
@@ -196,6 +197,117 @@ CompareResult LocalView::KeyAndDocId::compare(const KeyAndDocId& other) const {
 	}
 }
 
+ConstValue LocalView::searchKeys(const ConstValue &keys, natural groupLevel) const {
+
+	Shared _(lock);
+
+	Container rows = json.array();
+	bool reduced = groupLevel != naturalNull;
+
+	for (natural i = 0; i < keys.length(); i++) {
+
+		ConstValue subrows = searchOneKey(keys[i]);
+		if (reduced) {
+			ConstValue r = runReduce(subrows);
+			if (r == null) reduced = false;
+			else {
+				subrows = json("key", keys[i])
+					      ("value", r);
+			}
+		}
+
+		rows.load(subrows);
+
+	}
+
+	if (groupLevel == 0 && reduced) {
+		 ConstValue r = runReduce(rows);
+		 if (r != null) {
+			 rows = json << json("key",null)
+			 	 	 	 	    ("value",r);
+		 }
+
+	}
+	return json("rows",rows);
+
+}
+
+ConstValue LocalView::searchOneKey(const ConstValue &key) const {
+
+	KeyToValue::Iterator iter = keyToValueMap.seek(KeyAndDocId(key, ConstStrA()));
+	Container res = json.array();
+
+	while (iter.hasItems()) {
+		const KeyToValue::KeyValue &kv = iter.getNext();
+		if (compareJson(key, kv.key.key) != cmpResultEqual) break;
+
+		res.add(json("id",kv.key.docId)
+				    ("key",kv.key.key)
+					("value",kv.value.value)
+					("doc",kv.value.doc));
+	}
+	return res;
+}
+
+
+ConstValue LocalView::runReduce(const ConstValue &rows) const {
+
+	AutoArray<KeyAndDocId, SmallAlloc<256> > keylist;
+	AutoArray<ConstValue, SmallAlloc<256> > values;
+	keylist.reserve(rows.length());
+	values.reserve(rows.length());
+	for (JSON::ConstIterator iter = rows->getFwConstIter(); iter.hasItems();) {
+		const JSON::ConstValue &v = iter.getNext();
+		keylist.add(KeyAndDocId(v["key"],v["id"].getStringA()));
+		values.add(v["value"]);
+	}
+	return reduce(keylist,values,false);
+
+}
+
+ConstValue LocalView::searchRange(const ConstValue &startKey, const ConstValue &endKey,
+natural groupLevel, bool descending, natural offset, natural limit, ConstStrA offsetDoc,
+bool excludeEnd) const {
+
+	Shared _(lock);
+
+	KeyAndDocId startK(startKey,offsetDoc);
+	KeyAndDocId endK(endKey,excludeEnd?ConstStrA():ConstStrA("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"));
+
+	KeyAndDocId *seekPos;
+	KeyAndDocId *stopPos;
+
+	if (descending) {
+		seekPos = &endK;
+		stopPos = &startK;
+	} else {
+		seekPos = &startK;
+		stopPos = &endK;
+	}
+
+	KeyToValue::Iterator iter = keyToValueMap.seek(*seekPos);
+	if (descending) iter.setDir(Direction::backward);
+	natural whLimit = naturalNull - offset < limit? offset+limit:naturalNull;
+
+	while (iter.hasItems()) {
+
+	}
+
+
+
+}
+LocalView::Query::Query(const LocalView& lview, const Json& json, natural viewFlags)
+	:QueryBase(json,viewFlags),lview(lview) {}
+
+ConstValue LocalView::Query::exec() {
+	if (keys.empty()) {
+		return lview.searchRange(startkey,endkey, groupLevel, descent, offset, maxlimit,offset_doc,(viewFlags & View::exludeEnd) != 0);
+	} else {
+		return lview.searchKeys(keys,groupLevel);
+	}
+}
+
+
+
 
 } /* namespace LightCouch */
-

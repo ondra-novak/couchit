@@ -18,25 +18,14 @@ using namespace LightSpeed;
 using namespace BredyHttpClient;
 
 
-static void genUUIDS(PrintTextA &print) {
-
-	CouchDB db(getTestCouch());
-	Set<ConstStrA> uuidmap;
-
-	UIDIterator iter =  db.genUID(50);
-	while (iter.hasItems()) {
-		ConstStrA docId = iter.getNext();
-		uuidmap.insert(docId);
-	}
-	print("%1") << uuidmap.size();
-}
 
 static void genFastUUIDS(PrintTextA &print) {
 
 	Set<StringA> uuidmap;
+	CouchDB db(getTestCouch());
 
 	for (natural i = 0; i < 50; i++) {
-		StringA uuid = CouchDB::genUIDFast();
+		StringA uuid = db.getUID();
 //		print("%1\n") << uuid;
 		uuidmap.insert(uuid);
 	}
@@ -45,6 +34,5 @@ static void genFastUUIDS(PrintTextA &print) {
 
 
 
-defineTest test_genuuids("couchdb.genuuids","50",&genUUIDS);
 defineTest test_genfastuuids("couchdb.genfastuid","50",&genFastUUIDS);
 }

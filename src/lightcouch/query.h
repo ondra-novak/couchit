@@ -240,6 +240,34 @@ public:
 		natural length() const;
 		natural getRemain() const;
 		void rewind();
+
+		///perform inner join similar to SQL joins
+		/**
+		 * @param name name of the join. Result will be joined to the value under specified name
+		 * @param otherQuery prepared query to other view. Function feed this object with keys
+		 * @param foreignKey path to foreign key. Value from this path will be used as keys. If
+		 *  path resolves to NULL, whole record will be skipped. If key doesn't exists, whole record will be skipped
+		 * @return matching records
+		 *
+		 * TODO
+		 *
+		 * @note any rows read before the join will be removed from the result
+		 */
+		const ConstValue inner_join(ConstStrA name, QueryBase &otherQuery, const JSON::Path foreignKey);
+		///perform left join similar to SQL joins
+		/**
+		 * @param name name of the join. Result will be joined to the value under specified name
+		 * @param otherQuery prepared query to other view. Function feed this object with keys
+		 * @param foreignKey path to foreign key. Value from this path will be used as keys. If
+		 *  path resolves to NULL, the value null appears in result under given name.
+		 *  If key doesn't exists, the value null appears in result under given name.
+		 * @return matching records
+		 *
+		 * TODO
+		 *
+		 * @note any rows read before the join will be removed from the result
+		 */
+		const ConstValue left_join(ConstStrA name, QueryBase &otherQuery, const JSON::Path foreignKey);
 	protected:
 
 		ConstValue rows;

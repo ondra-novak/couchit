@@ -89,7 +89,7 @@ static void couchLoadData(PrintTextA &print) {
 				("age",kv[1])
 				("height",kv[2]);
 		savedDocs.add(doc);
-		chset.insert(doc);
+		chset.update(doc);
 	}
 	chset.commit(db);
 	Set<StringA> uuidmap;
@@ -113,7 +113,7 @@ static void couchConflicted(PrintTextA &print) {
 		for (natural i = 0; i < countof(designs); i++) {
 
 			Document doc(db.getJsonFactory().fromString(designs[i]));
-			chset.insert(doc);
+			chset.update(doc);
 		}
 		chset.commit(db,false);
 		print("failed");
@@ -131,7 +131,7 @@ static void couchLoadDesign(PrintTextA &) {
 	Changeset chset(db.createChangeset());
 	for (natural i = 0; i < countof(designs); i++) {
 		Document doc(db.getJsonFactory().fromString(designs[i]));
-		chset.insert(doc);
+		chset.update(doc);
 	}
 	chset.commit(db);
 }
@@ -142,7 +142,7 @@ static void couchFindWildcard(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
-	Query::Result res = q("K")(Query::isArray)(Query::wildcard).exec(db);
+	Query::Result res = q("K")(Query::isArray)(Query::wildcard).exec();
 	while (res.hasItems()) {
 		Query::Row row = res.getNext();
 		a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
@@ -157,7 +157,7 @@ static void couchFindGroup(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_age_group));
-	Query::Result res = q(40)(Query::any).exec(db);
+	Query::Result res = q(40)(Query::any).exec();
 	while (res.hasItems()) {
 		Query::Row row = res.getNext();
 		a("%1 ") << row.value->getStringUtf8();
@@ -170,7 +170,7 @@ static void couchFindRange(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_age));
-	Query::Result res = q.from(20).to(40).reverseOrder().exec(db);
+	Query::Result res = q.from(20).to(40).reverseOrder().exec();
 	while (res.hasItems()) {
 		Query::Row row = res.getNext();
 		a("%1 ") << row.value->getStringUtf8();
@@ -186,7 +186,7 @@ static void couchFindKeys(PrintTextA &a) {
 	Query::Result res = q.select("Kermit Byrd")(Query::isArray)
 					 .select("Owen Dillard")
 					 .select("Nicole Jordan")
-					 .exec(db);
+					 .exec();
 	while (res.hasItems()) {
 		Query::Row row = res.getNext();
 		a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
@@ -208,7 +208,7 @@ static void couchCaching(PrintTextA &a) {
 		Query::Result res = q.select("Kermit Byrd")(Query::isArray)
 						 .select("Owen Dillard")
 						 .select("Nicole Jordan")
-						 .exec(db);
+						 .exec();
 		while (res.hasItems()) {
 			Query::Row row = res.getNext();
 			a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
@@ -241,7 +241,8 @@ static void couchCaching2(PrintTextA &a) {
 		if (i == 2) {
 			//make a change during second run
 			Changeset cset = db.createChangeset();
-			cset.erase(killDoc);
+			killDoc.setDeleted(db.json);
+			cset.update(killDoc);
 			cset.commit(db);
 			//also calls listenChanges
 			db.getLastSeqNumber();
@@ -251,7 +252,7 @@ static void couchCaching2(PrintTextA &a) {
 		Query::Result res = q.select("Kermit Byrd")(Query::isArray)
 						 .select("Owen Dillard")
 						 .select("Nicole Jordan")
-						 .exec(db);
+						 .exec();
 		while (res.hasItems()) {
 			Query::Row row = res.getNext();
 			a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
@@ -278,7 +279,7 @@ static void couchReduce(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(age_group_height));
-	Query::Result res = q.group(1).exec(db);
+	Query::Result res = q.group(1).exec();
 
 	while (res.hasItems()) {
 		Query::Row row = res.getNext();
@@ -319,7 +320,7 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	LocalUID uid = db.genUIDFast();
+	UID uid = db.getUID();
 	bool isok = false;
 
 	Thread thr;
@@ -358,7 +359,7 @@ static void couchChangeSetWaitForData3(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	LocalUID uid = db.genUIDFast();
+	UID uid = db.getUID();
 	bool isok = false;
 	int counter=0;
 
