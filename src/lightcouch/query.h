@@ -63,14 +63,14 @@ using namespace LightSpeed;
  *   q.exec();
  */
 
-class Query {
+class QueryBase {
 public:
 
 
 
-	Query(CouchDB &db, const View &view);
-	Query(const Query &other);
-	virtual ~Query();
+	QueryBase(const Json &json, natural viewFlags);
+	QueryBase(const QueryBase &other);
+	virtual ~QueryBase();
 
 	///changes JSON factory
 	/**
@@ -80,7 +80,7 @@ public:
 
 
 	///Resets query object state. Deletes prepared query
-	Query &reset();
+	QueryBase &reset();
 
 
 	///select one or more keys defined as json value
@@ -93,20 +93,20 @@ public:
 	 * @note function removes prepared range, because select and range
 	 * is mutually exclusive
 	 */
-	Query &selectKey(ConstValue key);
+	QueryBase &selectKey(ConstValue key);
 	///define range search
-	Query &fromKey(ConstValue key);
+	QueryBase &fromKey(ConstValue key);
 	///define range search
-	Query &toKey(ConstValue key);
+	QueryBase &toKey(ConstValue key);
 
 	template<typename T>
-	Query &select(const T &key);
+	QueryBase &select(const T &key);
 
 	template<typename T>
-	Query &from(const T &key);
+	QueryBase &from(const T &key);
 
 	template<typename T>
-	Query &to(const T &key);
+	QueryBase &to(const T &key);
 
 
 	enum MetaValue {
@@ -150,18 +150,16 @@ public:
 		isArray
 	};
 
-	Query &operator ()(ConstStrA key);
-	Query &operator ()(natural key);
-	Query &operator ()(integer key);
-	Query &operator ()(int key);
-	Query &operator ()(double key);
-	Query &operator ()(ConstValue key);
-	Query &operator ()(bool key);
-	Query &operator ()(const char *key);
-	Query &operator ()(MetaValue metakey);
+	QueryBase &operator ()(ConstStrA key);
+	QueryBase &operator ()(natural key);
+	QueryBase &operator ()(integer key);
+	QueryBase &operator ()(int key);
+	QueryBase &operator ()(double key);
+	QueryBase &operator ()(ConstValue key);
+	QueryBase &operator ()(bool key);
+	QueryBase &operator ()(const char *key);
+	QueryBase &operator ()(MetaValue metakey);
 
-	ConstValue exec(CouchDB &db);
-	ConstValue exec();
 
 	///Apply reduce on the result
 	/**
@@ -169,14 +167,14 @@ public:
 	 * level to naturalNull cause disabling this function. Function overwrites
 	 * setting specified by the view definition - just locally for this query only
 	 */
-	Query &group(natural level);
+	QueryBase &group(natural level);
 
 
 	///Maximum count of results
-	Query &limit(natural limit);
+	QueryBase &limit(natural limit);
 
 	///Similar to MySQL defines offset and limit
-	Query &limit(natural offset, natural limit);
+	QueryBase &limit(natural offset, natural limit);
 
 	///Defines start position using docId and limit
 	/** This function is valid for ranged query, when start doc is specified by
@@ -187,13 +185,13 @@ public:
 	 * @param limit count of results
 	 * @return
 	 */
-	Query &limit(ConstStrA docId, natural limit);
+	QueryBase &limit(ConstStrA docId, natural limit);
 
 	///Update view after query executes
-	Query &updateAfter();
+	QueryBase &updateAfter();
 
 	///Do not update the view now
-	Query &stale();
+	QueryBase &stale();
 
 	///Enables returning results in reverse order.
 	/**
@@ -207,10 +205,12 @@ public:
 	 * object often creates ranged search silently
 	 * @return
 	 */
-	Query &reverseOrder();
+	QueryBase &reverseOrder();
 
 	template<typename T>
-	Query &arg(ConstStrA key, T value);
+	QueryBase &arg(ConstStrA key, T value);
+
+	virtual ConstValue exec() = 0;
 
 
 	class Row {
@@ -249,16 +249,12 @@ public:
 		natural offset;
 	};
 
-	CouchDB &getDatabase() {return db;}
-	const CouchDB &getDatabase() const {return db;}
 
 
 	const Json json;
 
 protected:
 
-	CouchDB &db;
-	View viewDefinition;
 
 	AutoArray<JSON::ConstValue,SmallAlloc<9> > curKeySet;
 	JSON::ConstValue startkey, endkey;
@@ -293,6 +289,8 @@ protected:
 
 	JSON::Value args;
 
+	natural viewFlags;
+
 	JSON::Container buildKey(ConstStringT<JSON::ConstValue> values);
 
 
@@ -305,31 +303,49 @@ protected:
 };
 
 template<typename T>
-inline Query& LightCouch::Query::select(const T& key) {
+inline QueryBase& LightCouch::QueryBase::select(const T& key) {
 	finishCurrent();
 	mode = mdKeys;
 	return this->operator ()(key);
 }
 
 template<typename T>
-inline Query& LightCouch::Query::from(const T& key) {
+inline QueryBase& LightCouch::QueryBase::from(const T& key) {
 	finishCurrent();
 	mode = mdStart;
 	return this->operator ()(key);
 }
 
 template<typename T>
-inline Query& LightCouch::Query::to(const T& key) {
+inline QueryBase& LightCouch::QueryBase::to(const T& key) {
 	finishCurrent();
 	mode = mdEnd;
 	return this->operator ()(key);
 }
 
 template<typename T>
-inline Query& LightCouch::Query::arg(ConstStrA key, T value) {
+inline QueryBase& LightCouch::QueryBase::arg(ConstStrA key, T value) {
 	initArgs()->add(key, factory(value));
 	return *this;
 }
+
+class Query: public QueryBase {
+public:
+	Query(CouchDB &db, const View &view);
+	Query(const Query &other);
+	virtual ~Query();
+
+	ConstValue exec(CouchDB &db);
+	ConstValue exec();
+
+protected:
+	CouchDB &db;
+	View viewDefinition;
+
+	CouchDB &getDatabase() {return db;}
+	const CouchDB &getDatabase() const {return db;}
+
+};
 
 
 }

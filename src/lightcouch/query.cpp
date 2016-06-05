@@ -13,24 +13,24 @@
 
 namespace LightCouch {
 
-Query::Query(CouchDB &db,const View &view)
-:json(db.json),db(db),viewDefinition(view),mode(mdKeys) {
+QueryBase::QueryBase(const Json &json, natural viewFlags)
+:json(json),mode(mdKeys),viewFlags(viewFlags) {
 	reset();
 }
 
 
-Query& Query::reset() {
+QueryBase& QueryBase::reset() {
 	curKeySet.clear();
 	startkey = endkey = keys = null;
 	mode = mdKeys;
-	staleMode = viewDefinition.flags & View::stale?smStale:(
-			viewDefinition.flags & View::updateAfter?smUpdateAfter:smUpdate);
+	staleMode = viewFlags & View::stale?smStale:(
+			viewFlags & View::updateAfter?smUpdateAfter:smUpdate);
 
-	groupLevel = (viewDefinition.flags & View::reduce)?((viewDefinition.flags & View::groupLevelMask) / View::groupLevel):naturalNull  ;
+	groupLevel = (viewFlags & View::reduce)?((viewFlags & View::groupLevelMask) / View::groupLevel):naturalNull  ;
 
 	offset = 0;
 	maxlimit = naturalNull;
-	descent = (viewDefinition.flags & View::reverseOrder) != 0;
+	descent = (viewFlags & View::reverseOrder) != 0;
 	forceArray = false;
 	args = null;
 
@@ -38,7 +38,7 @@ Query& Query::reset() {
 }
 
 
-Query& Query::selectKey(ConstValue key) {
+QueryBase& QueryBase::selectKey(ConstValue key) {
 	if (keys== nil) {
 		keys = json.array();
 	}
@@ -47,62 +47,62 @@ Query& Query::selectKey(ConstValue key) {
 
 }
 
-Query& Query::fromKey(ConstValue key) {
+QueryBase& QueryBase::fromKey(ConstValue key) {
 	keys = nil;
 	startkey = key;
 	return *this;
 
 }
 
-Query& Query::toKey(ConstValue key) {
+QueryBase& QueryBase::toKey(ConstValue key) {
 	keys = nil;
 	endkey = key;
 	return *this;
 }
 
-Query& Query::operator ()(ConstStrA key) {
+QueryBase& QueryBase::operator ()(ConstStrA key) {
 	curKeySet.add(json(key));
 	return *this;
 }
 
-Query& Query::operator ()(natural key) {
+QueryBase& QueryBase::operator ()(natural key) {
 	curKeySet.add(json(key));
 	return *this;
 }
 
-Query& Query::operator ()(integer key) {
+QueryBase& QueryBase::operator ()(integer key) {
 	curKeySet.add(json(key));
 	return *this;
 }
 
-Query& Query::operator ()(int key) {
+QueryBase& QueryBase::operator ()(int key) {
 	curKeySet.add(json(integer(key)));
 	return *this;
 }
 
-Query& Query::operator ()(double key) {
+QueryBase& QueryBase::operator ()(double key) {
 	curKeySet.add(json(key));
 	return *this;
 }
 
-Query& Query::operator ()(ConstValue key) {
+QueryBase& QueryBase::operator ()(ConstValue key) {
 	curKeySet.add(key);
 	return *this;
 }
 
-Query& Query::operator ()(bool key) {
+QueryBase& QueryBase::operator ()(bool key) {
 	curKeySet.add(json(key));
 	return *this;
 }
 
-Query& Query::operator ()(const char *key) {
+QueryBase& QueryBase::operator ()(const char *key) {
 	curKeySet.add(json(ConstStrA(key)));
 	return *this;
 }
 
 
 
-Query& Query::operator()(MetaValue metaValue) {
+QueryBase& QueryBase::operator()(MetaValue metaValue) {
 	switch (metaValue) {
 	case any: {
 		forceArray=true;
@@ -157,11 +157,14 @@ Query& Query::operator()(MetaValue metaValue) {
 	}
 }
 
-void Query::appendCustomArg(UrlFormatter &fmt, ConstStrA key, ConstStrA value ) {
+void QueryBase::appendCustomArg(UrlFormatter &fmt, ConstStrA key, ConstStrA value ) {
 	fmt("&%1=%2") << key << value;
 }
 
-void Query::appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode * value ) {
+void QueryBase::setJsonFactory(JSON::PFactory json) {
+}
+
+void QueryBase::appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode * value ) {
 	if (value->getType() == JSON::ndString) {
 		appendCustomArg(fmt,key,CouchDB::urlencode(value->getStringUtf8()));
 	} else {
@@ -260,62 +263,61 @@ ConstValue Query::exec(CouchDB &db) {
 
 }
 
-Query& Query::group(natural level) {
+QueryBase& QueryBase::group(natural level) {
 	groupLevel = level;
 	return *this;
 }
 
-JSON::Container Query::buildKey(ConstStringT<ConstValue> values) {
+JSON::Container QueryBase::buildKey(ConstStringT<ConstValue> values) {
 	if (!forceArray && values.length() == 1) {
 		return json(values[0]);
 	}
 	else return json(values);
 }
 
-Query& Query::reverseOrder() {
+QueryBase& QueryBase::reverseOrder() {
 	descent = !descent;
 	return *this;
 }
 
-Query& Query::limit(natural limit) {
+QueryBase& QueryBase::limit(natural limit) {
 	this->maxlimit = limit;
 	this->offset = 0;
 	this->offset_doc = StringA();
 	return *this;
 }
 
-Query& Query::limit(natural offset, natural limit) {
+QueryBase& QueryBase::limit(natural offset, natural limit) {
 	this->maxlimit = limit;
 	this->offset = offset;
 	this->offset_doc = StringA();
 	return *this;
 }
 
-Query& Query::limit(ConstStrA docId, natural limit) {
+QueryBase& QueryBase::limit(ConstStrA docId, natural limit) {
 	this->maxlimit = limit;
 	this->offset_doc = docId;
 	this->offset = 0;
 	return *this;
 }
 
-Query& Query::updateAfter() {
+QueryBase& QueryBase::updateAfter() {
 	staleMode = smUpdateAfter;
 	return *this;
 }
 
-Query& Query::stale() {
+QueryBase& QueryBase::stale() {
 	staleMode = smStale;
 	return *this;
 }
 
-Query::Query(const Query& other)
-	:json(other.json),db(other.db)
-	,viewDefinition(other.viewDefinition)
+QueryBase::QueryBase(const QueryBase& other)
+	:json(other.json)
 {
 }
 
 
-void Query::finishCurrent()
+void QueryBase::finishCurrent()
 {
 	if (curKeySet.empty())
 		return;
@@ -344,7 +346,7 @@ void Query::finishCurrent()
 }
 
 
-Query::Result::Result(ConstValue jsonResult)
+QueryBase::Result::Result(ConstValue jsonResult)
 :rows(jsonResult["rows"])
 ,rowIter(jsonResult["rows"]->getFwIter())
 {
@@ -354,37 +356,37 @@ Query::Result::Result(ConstValue jsonResult)
 	if (joffset) offset = joffset->getUInt(); else offset = 0;
 }
 
-const ConstValue& Query::Result::getNext() {
+const ConstValue& QueryBase::Result::getNext() {
 	out = rowIter.getNext();
 	return out;
 }
 
-const ConstValue& Query::Result::peek() const {
+const ConstValue& QueryBase::Result::peek() const {
 	out = rowIter.peek();
 	return out;
 }
 
-bool Query::Result::hasItems() const {
+bool QueryBase::Result::hasItems() const {
 	return rowIter.hasItems();
 }
 
-natural Query::Result::getTotal() const {
+natural QueryBase::Result::getTotal() const {
 	return total;
 }
 
-natural Query::Result::getOffset() const {
+natural QueryBase::Result::getOffset() const {
 	return offset;
 }
 
-natural Query::Result::length() const {
+natural QueryBase::Result::length() const {
 	return rows->length();
 }
 
-natural Query::Result::getRemain() const {
+natural QueryBase::Result::getRemain() const {
 	return rowIter.getRemain();
 }
 
-void Query::Result::rewind() {
+void QueryBase::Result::rewind() {
 	rowIter = rows->getFwIter();
 }
 
@@ -394,14 +396,14 @@ static ConstStrA getIDFromRow(const ConstValue & jrow) {
 	else return ConstStrA();
 }
 
-Query::Row::Row(const ConstValue& jrow)
+QueryBase::Row::Row(const ConstValue& jrow)
 	:key(jrow->getPtr("key"))
 	,value(jrow->getPtr("value"))
 	,doc(jrow->getPtr("doc"))
 	,id(getIDFromRow(jrow))
 {}
 
-JSON::Value Query::initArgs() {
+JSON::Value QueryBase::initArgs() {
 	if (args==null) args = json.object();
 	return args;
 }
@@ -410,7 +412,17 @@ JSON::Value Query::initArgs() {
 ConstValue Query::exec() {
 	return exec(db);
 }
+QueryBase::~QueryBase() {
+}
+
+Query::Query(CouchDB &db, const View &view):QueryBase(db.json,view.flags),db(db),viewDefinition(view) {
+}
+
+Query::Query(const Query& other):QueryBase(other),db(other.db),viewDefinition(other.viewDefinition) {
+}
+
 Query::~Query() {
+
 }
 
 }

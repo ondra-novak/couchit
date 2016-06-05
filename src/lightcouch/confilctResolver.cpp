@@ -6,11 +6,15 @@
  */
 
 #include <lightspeed/base/containers/autoArray.tcc>
+#include <lightspeed/base/text/textOut.tcc>
 #include "couchDB.h"
 #include "document.h"
 #include "confilctResolver.h"
+#include <lightspeed/base/containers/map.tcc>
 
 #include "revision.h"
+
+#include "validator.h"
 namespace LightCouch {
 
 
@@ -114,6 +118,13 @@ Value ConfilctResolver::merge3w(const ConstValue& topdoc,const ConstValue& confl
 	ConstValue conflictDiff = makeDiffObject(doc,Path::root,base,conflict);
 	ConstValue mergedDiffs = mergeDiffs(doc,Path::root,mainDiff,conflictDiff);
 	Value mergedDoc = patchObject(doc,Path::root,base,mergedDiffs);
+	Pointer<Validator> v = db.getValidator();
+	if (v != null) {
+		Validator::Result res = v->validateDoc(mergedDoc);
+		if (!res) {
+			return merge2w(doc,conflict);
+		}
+	}
 	return mergedDoc;
 }
 
