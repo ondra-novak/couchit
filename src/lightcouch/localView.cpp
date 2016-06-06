@@ -8,20 +8,24 @@
 #include "lightspeed/base/containers/map.tcc"
 #include "localView.h"
 
+#include <lightspeed/base/constructor.h>
 #include "couchDB.h"
 
 #include "lightspeed/base/containers/autoArray.tcc"
+#include "lightspeed/base/actions/promise.tcc"
+
 namespace LightCouch {
 
-LocalView::LocalView():json(JSON::create()) {
+LocalView::LocalView():json(JSON::create()),updateReceiver(*this) {
 
 }
 
-LocalView::LocalView(const Json &json):json(json) {
+LocalView::LocalView(const Json &json):json(json),updateReceiver(*this) {
 
 }
 
 LocalView::~LocalView() {
+	cancelStream();
 }
 
 
@@ -40,7 +44,7 @@ void LocalView::updateDocLk(const ConstValue& doc) {
 	}
 }
 
-void LocalView::map(const ConstValue& doc)  {
+void LocalView::map(const ConstValue&)  {
 	emit();
 }
 
@@ -119,7 +123,7 @@ ConstValue LocalView::getDocument(const ConstStrA docId) const {
 }
 
 
-ConstValue LocalView::reduce(const ConstStringT<KeyAndDocId>&,const ConstStringT<ConstValue>&, bool rereduce) const {
+ConstValue LocalView::reduce(const ConstStringT<KeyAndDocId>&,const ConstStringT<ConstValue>&, bool ) const {
 	return nil;
 }
 
@@ -141,6 +145,7 @@ static CompareResult compareJson(const ConstValue &left, const ConstValue &right
 		if (left->isNumber()) return right->isNull() || right->isBool()?cmpResultGreater:cmpResultLess;
 		if (left->isString()) return right->isArray() || right->isObject()?cmpResultLess:cmpResultGreater;
 		if (left->isArray()) return right->isObject()?cmpResultLess:cmpResultGreater;
+		return cmpResultEqual;
 	} else {
 		switch (left->getType()) {
 		case JSON::ndNull:return cmpResultEqual;
@@ -184,6 +189,8 @@ static CompareResult compareJson(const ConstValue &left, const ConstValue &right
 				if (ri.hasItems()) return cmpResultLess;
 				return cmpResultEqual;
 			}
+		default:
+			return cmpResultEqual;
 		}
 	}
 }
@@ -202,14 +209,14 @@ ConstValue LocalView::searchKeys(const ConstValue &keys, natural groupLevel) con
 	Shared _(lock);
 
 	Container rows = json.array();
-	bool reduced = groupLevel != naturalNull;
+	bool grouped = groupLevel > 0 && groupLevel < naturalNull;
 
 	for (natural i = 0; i < keys.length(); i++) {
 
 		ConstValue subrows = searchOneKey(keys[i]);
-		if (reduced) {
+		if (grouped) {
 			ConstValue r = runReduce(subrows);
-			if (r == null) reduced = false;
+			if (r == null) grouped = false;
 			else {
 				subrows = json("key", keys[i])
 					      ("value", r);
@@ -220,7 +227,7 @@ ConstValue LocalView::searchKeys(const ConstValue &keys, natural groupLevel) con
 
 	}
 
-	if (groupLevel == 0 && reduced) {
+	if (groupLevel == 0) {
 		 ConstValue r = runReduce(rows);
 		 if (r != null) {
 			 rows = json << json("key",null)
@@ -228,7 +235,7 @@ ConstValue LocalView::searchKeys(const ConstValue &keys, natural groupLevel) con
 		 }
 
 	}
-	return json("rows",rows);
+	return json("rows",rows)("total_rows",keyToValueMap.length());
 
 }
 
@@ -249,6 +256,41 @@ ConstValue LocalView::searchOneKey(const ConstValue &key) const {
 	return res;
 }
 
+LocalView::Query LocalView::createQuery(natural viewFlags) const {
+	return Query(*this,json,viewFlags);
+}
+
+void LocalView::cancelStream() {
+	UpdateStream str = updateStream;
+	updateStream.clear();
+	if (str != null) {
+		str.removeObserver(&updateReceiver);
+		if (str.getState() == IPromiseControl::stateResolving) {
+			str.wait();
+		}
+
+	}
+}
+
+void LocalView::setUpdateStream(const UpdateStream& stream) {
+	cancelStream();
+	if (stream != null)  {
+
+		Exclusive _(lock);
+		setUpdateStreamLk(stream);
+	}
+}
+void LocalView::setUpdateStreamLk(UpdateStream stream) {
+
+	updateStream = stream;
+	stream.addObserver(&updateReceiver);
+}
+
+
+LocalView::UpdateStream LocalView::getUpdateStream() const {
+	Shared _(lock);
+	return updateStream;
+}
 
 ConstValue LocalView::runReduce(const ConstValue &rows) const {
 
@@ -262,6 +304,37 @@ ConstValue LocalView::runReduce(const ConstValue &rows) const {
 		values.add(v["value"]);
 	}
 	return reduce(keylist,values,false);
+
+}
+
+static bool canGroupKeys(const ConstValue &subj, const ConstValue &sliced) {
+	if (subj->isArray()) {
+		natural cnt = subj.length();
+		if (cnt >= sliced.length()) {
+			cnt = sliced.length();
+		} else {
+			return false;
+		}
+
+		for (natural i = 0; i < cnt; i++) {
+			if (compareJson(subj[i],sliced[i]) != cmpResultEqual) return false;
+		}
+		return true;
+	} else {
+		return compareJson(subj,sliced) == cmpResultEqual;
+	}
+}
+
+static ConstValue sliceKey(const ConstValue &key, natural groupLevel, const Json &json) {
+	if (key->isArray()) {
+		if (key.length() <= groupLevel) return key;
+		Container out = json.array();
+		for (natural i = 0; i < groupLevel; i++)
+			out.add(key[i]);
+		return out;
+	} else {
+		return key;
+	}
 
 }
 
@@ -285,29 +358,130 @@ bool excludeEnd) const {
 		stopPos = &endK;
 	}
 
-	KeyToValue::Iterator iter = keyToValueMap.seek(*seekPos);
-	if (descending) iter.setDir(Direction::backward);
+
+
+	Optional<KeyToValue::Iterator> iter;
+	if (seekPos->key != null) {
+		iter = keyToValueMap.seek(*seekPos);
+	} else {
+		if (descending) iter = keyToValueMap.getBkIter();
+		else iter = keyToValueMap.getFwIter();
+	}
+
+	Optional<KeyToValue::Iterator> iend;
+	if (stopPos->key != null) {
+		iend = keyToValueMap.seek(*stopPos);
+	}
+	keyToValueMap.seek(*stopPos);
+	if (descending) iter->setDir(Direction::backward);
 	natural whLimit = naturalNull - offset < limit? offset+limit:naturalNull;
 
-	while (iter.hasItems()) {
+	Container rows = json.array();
+	ConstValue grows;
+
+	while (iter->hasItems() && (iend == null || iend.value() != iter.value()) && whLimit > 0) {
+
+		const KeyToValue::KeyValue &kv = iter->getNext();
+
+		if (offset == 0)
+			rows.add(json("id",kv.key.docId)
+				    ("key",kv.key.key)
+					("value",kv.value.value)
+					("doc",kv.value.doc));
+		else
+			offset--;
 
 	}
 
+	if (groupLevel != naturalNull) {
+		if (groupLevel == 0) {
+			grows = runReduce(rows);
+		} else {
+			Container res;
+			Container collect;
+			ConstValue lastKey = null;
+			res = json.array();
+			collect = json.array();
+
+			rows->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &val, ConstStrA, natural){
+
+				ConstValue key = val["key"];
+				if (!canGroupKeys(key, lastKey)) {
+
+					if (lastKey != null) {
+						ConstValue z = runReduce(collect);
+						res.add(json("key",lastKey)("value", z));
+					}
+					lastKey = sliceKey(key, groupLevel, json);
+					collect.clear();
+
+				} else {
+					collect.add(val);
+				}
+				return false;
+			}));
+
+			if (!collect.empty()) {
+				ConstValue z = runReduce(collect);
+				res.add(json("key",lastKey)("value", z));
+			}
+
+			grows = res;
+		}
+	} else {
+		grows = rows;
+	}
+
+	return json("rows",grows)("total_rows",keyToValueMap.length());
 
 
 }
-LocalView::Query::Query(const LocalView& lview, const Json& json, natural viewFlags)
-	:QueryBase(json,viewFlags),lview(lview) {}
+LocalView::Query::Query(const LocalView& lview, const Json& json, natural viewFlags, RefCntPtr<IListFn> listFn)
+	:QueryBase(json,viewFlags),lview(lview),listFn(listFn) {
+
+}
 
 ConstValue LocalView::Query::exec() {
+	ConstValue result;
 	if (keys.empty()) {
-		return lview.searchRange(startkey,endkey, groupLevel, descent, offset, maxlimit,offset_doc,(viewFlags & View::exludeEnd) != 0);
+		result = lview.searchRange(startkey,endkey, groupLevel, descent, offset, maxlimit,offset_doc,(viewFlags & View::exludeEnd) != 0);
 	} else {
-		return lview.searchKeys(keys,groupLevel);
+		result = lview.searchKeys(keys,groupLevel);
 	}
+	if (listFn != null) result = (*listFn)(result, args);
+	return result;
 }
 
 
+LocalView::UpdateReceiver::UpdateReceiver(LocalView& view):view(view) {
+
+}
+
+void LocalView::UpdateReceiver::resolve(
+		const UpdateStreamItem& result) throw () {
+	try {
+		Exclusive _(view.lock);
+		view.updateDocLk(result.document);
+		view.setUpdateStreamLk(result.nextItem);
+	} catch (...) {
+
+	}
+}
+
+void LocalView::UpdateReceiver::resolve(const PException&) throw () {
+	//ignore exceptions
+}
+
+LocalView::UpdateStream LocalView::DocumentSource::createStream() {
+	UpdateStream res;
+	nextItem = res.getPromise();
+	return res;
+}
+
+void LocalView::DocumentSource::updateDoc(const ConstValue &doc) {
+	Promise<UpdateStreamItem> toResolve = nextItem;
+	toResolve.resolve(Constructor2<UpdateStreamItem,ConstValue,UpdateStream>(doc, createStream()));
+}
 
 
 } /* namespace LightCouch */

@@ -14,6 +14,7 @@
 
 #include "lightspeed/base/compare.h"
 
+#include "lightspeed/base/actions/promise.h"
 namespace LightCouch {
 
 
@@ -92,19 +93,99 @@ public:
 	ConstValue getDocument(const ConstStrA docId) const;
 
 
+
+	class IListFn: public RefCntObj {
+	public:
+		virtual ConstValue operator()(const ConstValue &result, const ConstValue &args) const = 0;
+		virtual ~IListFn() {}
+	};
+
+	///Query object which can ask LocalView
+	/** You can create Query using createQuery() function.
+	 *
+	 * Query inherits QueryBase, so you can use same functions to ask local views
+	 */
 	class Query: public QueryBase {
 	public:
-		Query(const LocalView &lview, const Json &json, natural viewFlags);
+		Query(const LocalView &lview, const Json &json, natural viewFlags, RefCntPtr<IListFn> listFn = null);
 
 		virtual ConstValue exec() override;
 
 	protected:
 		const LocalView &lview;
+		RefCntPtr<IListFn> listFn;
 	};
+
+	///Creates Query object to ask LocalView
+	/**
+	 * @param viewFlags various flags defined by View object. You cannot supply View object directly
+	 * because it is connected to CouchDB's view. However, you can supply its flags
+	 *
+	 * @return created query.
+	 */
+	Query createQuery(natural viewFlags) const;
+
+	///Creates Query object to ask LocalView with list function
+	/**
+	 *
+	 * @param viewFlags various flags defined by View object. You cannot supply View object directly
+	 * @param listFn list function. The name of the function can be confusing, but it is best to match
+	 *  CouchDB's terminology. The list function receives result, performs
+	 * @return
+	 */
+	template<typename Fn>
+	Query createQuery(natural viewFlags, const Fn &listFn) const;
+
+
+	///Item of update stream
+	struct UpdateStreamItem {
+		///document to update in views
+		ConstValue document;
+		///contains initialized future for next item
+		Future<UpdateStreamItem> nextItem;
+
+		UpdateStreamItem (const ConstValue &document, const Future<UpdateStreamItem> &nextItem)
+			:document(document),nextItem(nextItem) {}
+	};
+
+
+	///Update stream - you can update various views from single source
+	/** Just create an UpdateStream and call getPromise() on it. UpdateStream
+	 * is future of future, where each future is carrying future to next item.
+	 */
+	typedef Future<UpdateStreamItem> UpdateStream;
+
+	///Creates souce of document for update
+	/** Just create instance of this object, then create a stream using the createStream() and
+	 * distribute stream through various views. Everytime tou call updateDoc(), these views will
+	 * be updated.
+	 *
+	 * The stream can be stopped by destroying the object or by recreating the stream
+	 */
+	class DocumentSource {
+	public:
+
+		///Creates an update stream
+		/** Note that function closes current stream, if any is active */
+		UpdateStream createStream();
+		///send update to every view
+		void updateDoc(const ConstValue &doc);
+
+	protected:
+		Promise<UpdateStreamItem> nextItem;
+
+	};
+
+
+	void setUpdateStream(const UpdateStream &stream);
+
+	UpdateStream getUpdateStream() const;
+
+
 
 protected:
 
-	const Json &json;
+	Json json;
 
 	struct KeyAndDocId: public Comparable<KeyAndDocId> {
 		ConstValue key;
@@ -122,6 +203,17 @@ protected:
 		ConstValue doc;
 
 		ValueAndDoc(ConstValue value,ConstValue doc):value(value),doc(doc) {}
+	};
+
+	class UpdateReceiver: public UpdateStream::IObserver {
+	public:
+
+		LocalView &view;
+
+		UpdateReceiver(LocalView &view);
+
+		virtual void resolve(const UpdateStreamItem &result) throw();
+		virtual void resolve(const PException &e) throw();
 	};
 
 	///Perform map operation
@@ -150,6 +242,7 @@ protected:
 	 * is required, the function is called again and again
 	 */
 	virtual ConstValue reduce(const ConstStringT<KeyAndDocId>  &keys, const ConstStringT<ConstValue> &values, bool rereduce) const;
+
 
 
 	///Emit key and value
@@ -206,6 +299,10 @@ protected:
 	ConstValue curDoc;
 
 
+	UpdateStream updateStream;
+	UpdateReceiver updateReceiver;
+
+
 	void eraseDocLk(ConstStrA docId);
 	void addDocLk(const ConstValue &doc, const ConstValue &key, const ConstValue &value);
 	void updateDocLk(const ConstValue &doc);
@@ -219,8 +316,32 @@ protected:
 
 
 	ConstValue runReduce(const ConstValue &rows) const;
+
+private:
+	void cancelStream();
+	void setUpdateStreamLk(UpdateStream stream);
 };
 
+template<typename Fn>
+inline LocalView::Query LocalView::createQuery(natural viewFlags, const Fn& listFn) const {
+
+	class CB: public IListFn {
+	public:
+		CB(const Fn &fn):fn(fn) {}
+		virtual ConstValue operator()(const ConstValue &result, const ConstValue &args) const {
+			return fn(result,args);
+		}
+
+	protected:
+		Fn fn;
+	};
+
+	RefCntPtr<IListFn> ptr = new CB(listFn);
+	return Query(*this,json,viewFlags,ptr.getMT());
+}
+
+
 } /* namespace LightCouch */
+
 
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_LOCALVIEW_H_ */
