@@ -15,6 +15,8 @@
 #include "lightspeed/base/compare.h"
 
 #include "lightspeed/base/actions/promise.h"
+
+#include "lightspeed/base/containers/map.h"
 namespace LightCouch {
 
 
@@ -181,11 +183,11 @@ public:
 
 	UpdateStream getUpdateStream() const;
 
+	const Json json;
 
 
 protected:
 
-	Json json;
 
 	struct KeyAndDocId: public Comparable<KeyAndDocId> {
 		ConstValue key;
