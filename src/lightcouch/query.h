@@ -319,7 +319,8 @@ protected:
 
 	natural viewFlags;
 
-	JSON::Container buildKey(ConstStringT<JSON::ConstValue> values);
+	JSON::ConstValue buildKey(ConstStringT<JSON::ConstValue> values);
+	JSON::Container buildRangeKey(ConstStringT<JSON::ConstValue> values);
 
 
 

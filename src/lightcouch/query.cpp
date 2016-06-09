@@ -112,8 +112,8 @@ QueryBase& QueryBase::operator()(MetaValue metaValue) {
 				case mdKeys:
 					startkey = endkey = keys = null;
 					if (curKeySet.empty()) return *this;
-					e = buildKey(curKeySet);
-					s = buildKey(curKeySet);
+					e = buildRangeKey(curKeySet);
+					s = buildRangeKey(curKeySet);
 					s.add(json(null));
 					e.add(json("\xEF\xBF\xBF",null));
 					startkey = s;
@@ -256,7 +256,7 @@ ConstValue Query::exec(CouchDB &db) {
 			urlformat("&keys=%1") << (hlp=CouchDB::urlencode(json.factory->toString(*keys)));
 			return db.jsonGET(urlline.getArray());
 		} else {
-			JSON::Value req = json("keys",keys);
+			JSON::Container req = json("keys",keys);
 			return db.jsonPOST(urlline.getArray(), req);
 		}
 	}
@@ -268,12 +268,17 @@ QueryBase& QueryBase::group(natural level) {
 	return *this;
 }
 
-JSON::Container QueryBase::buildKey(ConstStringT<ConstValue> values) {
+JSON::ConstValue QueryBase::buildKey(ConstStringT<ConstValue> values) {
 	if (!forceArray && values.length() == 1) {
 		return json(values[0]);
 	}
 	else return json(values);
 }
+
+JSON::Container QueryBase::buildRangeKey(ConstStringT<ConstValue> values) {
+	return json(values);
+}
+
 
 QueryBase& QueryBase::reverseOrder() {
 	descent = !descent;
