@@ -124,7 +124,7 @@ QueryBase& QueryBase::operator()(MetaValue metaValue) {
 					curKeySet.add(json(null));
 					return *this;
 				case mdEnd:
-					curKeySet.add(json("\xEF\xBF\xBF",null));
+					curKeySet.add(json("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF",null));
 					return *this;
 			}
 		}
@@ -136,7 +136,7 @@ QueryBase& QueryBase::operator()(MetaValue metaValue) {
 				startkey = buildKey(curKeySet);
 				curKeySet(curKeySet.length()-1) = json(
 						StringA(curKeySet(curKeySet.length()-1)->getStringUtf8()
-							+ConstStrA("\xEF\xBF\xBF")));
+							+ConstStrA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF")));
 				endkey = buildKey(curKeySet);
 				curKeySet.clear();
 				return *this;
@@ -146,7 +146,7 @@ QueryBase& QueryBase::operator()(MetaValue metaValue) {
 				if (curKeySet.empty()) return *this;
 				curKeySet(curKeySet.length()-1) = json(
 						StringA(curKeySet(curKeySet.length()-1)->getStringUtf8()
-							+ConstStrA("\xEF\xBF\xBF")));
+							+ConstStrA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF")));
 				return *this;
 			}
 

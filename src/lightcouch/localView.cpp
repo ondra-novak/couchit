@@ -9,6 +9,7 @@
 #include "localView.h"
 
 #include <lightspeed/base/constructor.h>
+#include <lightspeed/base/streams/utf.h>
 #include "couchDB.h"
 
 #include "lightspeed/base/containers/autoArray.tcc"
@@ -28,6 +29,25 @@ LocalView::~LocalView() {
 	cancelStream();
 }
 
+
+static CompareResult compareStringsUnicode(ConstStrA str1, ConstStrA str2) {
+	Utf8ToWideReader<ConstStrA::Iterator> iter1(str1.getFwIter()), iter2(str2.getFwIter());
+	iter1.enableSkipInvalidChars(true);
+	iter2.enableSkipInvalidChars(true);
+
+	while (iter1.hasItems() && iter2.hasItems()) {
+		wchar_t c1 = iter1.getNext();
+		wchar_t c2 = iter2.getNext();
+		if (c1 < c2) return cmpResultLess;
+		else if (c1 > c2) return cmpResultGreater;
+	}
+	if (iter1.hasItems())
+		return cmpResultGreater;
+	else if (iter2.hasItems())
+		return cmpResultLess;
+	else
+		return cmpResultEqual;
+}
 
 void LocalView::updateDoc(const ConstValue& doc) {
 	Exclusive _(lock);
@@ -137,6 +157,7 @@ void LocalView::addDocLk(const ConstValue &doc, const ConstValue& key, const Con
 	}
 }
 
+
 static CompareResult compareJson(const ConstValue &left, const ConstValue &right) {
 	if (left->getType() != right->getType()) {
 		if (left->isNull()) return cmpResultLess;
@@ -158,7 +179,7 @@ static CompareResult compareJson(const ConstValue &left, const ConstValue &right
 			else if (l>r) return cmpResultGreater;
 			else return cmpResultEqual;
 		}
-		case JSON::ndString: return left->getStringUtf8().compare(right->getStringUtf8());
+		case JSON::ndString: return compareStringsUnicode(left->getStringUtf8(),right->getStringUtf8());
 		case JSON::ndArray: {
 				JSON::ConstIterator li = left->getFwConstIter();
 				JSON::ConstIterator ri = right->getFwConstIter();
@@ -198,7 +219,7 @@ static CompareResult compareJson(const ConstValue &left, const ConstValue &right
 CompareResult LocalView::KeyAndDocId::compare(const KeyAndDocId& other) const {
 	CompareResult c = compareJson(key,other.key);
 	if (c == cmpResultEqual) {
-		return docId.compare(other.docId);
+		return compareStringsUnicode(docId,other.docId);
 	} else {
 		return c;
 	}
@@ -308,6 +329,7 @@ ConstValue LocalView::runReduce(const ConstValue &rows) const {
 }
 
 static bool canGroupKeys(const ConstValue &subj, const ConstValue &sliced) {
+	if (sliced == null) return false;
 	if (subj->isArray()) {
 		natural cnt = subj.length();
 		if (cnt >= sliced.length()) {
@@ -345,24 +367,29 @@ bool excludeEnd) const {
 	Shared _(lock);
 
 	KeyAndDocId startK(startKey,offsetDoc);
-	KeyAndDocId endK(endKey,excludeEnd?ConstStrA():ConstStrA("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"));
+	KeyAndDocId endK(endKey,excludeEnd?ConstStrA():ConstStrA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF"));
 
 	KeyAndDocId *seekPos;
 	KeyAndDocId *stopPos;
+	Direction::Type dir;
 
 	if (descending) {
 		seekPos = &endK;
 		stopPos = &startK;
+		dir = Direction::backward;
 	} else {
 		seekPos = &startK;
 		stopPos = &endK;
+		dir = Direction::forward;
 	}
+
+
 
 
 
 	Optional<KeyToValue::Iterator> iter;
 	if (seekPos->key != null) {
-		iter = keyToValueMap.seek(*seekPos);
+		iter = keyToValueMap.seek(*seekPos,0,dir);
 	} else {
 		if (descending) iter = keyToValueMap.getBkIter();
 		else iter = keyToValueMap.getFwIter();
@@ -370,14 +397,14 @@ bool excludeEnd) const {
 
 	Optional<KeyToValue::Iterator> iend;
 	if (stopPos->key != null) {
-		iend = keyToValueMap.seek(*stopPos);
+		bool found;
+		iend = keyToValueMap.seek(*stopPos,&found,dir);
 	}
-	keyToValueMap.seek(*stopPos);
-	if (descending) iter->setDir(Direction::backward);
 	natural whLimit = naturalNull - offset < limit? offset+limit:naturalNull;
 
 	Container rows = json.array();
 	ConstValue grows;
+
 
 	while (iter->hasItems() && (iend == null || iend.value() != iter.value()) && whLimit > 0) {
 
@@ -390,6 +417,8 @@ bool excludeEnd) const {
 					("doc",kv.value.doc));
 		else
 			offset--;
+
+		whLimit --;
 
 	}
 
@@ -415,9 +444,9 @@ bool excludeEnd) const {
 					lastKey = sliceKey(key, groupLevel, json);
 					collect.clear();
 
-				} else {
-					collect.add(val);
 				}
+				collect.add(val);
+
 				return false;
 			}));
 
@@ -442,8 +471,9 @@ LocalView::Query::Query(const LocalView& lview, const Json& json, natural viewFl
 }
 
 ConstValue LocalView::Query::exec() {
+	finishCurrent();
 	ConstValue result;
-	if (keys.empty()) {
+	if (keys == null || keys.empty()) {
 		result = lview.searchRange(startkey,endkey, groupLevel, descent, offset, maxlimit,offset_doc,(viewFlags & View::exludeEnd) != 0);
 	} else {
 		result = lview.searchKeys(keys,groupLevel);
