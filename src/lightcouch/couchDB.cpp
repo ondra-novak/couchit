@@ -103,7 +103,7 @@ JSON::ConstValue CouchDB::jsonGET(ConstStrA path, JSON::Value headers, natural f
 	if (cachedItem != nil) {
 		http.setHeader(HttpClient::fldIfNoneMatch, cachedItem->etag);
 	}
-	headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
+	if (headers!= null) headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
 		this->http.setHeader(key,nd->getStringUtf8());
 		return false;
 	}));
@@ -156,7 +156,7 @@ JSON::ConstValue CouchDB::jsonDELETE(ConstStrA path, JSON::Value headers, natura
 	Synchronized<FastLock> _(lock);
 	http.open(HttpClient::mDELETE, requestUrl);
 	http.setHeader(HttpClient::fldAccept,"application/json");
-	headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
+	if (headers) headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
 		this->http.setHeader(key,nd->getStringUtf8());
 		return false;
 	}));
@@ -198,7 +198,7 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 	http.open(method, requestUrl);
 	http.setHeader(HttpClient::fldAccept,"application/json");
 	http.setHeader(HttpClient::fldContentType,"application/json");
-	headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
+	if (headers != null) headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
 		this->http.setHeader(key,nd->getStringUtf8());
 		return false;
 	}));
@@ -309,7 +309,7 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 
 		gline.clear();
 		TextOut<AutoArrayStream<char, SmallAlloc<4096> > &, StaticAlloc<256> > fmt(gline);
-		fmt("%1/%2/_changes?since=%2") << baseUrl << database << fromSeq;
+		fmt("%1%%2/_changes?since=%3") << baseUrl << database << fromSeq;
 		if (!filter.viewPath.empty()) {
 			if (filter.flags & Filter::isView) {
 				fmt("&filter=_view&view=%1") << (hlp=urlencode(filter.viewPath));
@@ -348,26 +348,41 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 			http.open(HttpClient::mGET,gline.getArray());
 			http.setHeader(HttpClient::fldAccept,"application/json");
 			SeqFileInput in = http.send();
-			PNetworkStream conn = http.getConnection();
 
-			if (lm != lmNoWait)
-				conn->setWaitHandler(&whandle);
+			if (http.getStatus()/100 != 2) {
 
-			try {
-				JSON::Value v = factory->fromStream(in);
-			} catch (ListenExceptionStop &) {
-				listenExitFlag = false;
-				http.closeConnection();
-				return fromSeq;
-			} catch (...) {
-				listenExitFlag = false;
-				http.closeConnection();
-				throw;
+				JSON::Value errorVal;
+				try{
+					errorVal = factory->fromStream(in);
+				} catch (...) {
+
+				}
+				http.close();
+				throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+			} else {
+
+
+				PNetworkStream conn = http.getConnection();
+
+				if (lm != lmNoWait)
+					conn->setWaitHandler(&whandle);
+
+				try {
+					v = factory->fromStream(in);
+				} catch (ListenExceptionStop &) {
+					listenExitFlag = false;
+					http.closeConnection();
+					return fromSeq;
+				} catch (...) {
+					listenExitFlag = false;
+					http.closeConnection();
+					throw;
+				}
+
+				if (lm != lmNoWait)
+					conn->setWaitHandler(0);
+				http.close();
 			}
-
-			if (lm != lmNoWait)
-				conn->setWaitHandler(0);
-			http.close();
 		}
 
 

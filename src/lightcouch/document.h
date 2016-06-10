@@ -85,7 +85,7 @@ public:
 	 * @param v new document replaces old one. However, you cannot change _id and _revision (which are
 	 * restored from base revision)
 	 */
-	void setRevision(const Value &v) {editing = v;*this = v;cleanup();}
+	void setRevision(const Value &v) {editing = v;ConstValue::operator=(v);cleanup();}
 
 	///Sets revision from another const document, it creates copy
 	/**

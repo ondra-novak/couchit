@@ -51,7 +51,7 @@ Json::Object Document::edit(const Json& json) {
 	if (editing == null) {
 		if (base == null) editing = json.object();
 		else editing = base->copy(json.factory);
-		*this = editing;
+		ConstValue::operator=(editing);
 		cleanup();
 	}
 	return json.object(editing);
@@ -63,7 +63,7 @@ void Document::resolveConflicts() {
 
 void LightCouch::Document::setRevision(const Json& json, const ConstValue& v) {
 	editing = v->copy(json.factory);
-	*this = editing;
+	ConstValue::operator = (editing);
 	cleanup();
 }
 
@@ -80,28 +80,29 @@ void Document::cleanup() {
 		if (name.head(1) == ConstStrA("_")) editing->erase(name);
 	}
 
+	if (base != null) {
 	//resture _id and _rev
-	ConstValue id = base["_id"];
-	ConstValue rev = base["_rev"];
-	if (id != null) editing.set("_id",static_cast<Value &>(id));
-	if (rev != null) editing.set("_rev",static_cast<Value &>(rev));
+		ConstValue id = base["_id"];
+		ConstValue rev = base["_rev"];
+		if (id != null) editing.set("_id",static_cast<Value &>(id));
+		if (rev != null) editing.set("_rev",static_cast<Value &>(rev));
+	}
 }
 
 void Document::setDeleted(const Json& json, ConstStringT<ConstStrA> fieldsToKept) {
 	JSON::Value delDoc = json.object();
-	cleanup();
-	delDoc.set("_deleted",json(true));
 	for (auto iter = fieldsToKept.getFwIter(); iter.hasItems();) {
 		ConstStrA fld = iter.getNext();
 		Value oldV = editing[fld];
 		if (oldV != null) delDoc.set(fld,oldV);
 	}
 	setRevision(delDoc);
+	delDoc.set("_deleted",json(true));
 	enableTimestamp(json);
 }
 
 void Document::enableTimestamp(const Json& json) {
-	edit(json)(CouchDB::fldPrevRevision,null);
+	edit(json)(CouchDB::fldTimestamp,null);
 
 }
 
