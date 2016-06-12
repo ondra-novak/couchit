@@ -412,7 +412,24 @@ static void couchGetSeqNumber(PrintTextA &a) {
 
 }
 
+static void couchRetrieveDocument(PrintTextA &a) {
+	CouchDB db(getTestCouch());
+	db.use(DATABASENAME);
 
+	Query q(db.createQuery(by_name));
+	Query::Result res = q.select("Kermit Byrd")(Query::isArray).exec();
+	Query::Row row = res.getNext();
+
+	ConstValue doc = db.retrieveDocument(row.id, CouchDB::flgSeqNumber);
+	Container r = db.json.object(doc);
+	r.unset("_id");
+	//this is random - cannot be tested
+	r.unset("_rev");
+	a("%1") << db.json.factory->toString(*r);
+
+
+
+}
 
 defineTest test_couchConnect("couchdb.connect","Welcome",&couchConnect);
 defineTest test_couchCreateDB("couchdb.createDB","",&rawCreateDB);
@@ -423,6 +440,7 @@ defineTest test_couchFindWildcard("couchdb.findWildcard","Kenneth Meyer,42,156 K
 defineTest test_couchFindGroup("couchdb.findGroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ",&couchFindGroup);
 defineTest test_couchFindRange("couchdb.findRange","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRange);
 defineTest test_couchFindKeys("couchdb.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&couchFindKeys);
+defineTest test_couchRetrieveDocument("couchdb.retrieveDoc","{\"_local_seq\":1,\"age\":76,\"height\":184,\"name\":\"Kermit Byrd\"}",&couchRetrieveDocument);
 defineTest test_couchCaching("couchdb.caching","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,100,100 Owen Dillard,100,100 Nicole Jordan,100,100 ",&couchCaching);
 defineTest test_couchReduce("couchdb.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce);
 defineTest test_couchCaching2("couchdb.caching2","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,76,184 Nicole Jordan,75,150 ",&couchCaching2);

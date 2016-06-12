@@ -13,6 +13,7 @@
 
 #include "object.h"
 
+#include "exception.h"
 namespace LightCouch {
 
 using namespace LightSpeed;
@@ -41,6 +42,11 @@ public:
 	///Retrieves current document revision ID. Empty if missing
 	ConstStrA getRev() const;
 
+	///Retrieves current document ID. Function returns null if missing
+	ConstValue getIDValue() const;
+	///Retrieves current document revision ID. Function returns null if missing
+	ConstValue getRevValue() const;
+
 
 	///sets field in document
 	/** Function can be called after edit(), otherwise exception can be thrown() */
@@ -51,7 +57,10 @@ public:
 	void revert();
 	///Create new revision and enable editing
 	/**
-	 * @param json reference to json factory available in many objects of couchdb (such a json)
+	 * @param json reference to json factory available in many objects of couchdb (such a json).
+	 *  If you have Changeset object, you can use public member "json" (Changeset::json) to provide
+	 *  this argument
+	 *
 	 * @return object Json::Object - helper object that can be used to construct new values
 	 *
 	 * You can call edit() more then once. Each next call just construct Json::Object to
@@ -121,7 +130,7 @@ public:
 
 	  @note timestamp is stored in CouchDB::fldTimestamp
 	 */
-	void enableTimestamp(const Json &json);
+	void enableTimestamp();
 
 	///Enables tracking revision tree
 	/** By default couchDb traces only revisions of main branch while side revision are considered
@@ -133,7 +142,7 @@ public:
 	 * @note previous revision is stored in CouchDB::fldPrevRevision.
 	 * First revision has this field equal to null
 	 */
-	void enableRevTracking(const Json &json);
+	void enableRevTracking();
 
 	///States, that document resolved all conflicts so conflicts can be deleted during update
 	/** This state can be cleared by revert()
@@ -142,6 +151,9 @@ public:
 	 *
 	 *  */
 	void resolveConflicts();
+
+	void setID(const ConstValue &id);
+	void setRev(const ConstValue &rev);
 
 	ConstValue getConflictsToDelete() const;
 
@@ -152,6 +164,7 @@ protected:
 
 	void cleanup();
 };
+
 
 
 

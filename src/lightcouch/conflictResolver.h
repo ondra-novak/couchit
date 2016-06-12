@@ -5,8 +5,8 @@
  *      Author: ondra
  */
 
-#ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CONFILCTRESOLVER_H_
-#define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CONFILCTRESOLVER_H_
+#ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CONFLICTRESOLVER_H_
+#define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CONFLICTRESOLVER_H_
 
 #include "lightspeed/utils/json/json.h"
 #include "lightspeed/base/containers/constStr.h"
@@ -24,9 +24,9 @@ using namespace LightSpeed;
  * changes from conflicted revision to the top revision. Class can be inherited to
  * modify way how the merge is performed
  */
-class ConfilctResolver {
+class ConflictResolver {
 public:
-	ConfilctResolver(CouchDB &db);
+	ConflictResolver(CouchDB &db);
 
 	///Resolves the conflicts on the document
 	/**
@@ -34,9 +34,6 @@ public:
 	 * @return document with resolved conflicts. You need to put document into ChangeSet to store it in database
 	 */
 	Document resolve(const ConstStrA &docId);
-
-
-protected:
 
 
 	///Perform 3way merge. You can overwrite function specify own rules
@@ -61,6 +58,8 @@ protected:
 	 * @return
 	 */
 	virtual Value merge2w(const ConstValue &doc, const ConstValue &conflict);
+
+protected:
 
 	///Performs merge of values
 	/**
@@ -123,7 +122,7 @@ protected:
 
 	ConstValue deletedItem;
 
-	static bool isObjectDiff(const ConstValue &v);
+	bool isObjectDiff(const ConstValue &v);
 
 
 
@@ -131,4 +130,4 @@ protected:
 
 } /* namespace LightCouch */
 
-#endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CONFILCTRESOLVER_H_ */
+#endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CONFLICTRESOLVER_H_ */

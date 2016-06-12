@@ -22,6 +22,8 @@ void RequestError::message(ExceptionMsg& msg) const {
 	msg("CouchDB error: status=%1, message=%2") << code << this->msg;
 }
 
+const char *DocumentNotEditedException::msgText = "Document %1 is not edited. You have to call edit() first";
+const char *DocumentNotEditedException::msgNone = "<n/a>";
 
 
 

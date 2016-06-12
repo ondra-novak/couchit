@@ -45,6 +45,8 @@ CouchDB::HttpConfig CouchDB::httpConfig;
 ConstStrA CouchDB::fldTimestamp("!timestamp");
 ConstStrA CouchDB::fldPrevRevision("!prevRev");
 
+typedef AutoArrayStream<char, SmallAlloc<256> > UrlLine;
+
 static JSON::PFactory createFactory(JSON::PFactory jfact) {
 	if (jfact != null) return jfact;
 	else return JSON::create();
@@ -74,6 +76,23 @@ CouchDB::CouchDB(const Config& cfg)
 }
 
 
+template<typename C>
+void CouchDB::reqPathToFullPath(ConstStrA reqPath, C &output) {
+	output.append(baseUrl);
+	if (reqPath.head(1) == ConstStrA('/')) {
+		output.append(reqPath.offset(1));
+	} else {
+		if (database.empty()) throw ErrorMessageException(THISLOCATION,"No database selected");
+
+//			output.append(ConstStrA('/'));
+		output.append(database);
+		output.append(ConstStrA('/'));
+		output.append(reqPath);
+	}
+}
+
+
+
 JSON::ConstValue CouchDB::jsonGET(ConstStrA path, JSON::Value headers, natural flags) {
 	if (headers != null && headers->getType() != JSON::ndObject) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
@@ -82,7 +101,7 @@ JSON::ConstValue CouchDB::jsonGET(ConstStrA path, JSON::Value headers, natural f
 	AutoArray<char, SmallAlloc<4096> > requestUrl;
 	reqPathToFullPath(path,requestUrl);
 
-	bool usecache = (flags & disableCache) == 0;
+	bool usecache = (flags & flgDisableCache) == 0;
 	if (path.head(1) == ConstStrA('/')) usecache = false;
 	if (!cache) usecache = false;
 
@@ -92,7 +111,7 @@ JSON::ConstValue CouchDB::jsonGET(ConstStrA path, JSON::Value headers, natural f
 	if (usecache) {
 		cachedItem = cache->find(path);
 		if (cachedItem->isDefined()) {
-			if (seqNumSlot && *seqNumSlot == cachedItem->seqNum && (flags & refreshCache) == 0)
+			if (seqNumSlot && *seqNumSlot == cachedItem->seqNum && (flags & flgRefreshCache) == 0)
 				return cachedItem->value;
 		}
 	}
@@ -132,7 +151,7 @@ JSON::ConstValue CouchDB::jsonGET(ConstStrA path, JSON::Value headers, natural f
 				cache->set(path, QueryCache::CachedItem(fld,useq, v));
 			}
 		}
-		if (flags & storeHeaders && headers != null) {
+		if (flags & flgStoreHeaders && headers != null) {
 			headers->clear();
 			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
 				headers->add(key, this->factory->newValue(value));
@@ -174,7 +193,7 @@ JSON::ConstValue CouchDB::jsonDELETE(ConstStrA path, JSON::Value headers, natura
 		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		JSON::Value v = factory->fromStream(response);
-		if (flags & storeHeaders && headers != null) {
+		if (flags & flgStoreHeaders && headers != null) {
 			headers->clear();
 			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
 				headers->add(key, this->factory->newValue(value));
@@ -218,7 +237,7 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		JSON::Value v = factory->fromStream(response);
-		if (flags & storeHeaders && headers != null) {
+		if (flags & flgStoreHeaders && headers != null) {
 			headers.clear();
 			auto hb = json.object(headers);
 			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
@@ -272,8 +291,6 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 	AutoArrayStream<char, SmallAlloc<4096> > gline;
 	StringA hlp;
 
-	JSON::Value hdrs = json(refreshCache,true);
-
 
 	class WHandle: public INetworkResource::WaitHandler {
 	public:
@@ -284,7 +301,7 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 				if (limitTm.expired())
 					return 0;
 				//each 150 ms check exit flag.
-				//Find better solution later
+				//TODO Find better solution later
 				natural r = INetworkResource::WaitHandler::wait(resource,waitFor,150);
 				if (r) {
 					limitTm = Timeout(100000);
@@ -468,11 +485,11 @@ Query CouchDB::createQuery(natural viewFlags) {
 	return createQuery(v);
 }
 
-JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId) {
+JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId, natural flags) {
 	TextFormatBuff<char, StaticAlloc<256> > fmt;
 	StringA encdoc = urlencode(localId);
 	fmt("_local/%1") << encdoc;
-	return jsonGET(fmt.write(),null,refreshCache);
+	return jsonGET(fmt.write(),null,flgRefreshCache | (flags & flgDisableCache));
 
 }
 
@@ -499,7 +516,7 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 	}
 
 	JSON::Container h = json.object();
-	JSON::ConstValue v = jsonPUT(urlline.getArray(), null, h, storeHeaders);
+	JSON::ConstValue v = jsonPUT(urlline.getArray(), null, h, flgStoreHeaders);
 
 	UpdateFnResult r;
 	const JSON::INode *n = h->getPtr("X-Couch-Update-NewRev");
@@ -512,6 +529,8 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 
 }
 
+
+
 UID CouchDB::getUID() {
 	return UID(serverid,ConstStrA());
 }
@@ -520,6 +539,47 @@ UID CouchDB::getUID(ConstStrA suffix) {
 	return UID(serverid,suffix);
 }
 
+ConstValue CouchDB::retrieveDocument(ConstStrA docId, ConstStrA revId, natural flags) {
+	UrlLine urlLine;
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlLine);
+	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(docId.getFwIter()), revIdEnc(revId.getFwIter());
+	urlfmt("%1?rev=%2") << &docIdEnc << &revIdEnc;
+	return jsonGET(urlLine.getArray(),null, flags & (flgDisableCache|flgRefreshCache));
+}
 
+ConstValue CouchDB::retrieveDocument(ConstStrA docId, natural flags) {
+	UrlLine urlLine;
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlLine);
+	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(docId.getFwIter());
+
+	urlfmt("%1") << &docIdEnc;
+
+	char c = '?';
+		char d = '&';
+
+		if (flags & flgAttachments) {
+			urlfmt("%1attachments=true") << c;c=d;
+		}
+		if (flags & flgAttEncodingInfo) {
+			urlfmt("%1att_encoding_info=true") << c;c=d;
+		}
+		if (flags & flgConflicts) {
+			urlfmt("%1conflicts=true") << c;c=d;
+		}
+		if (flags & flgDeletedConflicts) {
+			urlfmt("%1deleted_conflicts=true") << c;c=d;
+		}
+		if (flags & flgSeqNumber) {
+			urlfmt("%1local_seq=true") << c;c=d;
+		}
+		if (flags & flgRevisions) {
+			urlfmt("%1revs=true") << c;c=d;
+		}
+		if (flags & flgRevisionsInfo) {
+			urlfmt("%1revs_info=true") << c;
+		}
+
+	return jsonGET(urlLine.getArray(),null,flags & (flgDisableCache|flgRefreshCache));
+
+}
 } /* namespace assetex */
-

@@ -86,6 +86,9 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 		index++;
 	}
 
+	//prepare for next request
+	init();
+
 	if (errors.length()) throw UpdateException(THISLOCATION,errors);
 
 	return *this;

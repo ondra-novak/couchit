@@ -5,21 +5,25 @@
  *      Author: ondra
  */
 
+#include "conflictResolver.h"
 #include <lightspeed/base/containers/autoArray.tcc>
 #include <lightspeed/base/text/textOut.tcc>
 #include "couchDB.h"
 #include "document.h"
-#include "confilctResolver.h"
 #include <lightspeed/base/containers/map.tcc>
+#include <lightspeed/utils/json/jsonserializer.tcc>
+#include <lightspeed/utils/urlencode.h>
 
 #include "revision.h"
 
 #include "validator.h"
+
+using LightSpeed::JSON::serialize;
 namespace LightCouch {
 
 
 
-ConfilctResolver::ConfilctResolver(CouchDB& db):db(db) {
+ConflictResolver::ConflictResolver(CouchDB& db):db(db) {
 }
 
 static StringA getBaseRev(ConstStrA revStr, natural start, ConstValue ids) {
@@ -34,7 +38,7 @@ static StringA getBaseRev(ConstStrA revStr, natural start, ConstValue ids) {
 	}
 }
 
-Document ConfilctResolver::resolve(const ConstStrA& docId) {
+Document ConflictResolver::resolve(const ConstStrA& docId) {
 
 	//buffer to format url-requests
 	AutoArrayStream<char, SmallAlloc<256> > buffer;
@@ -44,39 +48,43 @@ Document ConfilctResolver::resolve(const ConstStrA& docId) {
 	//format <docId>?revs=true&conflicts=true
 	//we can retrieve main line document and all revision and conflicts
 	fmt("%1?revs=true&conflicts=true") << docId;
-	Document headRev = db.jsonGET(buffer.getArray(),null,CouchDB::disableCache);
+	Document headRev = db.jsonGET(buffer.getArray(),null,CouchDB::flgDisableCache);
 
 	//Get list of revisions
 	ConstValue revisions = headRev["_revisions"];
 	//parse start revision
-	natural start = revisions["start"];
+	natural start = revisions["start"].getUInt();
 	//retrieve array of ids
 	ConstValue ids = revisions["ids"];
 	//retrieve conflicts
 	ConstValue conflicts = headRev["_conflicts"];
 
+
 	//if no conflicts found,
 	if (conflicts == null || conflicts.empty()) return headRev;
 	Map<ConstStrA, ConstValue> openedRevs;
+
+	Container open_revs = db.json.array(conflicts);
 
 
 	conflicts->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA , natural ){
 		ConstStrA revStr= v.getStringA();
 		StringA baseRevStr = getBaseRev(revStr,start,ids);
-		if (!baseRevStr.empty())
-			openedRevs(baseRevStr) = null;
+		if (!baseRevStr.empty()) {
+			if (openedRevs.find(baseRevStr) == 0) {
+				openedRevs(baseRevStr) = null;
+				open_revs.add(db.json(baseRevStr));
+			}
+		}
 		return false;
 	}));
 
 	buffer.clear();
-	ConstStrA sep = "[%22";
-	fmt("%1?open_revs=") << docId;
-	for (auto iter = openedRevs.getFwIter(); iter.hasItems();) {
-		fmt("%1%%2") << sep << iter.getNext().key;
-		sep = "%22,%22";
+	fmt("%1?open_revs=") << docId; {
+		FilterWrite<AutoArrayStream<char, SmallAlloc<256> > &, UrlEncoder> wrt(buffer);
+		JSON::serialize(open_revs,wrt,true);
 	}
-	fmt("%22]");
-	ConstValue revlist = db.jsonGET(buffer.getArray(),null,CouchDB::disableCache);
+	ConstValue revlist = db.jsonGET(buffer.getArray(),null,CouchDB::flgDisableCache);
 	revlist->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA , natural ){
 		ConstValue obj = v["ok"];
 		if (obj != null) {
@@ -112,7 +120,7 @@ Document ConfilctResolver::resolve(const ConstStrA& docId) {
 
 }
 
-Value ConfilctResolver::merge3w(const ConstValue& topdoc,const ConstValue& conflict, const ConstValue& base) {
+Value ConflictResolver::merge3w(const ConstValue& topdoc,const ConstValue& conflict, const ConstValue& base) {
 	Document doc(topdoc);
 	ConstValue mainDiff = makeDiffObject(doc,Path::root,base,doc);
 	ConstValue conflictDiff = makeDiffObject(doc,Path::root,base,conflict);
@@ -128,11 +136,11 @@ Value ConfilctResolver::merge3w(const ConstValue& topdoc,const ConstValue& confl
 	return mergedDoc;
 }
 
-Value ConfilctResolver::merge2w(const ConstValue& ,const ConstValue& ) {
+Value ConflictResolver::merge2w(const ConstValue& ,const ConstValue& ) {
 	return nil;
 }
 
-Value ConfilctResolver::mergeValue(Document& doc,const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
+Value ConflictResolver::mergeValue(Document& doc,const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
 	if (oldValue->getType() == newValue->getType() && oldValue->isObject())
 		return patchObject(doc,path,oldValue,newValue);
 	else
@@ -140,7 +148,7 @@ Value ConfilctResolver::mergeValue(Document& doc,const Path& path, const ConstVa
 
 }
 
-ConstValue ConfilctResolver::diffValue(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
+ConstValue ConflictResolver::diffValue(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
 	//different types, use new value
 	if (oldValue->getType() != newValue->getType()) return newValue;
 	//make diff
@@ -149,7 +157,7 @@ ConstValue ConfilctResolver::diffValue(Document& doc, const Path& path, const Co
 	return newValue;
 }
 
-Value ConfilctResolver::mergeObject(Document& doc, const Path& path,const ConstValue& oldValue,
+Value ConflictResolver::mergeObject(Document& doc, const Path& path,const ConstValue& oldValue,
 		const ConstValue& newValue,const ConstValue& baseValue) {
 
 	ConstValue diff = makeDiffObject(doc,path, newValue, baseValue);
@@ -160,7 +168,6 @@ template<typename Fn>
 void mergeTwoObjects(const ConstValue &left, const ConstValue &right,const Fn &resFn) {
 	JSON::ConstIterator l = left->getFwConstIter();
 	JSON::ConstIterator r = right->getFwConstIter();
-	JSON::ConstKeyValue n(0,ConstStrA(),null);
 
 	while (l.hasItems() && r.hasItems()) {
 		const JSON::ConstKeyValue &lkv = l.peek();
@@ -169,47 +176,44 @@ void mergeTwoObjects(const ConstValue &left, const ConstValue &right,const Fn &r
 		ConstStrA rk = rkv.getStringKey();
 
 		if (lk < rk) {
-			resFn(lkv, JSON::ConstKeyValue(0,rk,n));
+			resFn(lk, lkv, null);
 			l.skip();
 		} else if (lk > rk) {
-			resFn(n, rkv);
+			resFn(rk, null, rkv);
 			r.skip();
 		} else {
-			resFn(lkv,rkv);
+			resFn(lk,lkv,rkv);
 			l.skip();
 			r.skip();
 		}
 	}
 	while (l.hasItems()) {
 		const JSON::ConstKeyValue &lkv = l.getNext();
-		resFn(lkv, n);
+		resFn(lkv.getStringKey(),lkv, null);
 	}
 	while (r.hasItems()) {
 		const JSON::ConstKeyValue &rkv = r.getNext();
-		resFn(n, rkv);
+		resFn(rkv.getStringKey(),null, rkv);
 	}
 }
 
 
-JSON::ConstValue ConfilctResolver::makeDiffObject(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
+JSON::ConstValue ConflictResolver::makeDiffObject(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
 
 
 		if (deletedItem == null) deletedItem = db.json("deleted");
 		Container diff = db.json.object();
 
-		mergeTwoObjects(oldValue,newValue,[&](const JSON::ConstKeyValue &oldv, const JSON::ConstKeyValue &newv) {
+		mergeTwoObjects(oldValue,newValue,[&](const ConstStrA keyName, const ConstValue &oldv, const ConstValue &newv) {
+			if (path.isRoot() && keyName.head(1) == ConstStrA("_")) return;
 			if (newv == null) {
-				if (oldv.getStringKey().head(1) != ConstStrA("_")) {
-					diff.set(oldv.getStringKey(), deletedItem);
-				}
+				diff.set(keyName, deletedItem);
 			} else if (oldv == null) {
-				if (newv.getStringKey().head(1) != ConstStrA("_")) {
-					diff.set(newv.getStringKey(), newv);
-				}
+				diff.set(keyName,newv);
 			} else {
-				ConstValue x= diffValue(doc,Path(path,newv.getStringKey()),oldv,newv);
+				ConstValue x= diffValue(doc,Path(path,keyName),oldv,newv);
 				if (x != nil)
-					diff.set(newv, x);
+					diff.set(keyName, x);
 			}
 		});
 /*
@@ -250,27 +254,27 @@ JSON::ConstValue ConfilctResolver::makeDiffObject(Document& doc, const Path& pat
 		}
 */
 		if (diff.empty()) return null;
-		diff.set("_diff",db.json(true));
+		diff.set("_diff",deletedItem);
 		return diff;
 
 }
 
-Value ConfilctResolver::patchObject(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
+Value ConflictResolver::patchObject(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
 	if (isObjectDiff(newValue)) {
 		Value res = db.json.object();
 
-		mergeTwoObjects(oldValue,newValue,[&](const JSON::ConstKeyValue &oldv, const JSON::ConstKeyValue &newv) {
+		mergeTwoObjects(oldValue,newValue,[&](const ConstStrA keyName, const ConstValue &oldv, const ConstValue &newv) {
 			if (oldv == null) {
 				if (newv != deletedItem && !isObjectDiff(newv))
-					res.set(newv.getStringKey(), newv->copy(db.json.factory));
+					res.set(keyName, newv->copy(db.json.factory));
 			} else if (newv == null) {
-				res.set(oldv.getStringKey(), oldv->copy(db.json.factory));
+				res.set(keyName, oldv->copy(db.json.factory));
 			} else {
 				if (newv != deletedItem) {
 					if (newv->isObject()) {
-						res.set(newv.getStringKey(), patchObject(doc,Path(path,newv.getStringKey()),oldv,newv));
+						res.set(keyName, patchObject(doc,Path(path,keyName),oldv,newv));
 					} else {
-						res.set(newv.getStringKey(), newv->copy(db.json.factory));
+						res.set(keyName, newv->copy(db.json.factory));
 					}
 				}
 			}
@@ -330,105 +334,74 @@ Value ConfilctResolver::patchObject(Document& doc, const Path& path, const Const
 
 }
 
-ConstValue ConfilctResolver::resolveConflict(Document& , const Path& ,const ConstValue& leftValue, const ConstValue& rightValue) {
+ConstValue ConflictResolver::resolveConflict(Document& , const Path& ,const ConstValue& leftValue, const ConstValue& rightValue) {
 	if (rightValue == deletedItem) return rightValue;
 	else return leftValue;
 }
 
-Container ConfilctResolver::mergeDiffs(Document& doc, const Path& path, const ConstValue& leftValue, const ConstValue& rightValue) {
+Container ConflictResolver::mergeDiffs(Document& doc, const Path& path, const ConstValue& leftValue, const ConstValue& rightValue) {
 	Container res = db.json.object();
 
-	//retrieve iterators
-	JSON::ConstIterator l = leftValue->getFwConstIter();
-	JSON::ConstIterator r = rightValue->getFwConstIter();
+	mergeTwoObjects(leftValue,rightValue,[&](const ConstStrA keyName, const ConstValue &lkv, const ConstValue &rkv) {
 
-	//while both have vales (they are ordered)
-	while (r.hasItems() && l.hasItems()) {
-		//pick right key-value
-		const JSON::ConstKeyValue &rkv = r.peek();
-		//pick left key-value
-		const JSON::ConstKeyValue &lkv = l.peek();
-
-		//pick right key
-		ConstStrA rk = rkv.getStringKey();
-		//pick left key
-		ConstStrA lk = lkv.getStringKey();
-		//right key goes first
-		if (rk < lk) {
-			//add it to result
-			res.set(rk, rkv);
-			//skip to next
-			r.skip();
-		//left key goes first
-		} else if (rk > lk) {
-			//add it to result
-			res.set(lk, lkv);
-			//skip to next
-			l.skip();
-		//both are equal
-		} else {
-			//we found conflict
-			//create path
-			Path p(path,rk);
-			//if they both are objects - we can try to resolve conflict now
-			if (rkv->isObject() && lkv->isObject()) {
-				//determine, which is diff (they don't need to be diff, especialy when both doesn't exist in base revision)
-				bool drkv = isObjectDiff(rkv);
-				bool dlkv = isObjectDiff(lkv);
-				//right is diff
-				if (drkv) {
-					//left is diff
-					if (dlkv) {
-						//resolve it by merging diffs
-						res.set(rk,mergeDiffs(doc,p,lkv,rkv));
-					} else {
-						//if left is not diff, patch right diff to the left object
-						//however, this is conflict, so we must report this issue
-						//merged object is put left, because default implementation will use it
-						res.set(rk,resolveConflict(doc,p,patchObject(doc,p,lkv,rkv),lkv));
-					}
-					//if right is not diff
-				} else if (dlkv) {
-					//patch right object and ask to resolution
-					res.set(rk,resolveConflict(doc,p,patchObject(doc,p,rkv,lkv),rkv));
-				} else {
-					//if boths objects are not diffs and are not same
-					if (*rkv != *lkv) {
-						//ask to resolve conflict
-						res.set(rk,resolveConflict(doc,p,lkv,rkv));
-					}
-				}
-			//for other types
+			if (lkv == null) {
+				//add it to result
+				res.set(keyName, rkv);
+			//left key goes first
+			} else if (rkv == null) {
+				//add it to result
+				res.set(keyName, lkv);
+			//both are equal
 			} else {
-				//are they same
-				if (*rkv != *lkv) {
-					//if not, ask for resolution
-					res.set(rk,resolveConflict(doc,p,lkv,rkv));
+				//we found conflict
+				//create path
+				Path p(path,keyName);
+				//if they both are objects - we can try to resolve conflict now
+				if (rkv->isObject() && lkv->isObject()) {
+					//determine, which is diff (they don't need to be diff, especialy when both doesn't exist in base revision)
+					bool drkv = isObjectDiff(rkv);
+					bool dlkv = isObjectDiff(lkv);
+					//right is diff
+					if (drkv) {
+						//left is diff
+						if (dlkv) {
+							//resolve it by merging diffs
+							res.set(keyName,mergeDiffs(doc,p,lkv,rkv));
+						} else {
+							//if left is not diff, patch right diff to the left object
+							//however, this is conflict, so we must report this issue
+							//merged object is put left, because default implementation will use it
+							res.set(keyName,resolveConflict(doc,p,patchObject(doc,p,lkv,rkv),lkv));
+						}
+						//if right is not diff
+					} else if (dlkv) {
+						//patch right object and ask to resolution
+						res.set(keyName,resolveConflict(doc,p,patchObject(doc,p,rkv,lkv),rkv));
+					} else {
+						//if boths objects are not diffs and are not same
+						if (*rkv != *lkv) {
+							//ask to resolve conflict
+							res.set(keyName,resolveConflict(doc,p,lkv,rkv));
+						}
+					}
+				//for other types
+				} else {
+					//are they same
+					if (*rkv != *lkv) {
+						//if not, ask for resolution
+						res.set(keyName,resolveConflict(doc,p,lkv,rkv));
+					} else {
+						res.set(keyName,rkv);
+					}
 				}
 			}
-			//skip both sides
-			r.skip();
-			l.skip();
-			//continue here
-		}
-	}
-	//finish right values
-	while (r.hasItems()) {
-		const JSON::ConstKeyValue &rkv = r.getNext();
-		res.set(rkv.getStringKey(),rkv);
-	}
-	//finish left values
-	while (l.hasItems()) {
-		const JSON::ConstKeyValue &lkv = l.getNext();
-		res.set(lkv.getStringKey(),lkv);
-	}
-
+		});
 	return res;
 }
 
-bool ConfilctResolver::isObjectDiff(const ConstValue &v) {
-	ConstValue isdiff = v["diff"];
-	return isdiff != null && isdiff.getBool() == true;
+bool ConflictResolver::isObjectDiff(const ConstValue &v) {
+	ConstValue isdiff = v["_diff"];
+	return isdiff != null && isdiff == deletedItem;
 }
 
 

@@ -11,6 +11,7 @@
 #include <lightspeed/base/exceptions/exception.h>
 #include <lightspeed/base/containers/constStr.h>
 #include <lightspeed/utils/json/json.h>
+#include "object.h"
 
 namespace LightCouch {
 
@@ -32,6 +33,24 @@ protected:
 	JSON::Value extraInfo;
 
     virtual void message(ExceptionMsg &msg) const;
+
+};
+
+
+class DocumentNotEditedException: public Exception {
+public:
+	LIGHTSPEED_EXCEPTIONFINAL;
+
+	DocumentNotEditedException(const ProgramLocation &location, ConstValue docId):Exception(location),documentId(docId) {}
+
+	const ConstValue documentId;
+
+	static const char *msgText;
+	static const char *msgNone;
+	virtual void message(ExceptionMsg &msg) const {
+		if (documentId == null) msg(msgText) << msgNone;
+		else msg(msgText) << documentId.getStringA();
+	}
 
 };
 

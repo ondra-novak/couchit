@@ -40,12 +40,53 @@ class Validator;
 class CouchDB {
 public:
 
-	static const natural disableCache = 1;
-	static const natural refreshCache = 2;
-	static const natural storeHeaders = 4;
-
+	///Contains name of key which holds time of document's last update
+	/** Note that timestamping is optional feature supported only by LightCouch. If document
+	 * is updated by other way, the timestamp don't need to be updated. Timestamping
+	 * is supported by Changeset class
+	 */
 	static ConstStrA fldTimestamp;
+	///Contains ID of previous revision
+	/** Note this feature is optional and supported only by LightCouch. The class Changeset
+	 * will put there id of previous revision.
+	 */
 	static ConstStrA fldPrevRevision;
+
+	///Download flag - disable cache while retrieving resule
+	/** Downloader will not include etag into header, so database will return complete response
+	 * Result will not stored into cache. This flag is useful if you need
+	 * to retrieve content which will be used only once. For example when
+	 * url contains a random number.
+	 */
+	static const natural flgDisableCache = 1;
+	///Download flag - refresh cache with new value
+	/** Cache can quess, whether there is chance that content of URL has been updated. If
+	 * cache doesn't detect such condition, no request is generated and result is
+	 * returned from the cache. This flag disabled that feature. With this flag, request
+	 * is always generated but eTags will be used. So cache can still be used when
+	 * server returns state 304. If there is changed content, cache is also updated.
+	 */
+	static const natural flgRefreshCache = 2;
+	///Download flag - store headers to the argument
+	/** You have to supply empty object as header field (if you don't need to send
+	 * headers with the request) Function will store response headers to the object.
+	 */
+	static const natural flgStoreHeaders = 4;
+
+	///Retrieve all revision IDs
+	static const natural flgRevisions = 8;
+	///Retrieve revision info
+	static const natural flgRevisionsInfo = 0x10;
+	///Retrieve update seq
+	static const natural flgSeqNumber = 0x40;
+	///Retrieve attachments
+	static const natural flgAttachments = 0x80;
+	///Retrieve attachment encoding info
+	static const natural flgAttEncodingInfo = 0x100;
+	///Retrieve all conflicts
+	static const natural flgConflicts = 0x200;
+	///Retrieve all deleted conflicts
+	static const natural flgDeletedConflicts = 0x400;
 
 
 	struct Config {
@@ -304,13 +345,35 @@ public:
 	 * document, you can use ChangeSet object. Note that mixing writting standard documents and local documents
 	 * in single ChangeSet can cause undefined behaviour when local document is in conflict.
 	 * @param localId
+	 * @param flags can contain 0 or flgDisableCache, other flags are ignored
 	 * @return JSON document;
 	 *
 	 * @note if sequence numbers are tracked, function disables caching, because
 	 * sequence numbers are not updated when local document is stored
 	 */
-	JSON::ConstValue retrieveLocalDocument(ConstStrA localId);
+	ConstValue retrieveLocalDocument(ConstStrA localId, natural flags = 0);
 
+	///Retrieves document (by its id)
+	/**
+	 *
+	 * @param docId document id
+	 * @param flags various flags defined in CouchDB::flgXXXX. The flag flgStoreHeaders is ignored
+	 * @return json with document
+	 *
+	 * @note Retrieveing many documents using this method is slow. You should use Query
+	 * to retrieve multiple documents. However, some document properties are not available through the Query
+	 */
+	ConstValue retrieveDocument(ConstStrA docId, natural flags = 0);
+
+
+	///Retrieves other revision of the document
+	/**
+	 * @param docId document id
+	 * @param revId revision id
+	 * @param flags can be only flgDisableCache or zero. The default value is recommended.
+	 * @return json with document
+	 */
+	ConstValue retrieveDocument(ConstStrA docId, ConstStrA revId, natural flags = flgDisableCache);
 
 	///Retrieves pointer to validator
 	/**
@@ -369,19 +432,11 @@ protected:
 	natural listenChangesInternal(IChangeNotify &cb,  natural fromSeq, const Filter &filter, ListenMode lm);
 
 	template<typename C>
-	void reqPathToFullPath(ConstStrA reqPath, C &output) {
-		output.append(baseUrl);
-		if (reqPath.head(1) == ConstStrA('/')) {
-			output.append(reqPath.offset(1));
-		} else {
-			if (database.empty()) throw ErrorMessageException(THISLOCATION,"No database selected");
+	void reqPathToFullPath(ConstStrA reqPath, C &output);
 
-//			output.append(ConstStrA('/'));
-			output.append(database);
-			output.append(ConstStrA('/'));
-			output.append(reqPath);
-		}
-	}
+	template<typename C>
+	void urlEncodeToStream(ConstStrA str, C &output);
+
 
 	JSON::ConstValue jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags);
 public:

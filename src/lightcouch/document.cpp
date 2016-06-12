@@ -21,13 +21,13 @@ Document::Document(const Value& editableBase):ConstValue(editableBase),base(edit
 }
 
 ConstStrA Document::getID() const {
-	ConstValue v = (*this)["_id"];
+	ConstValue v = getIDValue();
 	if (v != null) return v.getStringA();
 	else return ConstStrA();
 }
 
 ConstStrA Document::getRev() const {
-	ConstValue v = (*this)["_rev"];
+	ConstValue v = getRevValue();
 	if (v != null) return v.getStringA();
 	else return ConstStrA();
 }
@@ -61,7 +61,7 @@ void Document::resolveConflicts() {
 	conflictsToDelete = base["_conflicts"];
 }
 
-void LightCouch::Document::setRevision(const Json& json, const ConstValue& v) {
+void Document::setRevision(const Json& json, const ConstValue& v) {
 	editing = v->copy(json.factory);
 	ConstValue::operator = (editing);
 	cleanup();
@@ -70,6 +70,29 @@ void LightCouch::Document::setRevision(const Json& json, const ConstValue& v) {
 
 ConstValue Document::getConflictsToDelete() const {
 	return conflictsToDelete;
+}
+
+ConstValue Document::getIDValue() const {
+	if (isNull()) return null;
+	return (*this)["_id"];
+}
+
+ConstValue Document::getRevValue() const {
+	if (isNull()) return null;
+	return (*this)["_rev"];
+}
+
+void Document::setID(const ConstValue& id) {
+	if (editing == null)
+		throw DocumentNotEditedException(THISLOCATION, getIDValue());
+	editing.set("_id",static_cast<const Value &>(id));
+
+}
+
+void Document::setRev(const ConstValue& rev) {
+	if (editing == null)
+		throw DocumentNotEditedException(THISLOCATION, getIDValue());
+	editing.set("_rev",static_cast<const Value &>(rev));
 }
 
 void Document::cleanup() {
@@ -98,14 +121,20 @@ void Document::setDeleted(const Json& json, ConstStringT<ConstStrA> fieldsToKept
 	}
 	setRevision(delDoc);
 	delDoc.set("_deleted",json(true));
-	enableTimestamp(json);
+	enableTimestamp();
 }
 
-void Document::enableTimestamp(const Json& json) {
-	edit(json)(CouchDB::fldTimestamp,null);
-
+void Document::enableTimestamp() {
+	if (editing == null) throw DocumentNotEditedException(THISLOCATION, getIDValue());
+	editing.set(CouchDB::fldTimestamp,JSON::getConstant(JSON::constNull));
 }
+
+void Document::enableRevTracking() {
+	if (editing == null) throw DocumentNotEditedException(THISLOCATION, getIDValue());
+	editing.set(CouchDB::fldPrevRevision,JSON::getConstant(JSON::constNull));
+}
+
+
 
 
 } /* namespace LightCouch */
-
