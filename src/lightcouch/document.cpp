@@ -96,13 +96,6 @@ void Document::setRev(const ConstValue& rev) {
 }
 
 void Document::cleanup() {
-	//remove all couchDB reserved items
-	for(auto iter = editing->getFwIter(); iter.hasItems();) {
-		const JSON::KeyValue &kv = iter.getNext();
-		ConstStrA name = kv.getStringKey();
-		if (name.head(1) == ConstStrA("_")) editing->erase(name);
-	}
-
 	if (base != null) {
 	//resture _id and _rev
 		ConstValue id = base["_id"];

@@ -93,7 +93,7 @@ void CouchDB::reqPathToFullPath(ConstStrA reqPath, C &output) {
 
 
 
-JSON::ConstValue CouchDB::jsonGET(ConstStrA path, JSON::Value headers, natural flags) {
+JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natural flags) {
 	if (headers != null && headers->getType() != JSON::ndObject) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
@@ -164,7 +164,7 @@ JSON::ConstValue CouchDB::jsonGET(ConstStrA path, JSON::Value headers, natural f
 }
 
 
-JSON::ConstValue CouchDB::jsonDELETE(ConstStrA path, JSON::Value headers, natural flags) {
+JSON::ConstValue CouchDB::requestDELETE(ConstStrA path, JSON::Value headers, natural flags) {
 	if (headers != null && headers->getType() != JSON::ndObject) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
@@ -251,10 +251,10 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 }
 
 
-JSON::ConstValue CouchDB::jsonPUT(ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags) {
+JSON::ConstValue CouchDB::requestPUT(ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPUT,path,postData,headers,flags);
 }
-JSON::ConstValue CouchDB::jsonPOST(ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags) {
+JSON::ConstValue CouchDB::requestPOST(ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPOST,path,postData,headers,flags);
 }
 
@@ -274,11 +274,11 @@ StringA CouchDB::urlencode(ConstStrA text) {
 }
 
 void CouchDB::createDatabase() {
-	jsonPUT(ConstStrA(),null);
+	requestPUT(ConstStrA(),null);
 }
 
 void CouchDB::deleteDatabase() {
-	jsonDELETE(ConstStrA(),null);
+	requestDELETE(ConstStrA(),null);
 }
 
 CouchDB::~CouchDB() {
@@ -471,7 +471,7 @@ Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	allRevs.load(confDoc["_conflicts"]);
 	revList= urlencode(factory->toString(*allRevs));
 	fmt("%1?open_revs=%2") << docId << revList;
-	JSON::ConstValue res = jsonGET(fmt.write());
+	JSON::ConstValue res = requestGET(fmt.write());
 	Conflicts c;
 	for (JSON::ConstIterator iter = res->getFwIter(); iter.hasItems();) {
 		const JSON::ConstKeyValue &kv = iter.getNext();
@@ -489,7 +489,7 @@ JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId, natural flags
 	TextFormatBuff<char, StaticAlloc<256> > fmt;
 	StringA encdoc = urlencode(localId);
 	fmt("_local/%1") << encdoc;
-	return jsonGET(fmt.write(),null,flgRefreshCache | (flags & flgDisableCache));
+	return requestGET(fmt.write(),null,flgRefreshCache | (flags & flgDisableCache));
 
 }
 
@@ -516,7 +516,7 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 	}
 
 	JSON::Container h = json.object();
-	JSON::ConstValue v = jsonPUT(urlline.getArray(), null, h, flgStoreHeaders);
+	JSON::ConstValue v = requestPUT(urlline.getArray(), null, h, flgStoreHeaders);
 
 	UpdateFnResult r;
 	const JSON::INode *n = h->getPtr("X-Couch-Update-NewRev");
@@ -544,7 +544,7 @@ ConstValue CouchDB::retrieveDocument(ConstStrA docId, ConstStrA revId, natural f
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlLine);
 	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(docId.getFwIter()), revIdEnc(revId.getFwIter());
 	urlfmt("%1?rev=%2") << &docIdEnc << &revIdEnc;
-	return jsonGET(urlLine.getArray(),null, flags & (flgDisableCache|flgRefreshCache));
+	return requestGET(urlLine.getArray(),null, flags & (flgDisableCache|flgRefreshCache));
 }
 
 ConstValue CouchDB::retrieveDocument(ConstStrA docId, natural flags) {
@@ -579,7 +579,7 @@ ConstValue CouchDB::retrieveDocument(ConstStrA docId, natural flags) {
 			urlfmt("%1revs_info=true") << c;
 		}
 
-	return jsonGET(urlLine.getArray(),null,flags & (flgDisableCache|flgRefreshCache));
+	return requestGET(urlLine.getArray(),null,flags & (flgDisableCache|flgRefreshCache));
 
 }
 } /* namespace assetex */

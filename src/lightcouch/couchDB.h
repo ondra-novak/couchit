@@ -130,7 +130,7 @@ public:
 	 * @param flags various flags that controls caching or behaviour
 	 * @return parsed response
 	 */
-	JSON::ConstValue jsonGET(ConstStrA path, JSON::Value headers = null, natural flags = 0);
+	JSON::ConstValue requestGET(ConstStrA path, JSON::Value headers = null, natural flags = 0);
 	///Performs POST request from the database
 	/** POST request are not cached.
 	 *
@@ -143,7 +143,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	JSON::ConstValue jsonPOST(ConstStrA path, JSON::ConstValue postData, JSON::Container headers = null, natural flags = 0);
+	JSON::ConstValue requestPOST(ConstStrA path, JSON::ConstValue postData, JSON::Container headers = null, natural flags = 0);
 	///Performs PUT request from the database
 	/** PUT request are not cached.
 	 *
@@ -156,7 +156,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	JSON::ConstValue jsonPUT(ConstStrA path, JSON::ConstValue postData, JSON::Container headers = null, natural flags = 0);
+	JSON::ConstValue requestPUT(ConstStrA path, JSON::ConstValue postData, JSON::Container headers = null, natural flags = 0);
 
 	///Performs DELETE request at database
 	/**
@@ -166,7 +166,7 @@ public:
 	 * @param flags flags that controls behaviour
 	 * @return
 	 */
-	JSON::ConstValue jsonDELETE(ConstStrA path, JSON::Value headers = null, natural flags = 0);
+	JSON::ConstValue requestDELETE(ConstStrA path, JSON::Value headers = null, natural flags = 0);
 
 
 	///Retrieves UID generated localy
@@ -310,9 +310,13 @@ public:
 	 */
 	Query createQuery(natural viewFlags);
 
+	///Creates changeset
+	/** Changeset will use this database connection to update document
+	 *
+	 * @return
+	 */
 	Changeset createChangeset();
 
-	JSON::IFactory &getJsonFactory();
 
 
 	///Enables tracking of sequence numbers for caching
@@ -320,7 +324,7 @@ public:
 	 * Function directly call QueryCache::trackSeqNumbers with correct database. It enables
 	 * tracking sequence numbers for caching. You have to update number everytime database is changed. This
 	 * can be achieved by installing dispatcher through listenChanges(). When listenChanges is active,
-	 * sequence number is updated automatically (but carefully with filters, you need to install at least
+	 * sequence number is updated automatically (but be careful with filters, you need to install at least
 	 * one dispatcher without filtering)
 	 *
 	 * @return reference to variable which should be updated with every change in the database. It will be initialized
@@ -330,15 +334,6 @@ public:
 	 */
 	atomicValue &trackSeqNumbers();
 
-	///Loads all conflicts to explore and resolve
-	/** You can use this function to download all opened revision for resolution
-	 * Function will fill Conflicts container with all opened revisions including their
-	 * content.
-	 * @param conflictedDoc - conflicted document (must have _conflicts)
-	 * @return container all conflicted revisions. If document has no conflicts, results
-	 * is empty container. You should test result before using it
-	 */
-	Conflicts loadConflicts(const Document &conflictedDoc);
 
 	///Retrieves local document (by its id)
 	/** You can use function to retrieve local document, because Query object will not retrieve it. To store
@@ -383,12 +378,71 @@ public:
 	Pointer<Validator> getValidator() const {return validator;}
 
 
-	struct UpdateFnResult {
-		JSON::ConstValue response;
-		StringA newRevID;
-	};
+	///Calls update handler to update document using server-side function
+	/** Server side function must be defined in design documents. You have to know relative path to
+	 * the database root.
+	 *
+	 * @param updateHandlerPath relative path to the update handler
+	 * @param documentId document id to update. If you need to create new document, you have to supply newly
+	 * generated ID. LightCouch doesn't support POST requests without document id.
+	 * @param arguments optional arguments (can be NULL)passed as object which is transformed to the key=value structure. Arguments are converted to strings (without quotes). Objects and arrays are serialized
+	 * @return Response of the function. Response must be application/json, otherwise following object is returned
+	 *
+	 * @code
+	 * {
+	 *    content: "...",
+	 *    contentType: "..."
+	 * }
+	 * @endcode
+	 *
+	 * @note "content" can be binary. This is invalid for JSON. You should not convert such json to a string.
+	 *
+	 * @exception RequestError if function returns any other status then 200 or 201
+	 */
+	ConstValue updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId, JSON::ConstValue arguments);
 
-	UpdateFnResult callUpdateFn(ConstStrA updateFnPath, ConstStrA documentId, JSON::Value arguments);
+
+	///Calls show handler.
+	/** Calls special show handler for specified document. The document doesn't need to exists, handler
+	 * must be able to handle such situation
+	 *
+	 * @param showHandlerPath relative to database's root path to the show handler
+	 * @param documentId document id
+	 * @param arguments optional arguments (can be NULL) passed as object which is transformed to the key=value structure. Arguments are converted to strings (without quotes). Objects and arrays are serialized
+	 * @param flags allowed flags flgDisableCache or flgRefreshCache or zero. If cache available caching is in effect by default.
+	 * @return Response of the function. Response must be application/json, otherwise following object is returned
+	 *
+	 * @code
+	 * {
+	 *    content: "...",
+	 *    contentType: "..."
+	 * }
+	 * @endcode
+	 *
+	 * @note "content" can be binary. This is invalid for JSON. You should not convert such json to a string.
+	 *
+	 * @exception RequestError if function returns any other status then 200 or 201
+	 */
+	ConstValue showDoc(ConstStrA showHandlerPath, ConstStrA documentId, JSON::ConstValue arguments, natural flags = 0);
+
+
+	///Uploads attachment with specified document
+	/**
+	 * @param document document object. The document don't need to be complete, only _id and _rev must be there. After
+	 * successful update, _rev is
+	 * @param attachmentName
+	 * @param contentType
+	 * @param fn
+	 */
+	template<typename UploadFn>
+	void uploadAttachment(Document &document, ConstStrA attachmentName, ConstStrA contentType, const UploadFn &fn);
+
+
+
+	template<typename DownloadFn>
+	void downloadAttachment(Document &document, ConstStrA attachmentName, const DownloadFn &fn);
+
+
 
 	///Use json variable to build objects
 	const Json json;

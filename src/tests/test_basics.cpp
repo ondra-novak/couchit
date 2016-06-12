@@ -32,7 +32,7 @@ static void couchConnect(PrintTextA &print) {
 
 	CouchDB db(getTestCouch());
 
-	ConstValue v = db.jsonGET("/");
+	ConstValue v = db.requestGET("/");
 		print("%1") << v["couchdb"]->getStringUtf8();
 }
 
@@ -398,7 +398,7 @@ static void couchChangesStopWait(PrintTextA &a) {
 		return true;
 	});
 
-	ConstValue v = db.jsonGET("/");
+	ConstValue v = db.requestGET("/");
 	a("%1") << v["couchdb"]->getStringUtf8();
 }
 

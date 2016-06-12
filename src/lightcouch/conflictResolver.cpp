@@ -48,7 +48,7 @@ Document ConflictResolver::resolve(const ConstStrA& docId) {
 	//format <docId>?revs=true&conflicts=true
 	//we can retrieve main line document and all revision and conflicts
 	fmt("%1?revs=true&conflicts=true") << docId;
-	Document headRev = db.jsonGET(buffer.getArray(),null,CouchDB::flgDisableCache);
+	Document headRev = db.requestGET(buffer.getArray(),null,CouchDB::flgDisableCache);
 
 	//Get list of revisions
 	ConstValue revisions = headRev["_revisions"];
@@ -84,7 +84,7 @@ Document ConflictResolver::resolve(const ConstStrA& docId) {
 		FilterWrite<AutoArrayStream<char, SmallAlloc<256> > &, UrlEncoder> wrt(buffer);
 		JSON::serialize(open_revs,wrt,true);
 	}
-	ConstValue revlist = db.jsonGET(buffer.getArray(),null,CouchDB::flgDisableCache);
+	ConstValue revlist = db.requestGET(buffer.getArray(),null,CouchDB::flgDisableCache);
 	revlist->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA , natural ){
 		ConstValue obj = v["ok"];
 		if (obj != null) {
@@ -205,7 +205,7 @@ JSON::ConstValue ConflictResolver::makeDiffObject(Document& doc, const Path& pat
 		Container diff = db.json.object();
 
 		mergeTwoObjects(oldValue,newValue,[&](const ConstStrA keyName, const ConstValue &oldv, const ConstValue &newv) {
-			if (path.isRoot() && keyName.head(1) == ConstStrA("_")) return;
+			if (path.isRoot() && keyName != "_attachments" && keyName.head(1) == ConstStrA("_")) return;
 			if (newv == null) {
 				diff.set(keyName, deletedItem);
 			} else if (oldv == null) {

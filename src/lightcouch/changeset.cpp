@@ -61,7 +61,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 	}
 	if (all_or_nothing)
 		json.object(wholeRequest)("all_or_nothing",true);
-	JSON::ConstValue out = db.jsonPOST("_bulk_docs", wholeRequest);
+	JSON::ConstValue out = db.requestPOST("_bulk_docs", wholeRequest);
 
 
 	AutoArray<ErrorItem> errors;
