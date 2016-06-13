@@ -386,18 +386,27 @@ public:
 	 * @param documentId document id to update. If you need to create new document, you have to supply newly
 	 * generated ID. LightCouch doesn't support POST requests without document id.
 	 * @param arguments optional arguments (can be NULL)passed as object which is transformed to the key=value structure. Arguments are converted to strings (without quotes). Objects and arrays are serialized
-	 * @return Response of the function. Response must be application/json, otherwise following object is returned
+	 * @return Response of the function. Response has following format
 	 *
 	 * @code
 	 * {
-	 *    content: "...",
-	 *    contentType: "..."
+	 *    "content":"...",
+	 *    "content-type":"...",
+	 *    "rev":"...",
+	 *    "id":"..."
 	 * }
-	 * @endcode
 	 *
-	 * @note "content" can be binary. This is invalid for JSON. You should not convert such json to a string.
+	 * @b content - string or binary or parsed json value if possible.
+	 * @b content-type - content type. If you need to parse response as json, specify application/json here.
+	 * @b rev - revision id of the update.
+	 * @b id - id of the document
 	 *
-	 * @exception RequestError if function returns any other status then 200 or 201
+	 *
+	 * @note contenr can be binary string. It is not valid in json, however, in C++ it is simply
+	 *  a string, which can contain a binary information
+	 *
+	 *
+	 *  @exception RequestError if function returns any other status then 200 or 201
 	 */
 	ConstValue updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId, JSON::ConstValue arguments);
 
@@ -414,12 +423,19 @@ public:
 	 *
 	 * @code
 	 * {
-	 *    content: "...",
-	 *    contentType: "..."
+	 *    "content":"...",
+	 *    "content-type":"...",
+	 *    "id":"..."
 	 * }
-	 * @endcode
 	 *
-	 * @note "content" can be binary. This is invalid for JSON. You should not convert such json to a string.
+	 * @b content - string or binary or parsed json value if possible.
+	 * @b content-type - content type. If you need to parse response as json, specify application/json here.
+1	 * @b id - id of the document
+	 *
+	 *
+	 * @note contenr can be binary string. It is not valid in json, however, in C++ it is simply
+	 *  a string, which can contain a binary information
+	 *
 	 *
 	 * @exception RequestError if function returns any other status then 200 or 201
 	 */

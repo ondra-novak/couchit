@@ -433,11 +433,6 @@ Changeset CouchDB::createChangeset() {
 	return Changeset(*this);
 }
 
-JSON::IFactory &CouchDB::getJsonFactory() {
-	return *factory;
-}
-
-
 
 void CouchDB::stopListenChanges() {
 	listenExitFlag = true;
@@ -461,7 +456,7 @@ atomicValue& CouchDB::trackSeqNumbers() {
 	seqNumSlot = &v;
 	return v;
 }
-
+/*
 Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	TextFormatBuff<char, StaticAlloc<256> > fmt;
 	StringA docId = urlencode(confDoc["_id"].getStringA());
@@ -480,6 +475,7 @@ Conflicts CouchDB::loadConflicts(const Document &confDoc) {
 	}
 	return c;
 }
+*/
 Query CouchDB::createQuery(natural viewFlags) {
 	View v("_all_docs", viewFlags);
 	return createQuery(v);
@@ -492,7 +488,7 @@ JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId, natural flags
 	return requestGET(fmt.write(),null,flgRefreshCache | (flags & flgDisableCache));
 
 }
-
+/*
 CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 		ConstStrA documentId, JSON::Value arguments) {
 	AutoArrayStream<char, SmallAlloc<1024> > urlline;
@@ -529,7 +525,7 @@ CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
 
 }
 
-
+*/
 
 UID CouchDB::getUID() {
 	return UID(serverid,ConstStrA());
@@ -582,4 +578,46 @@ ConstValue CouchDB::retrieveDocument(ConstStrA docId, natural flags) {
 	return requestGET(urlLine.getArray(),null,flags & (flgDisableCache|flgRefreshCache));
 
 }
+
+ConstValue CouchDB::updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId,
+		JSON::ConstValue arguments) {
+
+	UrlLine urlline;
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
+	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter());
+	urlfmt("%1/%2") << updateHandlerPath << &docIdEnc;
+	if (arguments != null) {
+		char c = '?';
+		for (JSON::ConstIterator iter = arguments->getFwIter(); iter.hasItems();) {
+			const JSON::ConstKeyValue &kv = iter.getNext();
+			FilterRead<ConstStrA::Iterator, UrlEncoder> keyEnc(kv.getStringKey().getFwIter());
+			ConstStrA valStr;
+			if (kv->isString()) {
+				valStr = kv.getStringA();
+			} else {
+				valStr = json.factory->toString(*kv);
+			}
+			FilterRead<ConstStrA::Iterator, UrlEncoder> valEnc(valStr.getFwIter());
+			urlfmt("%1%%2=%3") << c << &keyEnc << &valEnc;
+			c = '&';
+		}
+	}
+	JSON::ConstValue v = requestPUT(urlline.getArray(), null);
+
+	/*UpdateFnResult r;
+	const JSON::INode *n = h->getPtr("X-Couch-Update-NewRev");
+	if (n) {
+		r.newRevID = n->getStringUtf8();
+	}
+	r.response = v;
+	return r;
+*/
+
+}
+
+ConstValue CouchDB::showDoc(ConstStrA showHandlerPath, ConstStrA documentId,
+		JSON::ConstValue arguments, natural flags) {
+}
+
 } /* namespace assetex */
+

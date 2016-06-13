@@ -80,7 +80,7 @@ static void couchLoadData(PrintTextA &print) {
 	AutoArray<Document, SmallAlloc<50> > savedDocs;
 
 	Changeset chset(db.createChangeset());
-	JSON::Value data = db.getJsonFactory().fromString(strdata);
+	JSON::Value data = db.json.factory->fromString(strdata);
 	for (JSON::Iterator iter = data->getFwIter(); iter.hasItems();) {
 		const JSON::KeyValue &kv= iter.getNext();
 		Document doc;
@@ -112,7 +112,7 @@ static void couchConflicted(PrintTextA &print) {
 		Changeset chset(db.createChangeset());
 		for (natural i = 0; i < countof(designs); i++) {
 
-			Document doc(db.getJsonFactory().fromString(designs[i]));
+			Document doc(db.json.factory->fromString(designs[i]));
 			chset.update(doc);
 		}
 		chset.commit(db,false);
@@ -130,7 +130,7 @@ static void couchLoadDesign(PrintTextA &) {
 
 	Changeset chset(db.createChangeset());
 	for (natural i = 0; i < countof(designs); i++) {
-		Document doc(db.getJsonFactory().fromString(designs[i]));
+		Document doc(db.json.factory->fromString(designs[i]));
 		chset.update(doc);
 	}
 	chset.commit(db);
