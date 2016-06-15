@@ -579,7 +579,7 @@ ConstValue CouchDB::retrieveDocument(ConstStrA docId, natural flags) {
 
 }
 
-ConstValue CouchDB::updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId,
+CouchDB::UpdateResult CouchDB::updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId,
 		JSON::ConstValue arguments) {
 
 	UrlLine urlline;
@@ -602,22 +602,111 @@ ConstValue CouchDB::updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId,
 			c = '&';
 		}
 	}
-	JSON::ConstValue v = requestPUT(urlline.getArray(), null);
+	JSON::Container h = json.object();
+	JSON::ConstValue v = requestPUT(urlline.getArray(), null, h, flgStoreHeaders);
 
-	/*UpdateFnResult r;
+	StringA newRev;
 	const JSON::INode *n = h->getPtr("X-Couch-Update-NewRev");
 	if (n) {
-		r.newRevID = n->getStringUtf8();
+		newRev = n->getStringUtf8();
 	}
-	r.response = v;
-	return r;
-*/
+
+	return UpdateResult(v,newRev);
 
 }
 
 ConstValue CouchDB::showDoc(ConstStrA showHandlerPath, ConstStrA documentId,
 		JSON::ConstValue arguments, natural flags) {
+
+	UrlLine urlline;
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
+	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter());
+	urlfmt("%1/%2") << showHandlerPath << &docIdEnc;
+	if (arguments != null) {
+		char c = '?';
+		for (JSON::ConstIterator iter = arguments->getFwIter(); iter.hasItems();) {
+			const JSON::ConstKeyValue &kv = iter.getNext();
+			FilterRead<ConstStrA::Iterator, UrlEncoder> keyEnc(kv.getStringKey().getFwIter());
+			ConstStrA valStr;
+			if (kv->isString()) {
+				valStr = kv.getStringA();
+			} else {
+				valStr = json.factory->toString(*kv);
+			}
+			FilterRead<ConstStrA::Iterator, UrlEncoder> valEnc(valStr.getFwIter());
+			urlfmt("%1%%2=%3") << c << &keyEnc << &valEnc;
+			c = '&';
+		}
+	}
+	JSON::ConstValue v = requestGET(urlline.getArray(),null,flags);
+
+	return v;
+
+}
+
+
+StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,ConstStrA contentType, const UploadFn& updateFn) {
+	Synchronized<FastLock> _(lock);
+	ConstStrA documentId = document.getID();
+	ConstStrA revId = document.getRev();
+	UrlLine urlline;
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
+	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
+	urlfmt("%1/%2") << &docIdEnc << &attNameEnc;
+	if (!revId.empty()) {
+		FilterRead<ConstStrA::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
+		urlfmt("?rev=%1") << &revIdEnc;
+	}
+	http.open(HttpClient::mPUT, urlline.getArray());
+	http.setHeader(HttpClient::fldContentType, contentType);
+	SeqFileOutput out = http.beginBody(HttpClient::psoDefault);
+	updateFn(out);
+	SeqFileInput in = http.send();
+	if (http.getStatus() != 201) {
+
+		JSON::Value errorVal;
+		try{
+			errorVal = factory->fromStream(in);
+		} catch (...) {
+
+		}
+		http.close();
+		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+	} else {
+		JSON::Value v = factory->fromStream(in);
+		http.close();
+		return v["rev"].getStringA();
+	}
+}
+
+void CouchDB::downloadAttachment(Document& document, ConstStrA attachmentName, const DownloadFn &downloadFn) {
+	Synchronized<FastLock> _(lock);
+	ConstStrA documentId = document.getID();
+	ConstStrA revId = document.getRev();
+	UrlLine urlline;
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
+	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
+	urlfmt("%1/%2") << &docIdEnc << &attNameEnc;
+	if (!revId.empty()) {
+		FilterRead<ConstStrA::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
+		urlfmt("?rev=%1") << &revIdEnc;
+	}
+	http.open(HttpClient::mGET, urlline.getArray());
+	SeqFileInput in = http.send();
+	if (http.getStatus() != 200) {
+
+		JSON::Value errorVal;
+		try{
+			errorVal = factory->fromStream(in);
+		} catch (...) {
+
+		}
+		http.close();
+		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+	} else {
+		HttpClient::HeaderValue ctx = http.getHeader(HttpClient::fldContentType);
+		downloadFn(DownloadFile(in,ctx));
+	}
 }
 
 } /* namespace assetex */
-

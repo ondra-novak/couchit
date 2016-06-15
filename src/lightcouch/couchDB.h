@@ -20,6 +20,8 @@
 #include "view.h"
 
 #include "lightspeed/mt/fastlock.h"
+
+#include "lightspeed/base/actions/message.h"
 namespace LightSpeed {
 class PoolAlloc;
 }
@@ -377,6 +379,12 @@ public:
 	 */
 	Pointer<Validator> getValidator() const {return validator;}
 
+	class UpdateResult: public ConstValue {
+	public:
+		UpdateResult(ConstValue v, StringA newRev):ConstValue(v),newRev(newRev) {}
+
+		const StringA newRev;
+	};
 
 	///Calls update handler to update document using server-side function
 	/** Server side function must be defined in design documents. You have to know relative path to
@@ -408,7 +416,7 @@ public:
 	 *
 	 *  @exception RequestError if function returns any other status then 200 or 201
 	 */
-	ConstValue updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId, JSON::ConstValue arguments);
+	UpdateResult updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId, JSON::ConstValue arguments);
 
 
 	///Calls show handler.
@@ -442,21 +450,34 @@ public:
 	ConstValue showDoc(ConstStrA showHandlerPath, ConstStrA documentId, JSON::ConstValue arguments, natural flags = 0);
 
 
+	class DownloadFile: public SeqFileInput {
+	public:
+		DownloadFile(const SeqFileInput &stream, ConstStrA contentType):SeqFileInput(stream)
+				,contentType(contentType) {}
+		const ConstStrA contentType;
+	};
+
+	typedef Message<void, SeqFileOutput> UploadFn;
+	typedef Message<void, DownloadFile> DownloadFn;
+
 	///Uploads attachment with specified document
 	/**
-	 * @param document document object. The document don't need to be complete, only _id and _rev must be there. After
-	 * successful update, _rev is
-	 * @param attachmentName
-	 * @param contentType
-	 * @param fn
+	 * @param document document object. The document don't need to be complete, only _id and _rev must be there.
+	 * @param attachmentName name of attachment
+	 * @param contentType content type of the attachment
+	 * @param fn function which will be called to supply attachment body. Function accepts one argument
+	 * SeqFileOuput.
+	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	template<typename UploadFn>
-	void uploadAttachment(Document &document, ConstStrA attachmentName, ConstStrA contentType, const UploadFn &fn);
+	StringA uploadAttachment(Document &document, ConstStrA attachmentName, ConstStrA contentType, const UploadFn &uploadFn);
 
-
-
-	template<typename DownloadFn>
-	void downloadAttachment(Document &document, ConstStrA attachmentName, const DownloadFn &fn);
+	///Downloads attachment
+	/**
+	 * @param document document. The document don't need to be complete, only _id and _rev must be there.
+	 * @param attachmentName name of attachment to retrieve
+	 * @param downloadFn function, which accepts DownloadFile where you can
+	 */
+	void downloadAttachment(Document &document, ConstStrA attachmentName, const DownloadFn &downloadFn);
 
 
 
@@ -534,6 +555,7 @@ natural CouchDB::listenChanges(natural fromSeq, natural filterFlags, ListenMode 
 	Filter f(StringA(), filterFlags);
 	return listenChanges(fromSeq, f, lm, cb);
 }
+
 
 
 } /* namespace assetex */
