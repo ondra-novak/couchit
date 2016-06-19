@@ -128,6 +128,26 @@ void Document::enableRevTracking() {
 }
 
 
+void Document::deleteAttachment(ConstStrA name) {
+	if (editing == null) throw DocumentNotEditedException(THISLOCATION, getIDValue());
+	Value a = editing["_attachments"];
+	a.unset(name);
+}
+
+void Document::inlineAttachment(const Json &json, ConstStrA name, const AttachmentDataRef &data) {
+	if (editing == null) throw DocumentNotEditedException(THISLOCATION, getIDValue());
+	Value a = editing["_attachments"];
+	if (a == null) {
+		a = json.object();
+		editing.set("_attachments",a);
+	}
+	a.set(name,data.toInline(json));
+}
+
+ConstValue Document::getAttachment(ConstStrA name) const {
+	ConstValue a = this->operator []("_attachments");
+	return a[name];
+}
 
 
 } /* namespace LightCouch */

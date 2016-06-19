@@ -4,6 +4,7 @@
  *  Created on: 19. 3. 2016
  *      Author: ondra
  */
+#include "../lightcouch/attachment.h"
 #include "../lightcouch/document.h"
 #include "../lightcouch/queryCache.h"
 #include "../lightcouch/changeset.h"
@@ -442,7 +443,7 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 	Document doc2 = db.retrieveDocument(doc.getID());
 
 
-	CouchDB::AttachmentData data = db.downloadAttachment(doc2,"testAttachment");
+	AttachmentData data = db.downloadAttachment(doc2,"testAttachment");
 
 	a("%1-%2") << data.contentType << ConstStrA(reinterpret_cast<const char *>(data.data()),data.length());
 

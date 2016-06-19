@@ -23,7 +23,7 @@ namespace LightCouch {
 
 
 
-ConflictResolver::ConflictResolver(CouchDB& db):db(db) {
+ConflictResolver::ConflictResolver(CouchDB& db, bool attachments):db(db),attachments(attachments) {
 }
 
 static StringA getBaseRev(ConstStrA revStr, natural start, ConstValue ids) {
@@ -45,10 +45,7 @@ Document ConflictResolver::resolve(const ConstStrA& docId) {
 	//url formatter
 	TextOut<AutoArrayStream<char, SmallAlloc<256> >  &, SmallAlloc<256> > fmt(buffer);
 
-	//format <docId>?revs=true&conflicts=true
-	//we can retrieve main line document and all revision and conflicts
-	fmt("%1?revs=true&conflicts=true") << docId;
-	Document headRev = db.requestGET(buffer.getArray(),null,CouchDB::flgDisableCache);
+	Document headRev = db.retrieveDocument(docId, CouchDB::flgRevisions|CouchDB::flgConflicts|(attachments?CouchDB::flgAttachments:0));
 
 	//Get list of revisions
 	ConstValue revisions = headRev["_revisions"];
@@ -80,9 +77,14 @@ Document ConflictResolver::resolve(const ConstStrA& docId) {
 	}));
 
 	buffer.clear();
-	fmt("%1?open_revs=") << docId; {
+	{
+		FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(docId.getFwIter());
+		fmt("%1?open_revs=") << &docIdEnc;
 		FilterWrite<AutoArrayStream<char, SmallAlloc<256> > &, UrlEncoder> wrt(buffer);
 		JSON::serialize(open_revs,wrt,true);
+		if (attachments) {
+			fmt("&attachments=true");
+		}
 	}
 	ConstValue revlist = db.requestGET(buffer.getArray(),null,CouchDB::flgDisableCache);
 	revlist->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA , natural ){
@@ -116,6 +118,8 @@ Document ConflictResolver::resolve(const ConstStrA& docId) {
 		}
 		return false;
 	}));
+	ConstValue v = headRev["_attachments"];
+	if (v != null && v.empty()) headRev.unset("_attachments");
 	return headRev;
 
 }
@@ -207,7 +211,14 @@ JSON::ConstValue ConflictResolver::makeDiffObject(Document& doc, const Path& pat
 		mergeTwoObjects(oldValue,newValue,[&](const ConstStrA keyName, const ConstValue &oldv, const ConstValue &newv) {
 			if (path.isRoot() && keyName != "_attachments" && keyName.head(1) == ConstStrA("_")) return;
 			if (newv == null) {
-				diff.set(keyName, deletedItem);
+				if (path.isRoot() && keyName == "_attachments") {
+					ConstValue fakeObj = db.json.object();
+					ConstValue x = diffValue(doc,Path(path,keyName),oldv,fakeObj);
+					if (x != null)
+						diff.set(keyName, x);
+				} else {
+					diff.set(keyName, deletedItem);
+				}
 			} else if (oldv == null) {
 				diff.set(keyName,newv);
 			} else {
@@ -334,9 +345,21 @@ Value ConflictResolver::patchObject(Document& doc, const Path& path, const Const
 
 }
 
-ConstValue ConflictResolver::resolveConflict(Document& , const Path& ,const ConstValue& leftValue, const ConstValue& rightValue) {
-	if (rightValue == deletedItem) return rightValue;
-	else return leftValue;
+ConstValue ConflictResolver::resolveConflict(Document& doc, const Path& path ,const ConstValue& leftValue, const ConstValue& rightValue) {
+	if (path.getParent().isRoot() && path.getKey() == "_attachments" ) {
+		if (leftValue == deletedItem)
+			return rightValue;
+		else if (rightValue == deletedItem)
+			return leftValue;
+		else {
+			return mergeDiffs(doc,path,leftValue,rightValue);
+		}
+	} else {
+		if (rightValue == deletedItem)
+			return rightValue;
+		else
+			return leftValue;
+	}
 }
 
 Container ConflictResolver::mergeDiffs(Document& doc, const Path& path, const ConstValue& leftValue, const ConstValue& rightValue) {

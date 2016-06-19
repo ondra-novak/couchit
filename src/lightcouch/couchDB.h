@@ -22,6 +22,8 @@
 #include "lightspeed/mt/fastlock.h"
 
 #include "lightspeed/base/actions/message.h"
+
+#include "attachment.h"
 namespace LightSpeed {
 class PoolAlloc;
 }
@@ -493,39 +495,6 @@ public:
 				,contentType(contentType),contentLength(contentLength) {}
 		const ConstStrA contentType;
 		natural contentLength;
-	};
-
-	///Contains attachment data as reference
-	/** use this class to refer some binary data (with proper content type). Data
-	 * are not stored with the object, you must not destroy refered object
-	 */
-	class AttachmentDataRef: public ConstBin {
-	public:
-		///Constructor
-		/**
-		 *
-		 * @param data reference to binary data
-		 * @param contenType content type
-		 */
-		AttachmentDataRef(const ConstBin data, const StringA &contentType)
-			:ConstBin(data),contentType(contentType) {}
-		const StringA contentType;
-	};
-
-	///Contains attachment data
-	/** use this class to store some binary data with proper content type. Data
-	 * are stored with the object. This may result to some extra memory allocation.
-	 *
-	 * Because StringB is used, you can prepare the binary data into this object. If you
-	 * pass StringB as argument then no copying is made, object is shared instead.
-	 */
-	class AttachmentData: public AttachmentDataRef {
-	public:
-		AttachmentData(const StringB &data, const StringA &contentType)
-			:AttachmentDataRef(data,contentType),bindata(data) {}
-
-	private:
-		const StringB bindata;
 	};
 
 	typedef Message<void, SeqFileOutput> UploadFn;

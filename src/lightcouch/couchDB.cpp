@@ -729,7 +729,7 @@ StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,
 
 }
 
-CouchDB::AttachmentData CouchDB::downloadAttachment(Document& document,
+AttachmentData CouchDB::downloadAttachment(Document& document,
 		ConstStrA attachmentName) {
 
 	StringB data;

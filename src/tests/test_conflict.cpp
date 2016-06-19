@@ -14,7 +14,9 @@
 #include "test_common.h"
 #include <lightspeed/base/text/textstream.tcc>
 #include <lightspeed/utils/json/json.h>
+#include <string.h>
 
+#include "../lightcouch/attachment.h"
 using LightCouch::getTestCouch;
 using LightSpeed::JSON::ConstValue;
 
@@ -137,17 +139,18 @@ static void resolveConflictsFromDB(PrintTextA &a) {
 
 	Changeset chset = cdb.createChangeset();
 
-	Document doc1 = chset.newDocument();
+	Document doc1 = chset.json("_id","conflictTest");
 
 	doc1.edit(cdb.json)
 			("commonVal",10)
 			("notChanged",true)
 			("delval",14);
 
+
 	chset.update(doc1);
 	chset.commit();
 
-	Document doc2 = cdb.retrieveDocument(doc1.getUInt());
+	Document doc2 = cdb.retrieveDocument(doc1.getID(),View::attachments);
 	doc2.edit(cdb.json)
 			("change1",20);
 	chset.update(doc2);
@@ -183,8 +186,10 @@ static void resolveConflictsFromDB(PrintTextA &a) {
 
 static void resolveAttachmentsConflicts(PrintTextA &a) {
 
-	byte att1[]= "Attachment1";
-	byte att2[]= "Attachment2";
+	ConstStrA common("Common");
+	ConstStrA att1("Attachment1");
+	ConstStrA att2("Attachment2");
+	StringA textplain("text/plain");
 
 	CouchDB cdb(getTestCouch());
 	cdb.use(DATABASENAME);
@@ -192,43 +197,38 @@ static void resolveAttachmentsConflicts(PrintTextA &a) {
 
 	Changeset chset = cdb.createChangeset();
 
-	Document doc1 = chset.newDocument();
+	Document doc1 = chset.json("_id","attchtest");
 
 	doc1.edit(cdb.json)
 			("commonVal",10)
 			("notChanged",true);
+	doc1.inlineAttachment(cdb.json,"common",AttachmentDataRef(ConstBin(common.data(),common.length()), textplain));
 
 	chset.update(doc1);
 	chset.commit();
 
-	cdb.uploadAttachment(doc1,"test1",CouchDB::AttachmentDataRef(ConstBin(att1),ConstStrA("text/plain")));
+	Document doc2 = cdb.retrieveDocument(doc1.getID(),CouchDB::flgAttachments);
 
-
-	Document doc2 = cdb.retrieveDocument(doc1.getUInt());
-	doc2.edit(cdb.json)
-			("change1",20);
+	doc2.edit(cdb.json);
+	doc2.inlineAttachment(cdb.json,"test1",AttachmentDataRef(ConstBin(att1.data(),att1.length()),textplain));
 	chset.update(doc2);
 	chset.commit();
 	doc2.revert();
-	doc2.edit(cdb.json)
-			("change2",40);
-	doc2.unset("delval");
+
+	doc2.edit(cdb.json);
+	doc2.inlineAttachment(cdb.json,"test2",AttachmentDataRef(ConstBin(att2.data(),att2.length()),textplain));
+	chset.update(doc2);
+	chset.commit();
+
+	doc2.edit(cdb.json);
+	doc2.deleteAttachment("common");
 
 	chset.update(doc2);
 	chset.commit();
 
-	doc2.revert();
-	doc2.edit(cdb.json)
-			("change3",cdb.json("inner",true))
-			("commonVal",11);
-	doc2.unset("delval");
-
-	chset.update(doc2);
-	chset.commit();
-
-
-	ConflictResolver resolver(cdb);
+	ConflictResolver resolver(cdb,true);
 	Document doc3 = resolver.resolve(doc1.getID());
+	//a("%1") << cdb.json.factory->toString(*doc3);
 	doc3.resolveConflicts();
 	chset.update(doc3);
 	chset.commit();
@@ -238,7 +238,13 @@ static void resolveAttachmentsConflicts(PrintTextA &a) {
 	cdb.deleteDatabase();
 }
 
-defineTest test_resolveConflictsFromDB("couchdb.conflicts.resolver2","{\"_id\":\"ctest\",\"_rev\":\"3-5c4e02bdc4cb4b6d35b09498036905d5\",\"change1\":20,\"change2\":40,\"change3\":{\"inner\":true},\"commonVal\":11,\"notChanged\":true}",&resolveConflictsFromDB);
+defineTest test_resolveConflictsFromDB("couchdb.conflicts.resolver2","{\"_id\":\"conflictTest\",\"_rev\":\"3-5c4e02bdc4cb4b6d35b09498036905d5\",\"change1\":20,\"change2\":40,\"change3\":{\"inner\":true},\"commonVal\":11,\"notChanged\":true}",&resolveConflictsFromDB);
+defineTest test_resolveConflictsAttachments("couchdb.conflicts.attachments","{\"_attachments\":{\"test1\":"
+		"{\"content_type\":\"text/plain\",\"digest\":\"md5-bpfsF2f8e1f3QFpaFBwGxQ==\",\"length\":11,"
+		"\"revpos\":4,\"stub\":true},\"test2\":{\"content_type\":\"text/plain\",\"digest\":\""
+		"md5-l1TAl/iENhopzRj5/Aoq2Q==\",\"length\":11,\"revpos\":4,\"stub\":true}},\"_id\":\""
+		"attchtest\",\"_rev\":\"4-5c6214114a198eaa111cbb44e856a4c1\",\"commonVal\""
+				":10,\"notChanged\":true}",&resolveAttachmentsConflicts);
 
 }
 

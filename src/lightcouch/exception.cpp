@@ -19,7 +19,12 @@ RequestError::~RequestError() throw () {
 }
 
 void RequestError::message(ExceptionMsg& msg) const {
-	msg("CouchDB error: status=%1, message=%2") << code << this->msg;
+	JSON::PFactory f = JSON::create();
+	ConstStrA details;
+	if (this->extraInfo != null) {
+		details = f->toString(*extraInfo);
+	}
+	msg("CouchDB error: status=%1, message=%2, details=%3") << code << this->msg << details;
 }
 
 const char *DocumentNotEditedException::msgText = "Document %1 is not edited. You have to call edit() first";

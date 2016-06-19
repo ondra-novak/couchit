@@ -26,7 +26,16 @@ using namespace LightSpeed;
  */
 class ConflictResolver {
 public:
-	ConflictResolver(CouchDB &db);
+	///Constructs conflict resolver
+	/**
+	 * @param db use specified database connection
+	 * @param attachments specify true to include attachments into documents. This allows to merge
+	 * documents with attachments where attachments can be in conflict. Without this settings the
+	 * result document can fail co commit with error 412. However, settings this to true causes, that
+	 * all attachments will be downloaded with each revision in conflict (and each associated base revision).
+	 * This can be a lot of data. Thai is the reason, why this options is disabled by default.
+	 */
+	ConflictResolver(CouchDB &db, bool attachments = false);
 
 	///Resolves the conflicts on the document
 	/**
@@ -112,6 +121,7 @@ protected:
 	virtual ConstValue resolveConflict(Document &doc, const Path &path, const ConstValue &leftValue, const ConstValue &rightValue);
 
 	CouchDB &db;
+	const bool attachments;
 
 
 	Value mergeObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue, const ConstValue &baseValue);

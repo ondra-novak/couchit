@@ -16,6 +16,8 @@
 #include "exception.h"
 namespace LightCouch {
 
+class AttachmentDataRef;
+
 using namespace LightSpeed;
 
 ///Contains document fetched from couchdb, it also handles editing
@@ -46,6 +48,10 @@ public:
 	ConstValue getIDValue() const;
 	///Retrieves current document revision ID. Function returns null if missing
 	ConstValue getRevValue() const;
+
+	void deleteAttachment(ConstStrA name);
+	void inlineAttachment(const Json &json, ConstStrA name, const AttachmentDataRef &data);
+	ConstValue getAttachment(ConstStrA name) const;
 
 
 	///sets field in document
