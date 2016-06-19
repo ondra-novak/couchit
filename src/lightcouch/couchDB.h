@@ -171,37 +171,59 @@ public:
 	JSON::ConstValue requestDELETE(ConstStrA path, JSON::Value headers = null, natural flags = 0);
 
 
-	///Retrieves UID generated localy
-	/** UID is generated from
-	 * |time|counter|dbsuffix
-	 *
-	 * it uses numbers base 62 (0-9A-Za-z)
-	 *
-	 * where @b time is time in seconds.
-	 * @b counter is value increased for every object created inside single process.
-	 * @b dbsuffix is global suffix defined by database. Each separate process should have
-	 * own unique. By default it is random number generated on every start
-	 *
-	 * @return
+	///Generates new unique ID
+	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
+	 * counter part and random part. The random is choosen when application starts. The counter
+	 * part counts number of objects created from the start of the application. If the application
+	 * is restarted, counter is reset, however, the application generates different random part, so
+	 * newly generated UID will be truly unique. The timestamp parts allows to order objects
+	 * by time of creation.
+	 * @return UUID object which can be converted to ConstStrA
 	 */
 	UID getUID();
-
-	///Retrieves UID generated localy
-	/** UID is generated from
-	 * |time|counter|dbsuffix|suffix
-	 *
-	 * it uses numbers base 62 (0-9A-Za-z)
-	 *
-	 * where @b time is time in seconds.
-	 * @b counter is value increased for every object created inside single process.
-	 * @b dbsuffix is global suffix defined by database. Each separate process should have
-	 * own unique. By default it is random number generated on every start
-	 * @b suffix can be defined by user. You can use this string as type identificator
-	 *
-	 * @return
+	///Generates new unique ID
+	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
+	 * counter part and random part. The random is choosen when application starts. The counter
+	 * part counts number of objects created from the start of the application. If the application
+	 * is restarted, counter is reset, however, the application generates different random part, so
+	 * newly generated UID will be truly unique. The timestamp parts allows to order objects
+	 * by time of creation.
+	 * @return Value object which can be put directly to the document
 	 */
+	Value getUIDValue();
 
+	///Generates new unique ID
+	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
+	 * counter part and random part. The random is choosen when application starts. The counter
+	 * part counts number of objects created from the start of the application. If the application
+	 * is restarted, counter is reset, however, the application generates different random part, so
+	 * newly generated UID will be truly unique. The timestamp parts allows to order objects
+	 * by time of creation.
+	 *
+	 * @param suffix - user defined suffix - it can be used to identify type of the document. If
+	 * you need a separator between the UID and suffix, you have to specify it with the suffix.
+	 * For example ".invoice" will add ".invoice" to the UID, so any filter can take advantage
+	 * from knowledge, that document is invoice.
+	 *
+	 * @return UUID object which can be converted to ConstStrA
+	 */
 	UID getUID(ConstStrA suffix);
+	///Generates new unique ID
+	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
+	 * counter part and random part. The random is choosen when application starts. The counter
+	 * part counts number of objects created from the start of the application. If the application
+	 * is restarted, counter is reset, however, the application generates different random part, so
+	 * newly generated UID will be truly unique. The timestamp parts allows to order objects
+	 * by time of creation.
+	 *
+	 * @param suffix - user defined suffix - it can be used to identify type of the document. If
+	 * you need a separator between the UID and suffix, you have to specify it with the suffix.
+	 * For example ".invoice" will add ".invoice" to the UID, so any filter can take advantage
+	 * from knowledge, that document is invoice.
+	 *
+	 * @return Value object which can be put directly to the document
+	 **/
+	Value getUIDValue(ConstStrA suffix);
 
 
 	///Changes current database
@@ -452,9 +474,17 @@ public:
 
 	class DownloadFile: public SeqFileInput {
 	public:
-		DownloadFile(const SeqFileInput &stream, ConstStrA contentType):SeqFileInput(stream)
-				,contentType(contentType) {}
+		DownloadFile(const SeqFileInput &stream, ConstStrA contentType, natural contentLength):SeqFileInput(stream)
+				,contentType(contentType),contentLength(contentLength) {}
 		const ConstStrA contentType;
+		natural contentLength;
+	};
+
+	class AttachmentData: public StringKey<StringB> {
+	public:
+		AttachmentData(const StringB &data, const StringA &contentType):StringKey<StringB>(data),contentType(contentType) {}
+		AttachmentData(ConstBin data, ConstStrA contentType):StringKey<StringB>(data),contentType(contentType) {}
+		const StringKey<StringA> contentType;
 	};
 
 	typedef Message<void, SeqFileOutput> UploadFn;
@@ -471,6 +501,17 @@ public:
 	 */
 	StringA uploadAttachment(Document &document, ConstStrA attachmentName, ConstStrA contentType, const UploadFn &uploadFn);
 
+	///Uploads attachment with specified document
+	/**
+	 * Function allows to upload attachment stored complete in the memory.
+	 *
+	 * @param document document object. The document don't need to be complete, only _id and _rev must be there.
+	 * @param attachmentName name of attachment
+	 * @param attachmentData content of attachment
+	 * @return Funtcion returns new revision of the document, if successful.
+	 */
+	StringA uploadAttachment(Document &document, ConstStrA attachmentName, const AttachmentData &attachmentData);
+
 	///Downloads attachment
 	/**
 	 * @param document document. The document don't need to be complete, only _id and _rev must be there.
@@ -479,6 +520,15 @@ public:
 	 */
 	void downloadAttachment(Document &document, ConstStrA attachmentName, const DownloadFn &downloadFn);
 
+	///Downloads attachment
+	/**
+	 * Function allows to download attachment to the memory. Large attachments may cost lot of memory.
+	 *
+	 * @param document  document. The document don't need to be complete, only _id and _rev must be there.
+	 * @param attachmentName name of attachment to retrieve
+	 * @return content of attachment
+	 */
+	AttachmentData downloadAttachment(Document &document, ConstStrA attachmentName);
 
 
 	///Use json variable to build objects

@@ -426,7 +426,27 @@ static void couchRetrieveDocument(PrintTextA &a) {
 	//this is random - cannot be tested
 	r.unset("_rev");
 	a("%1") << db.json.factory->toString(*r);
+}
 
+static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
+	CouchDB db(getTestCouch());
+	db.use(DATABASENAME);
+
+	Value docId = db.getUIDValue();
+
+	Document doc;
+	doc.edit(db.json);
+	doc.setID(docId);
+	db.uploadAttachment(doc,"testAttachment","text/plain",[](SeqFileOutput wr) {
+		SeqTextOutA txtwr(wr);
+		ConstStrA sentence("The quick brown fox jumps over the lazy dog");
+		txtwr.blockWrite(sentence,true);
+	});
+
+
+	CouchDB::AttachmentData data = db.downloadAttachment(doc,"testAttachment");
+
+	a("%1-%2") << data.contentType << ConstStrA(reinterpret_cast<const char *>(data.data()),data.length());
 
 
 }
@@ -449,6 +469,7 @@ defineTest test_couchChangesWaiting("couchdb.changesWaiting","ok",&couchChangeSe
 defineTest test_couchChangesWaiting3("couchdb.changesWaitingForThree","ok",&couchChangeSetWaitForData3);
 defineTest test_couchChangesStopWait("couchdb.changesStopWait","Welcome",&couchChangesStopWait);
 defineTest test_couchGetSeqNumber("couchdb.getSeqNumber","ok",&couchGetSeqNumber);
+defineTest test_couchAttachments("couchdb.attachments","text/plain-The quick brown fox jumps over the lazy dog",&couchStoreAndRetrieveAttachment);
 defineTest test_couchDeleteDB("couchdb.deleteDB","",&deleteDB);
 }
 
