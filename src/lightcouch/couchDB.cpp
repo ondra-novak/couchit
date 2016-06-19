@@ -721,7 +721,7 @@ Value CouchDB::getUIDValue(ConstStrA suffix) {
 }
 
 StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,
-		const AttachmentData &data) {
+		const AttachmentDataRef &data) {
 
 	return uploadAttachment(document,attachmentName,data.contentType,UploadFn([&](SeqFileOutput out) {
 		out.blockWrite(data,true);
@@ -744,5 +744,13 @@ CouchDB::AttachmentData CouchDB::downloadAttachment(Document& document,
 
 }
 
-} /* namespace assetex */
 
+Value CouchDB::newDocument() {
+	return json("_id",ConstStrA(getUID()));
+}
+
+Value CouchDB::newDocument(ConstStrA suffix) {
+	return json("_id",ConstStrA(getUID(suffix)));
+}
+
+} /* namespace assetex */

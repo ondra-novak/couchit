@@ -137,19 +137,17 @@ static void resolveConflictsFromDB(PrintTextA &a) {
 
 	Changeset chset = cdb.createChangeset();
 
-	ConstStrA docName="ctest";
+	Document doc1 = chset.newDocument();
 
-	Document doc1;
 	doc1.edit(cdb.json)
 			("commonVal",10)
 			("notChanged",true)
 			("delval",14);
-	doc1.setID(cdb.json(docName));
 
 	chset.update(doc1);
 	chset.commit();
 
-	Document doc2 = cdb.retrieveDocument(docName);
+	Document doc2 = cdb.retrieveDocument(doc1.getUInt());
 	doc2.edit(cdb.json)
 			("change1",20);
 	chset.update(doc2);
@@ -173,12 +171,69 @@ static void resolveConflictsFromDB(PrintTextA &a) {
 
 
 	ConflictResolver resolver(cdb);
-	Document doc3 = resolver.resolve(docName);
+	Document doc3 = resolver.resolve(doc1.getID());
 	doc3.resolveConflicts();
 	chset.update(doc3);
 	chset.commit();
 
-	ConstValue res = cdb.retrieveDocument(docName,CouchDB::flgConflicts);
+	ConstValue res = cdb.retrieveDocument(doc1.getID(),CouchDB::flgConflicts);
+	a("%1") << cdb.json.factory->toString(*res);
+	cdb.deleteDatabase();
+}
+
+static void resolveAttachmentsConflicts(PrintTextA &a) {
+
+	byte att1[]= "Attachment1";
+	byte att2[]= "Attachment2";
+
+	CouchDB cdb(getTestCouch());
+	cdb.use(DATABASENAME);
+	cdb.createDatabase();
+
+	Changeset chset = cdb.createChangeset();
+
+	Document doc1 = chset.newDocument();
+
+	doc1.edit(cdb.json)
+			("commonVal",10)
+			("notChanged",true);
+
+	chset.update(doc1);
+	chset.commit();
+
+	cdb.uploadAttachment(doc1,"test1",CouchDB::AttachmentDataRef(ConstBin(att1),ConstStrA("text/plain")));
+
+
+	Document doc2 = cdb.retrieveDocument(doc1.getUInt());
+	doc2.edit(cdb.json)
+			("change1",20);
+	chset.update(doc2);
+	chset.commit();
+	doc2.revert();
+	doc2.edit(cdb.json)
+			("change2",40);
+	doc2.unset("delval");
+
+	chset.update(doc2);
+	chset.commit();
+
+	doc2.revert();
+	doc2.edit(cdb.json)
+			("change3",cdb.json("inner",true))
+			("commonVal",11);
+	doc2.unset("delval");
+
+	chset.update(doc2);
+	chset.commit();
+
+
+	ConflictResolver resolver(cdb);
+	Document doc3 = resolver.resolve(doc1.getID());
+	doc3.resolveConflicts();
+	chset.update(doc3);
+	chset.commit();
+
+	ConstValue res = cdb.retrieveDocument(doc1.getID(),CouchDB::flgConflicts);
 	a("%1") << cdb.json.factory->toString(*res);
 	cdb.deleteDatabase();
 }

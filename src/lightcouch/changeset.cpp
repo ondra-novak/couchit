@@ -156,6 +156,14 @@ Changeset& Changeset::erase(ConstValue docId, ConstValue revId) {
 	return *this;
 }
 
+Document Changeset::newDocument() {
+	return db.newDocument();
+}
+
+Document Changeset::newDocument(ConstStrA suffix) {
+	return db.newDocument(suffix);
+}
+
 void Changeset::eraseConflicts(ConstValue docId, ConstValue conflictList) {
 	if (conflictList != null)
 		conflictList->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA, natural ){

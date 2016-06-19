@@ -432,19 +432,17 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	Value docId = db.getUIDValue();
-
-	Document doc;
-	doc.edit(db.json);
-	doc.setID(docId);
+	Document doc = db.newDocument(".data");
 	db.uploadAttachment(doc,"testAttachment","text/plain",[](SeqFileOutput wr) {
 		SeqTextOutA txtwr(wr);
 		ConstStrA sentence("The quick brown fox jumps over the lazy dog");
 		txtwr.blockWrite(sentence,true);
 	});
 
+	Document doc2 = db.retrieveDocument(doc.getID());
 
-	CouchDB::AttachmentData data = db.downloadAttachment(doc,"testAttachment");
+
+	CouchDB::AttachmentData data = db.downloadAttachment(doc2,"testAttachment");
 
 	a("%1-%2") << data.contentType << ConstStrA(reinterpret_cast<const char *>(data.data()),data.length());
 

@@ -99,7 +99,20 @@ public:
 	 */
 	void revert(Value doc);
 
+	///Creates new document
+	/** Function creates empty object and puts _id in it
+	 *
+	 * @return newly created document. It is already in edit mode, so you can set new atributes
+	 */
+	Document newDocument();
 
+	///Creates new document
+	/** Function creates empty object and puts _id in it
+	 *
+	 * @param suffix suffix append to the ID
+	 * @return newly created document. It is already in edit mode, so you can set new atributes
+	 */
+	Document newDocument(ConstStrA suffix);
 
 
 	struct ErrorItem {

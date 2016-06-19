@@ -394,6 +394,21 @@ public:
 	 */
 	ConstValue retrieveDocument(ConstStrA docId, ConstStrA revId, natural flags = flgDisableCache);
 
+	///Creates new document
+	/**
+	 * Function creates new object and puts _id in it. Generates new id
+	 * @return Value which can be converted to Document object
+	 */
+	Value newDocument();
+
+	///Creates new document
+	/**
+	 * Function creates new object and puts _id in it. Generates new id
+	 * @param suffix suffix append to UID - can be used to specify type of the document
+	 * @return Value which can be converted to Document object
+	 */
+	Value newDocument(ConstStrA suffix);
+
 	///Retrieves pointer to validator
 	/**
 	 * @return function returns null, when validator is not defined. Otherwise function
@@ -480,11 +495,37 @@ public:
 		natural contentLength;
 	};
 
-	class AttachmentData: public StringKey<StringB> {
+	///Contains attachment data as reference
+	/** use this class to refer some binary data (with proper content type). Data
+	 * are not stored with the object, you must not destroy refered object
+	 */
+	class AttachmentDataRef: public ConstBin {
 	public:
-		AttachmentData(const StringB &data, const StringA &contentType):StringKey<StringB>(data),contentType(contentType) {}
-		AttachmentData(ConstBin data, ConstStrA contentType):StringKey<StringB>(data),contentType(contentType) {}
-		const StringKey<StringA> contentType;
+		///Constructor
+		/**
+		 *
+		 * @param data reference to binary data
+		 * @param contenType content type
+		 */
+		AttachmentDataRef(const ConstBin data, const StringA &contentType)
+			:ConstBin(data),contentType(contentType) {}
+		const StringA contentType;
+	};
+
+	///Contains attachment data
+	/** use this class to store some binary data with proper content type. Data
+	 * are stored with the object. This may result to some extra memory allocation.
+	 *
+	 * Because StringB is used, you can prepare the binary data into this object. If you
+	 * pass StringB as argument then no copying is made, object is shared instead.
+	 */
+	class AttachmentData: public AttachmentDataRef {
+	public:
+		AttachmentData(const StringB &data, const StringA &contentType)
+			:AttachmentDataRef(data,contentType),bindata(data) {}
+
+	private:
+		const StringB bindata;
 	};
 
 	typedef Message<void, SeqFileOutput> UploadFn;
@@ -510,7 +551,7 @@ public:
 	 * @param attachmentData content of attachment
 	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	StringA uploadAttachment(Document &document, ConstStrA attachmentName, const AttachmentData &attachmentData);
+	StringA uploadAttachment(Document &document, ConstStrA attachmentName, const AttachmentDataRef &attachmentData);
 
 	///Downloads attachment
 	/**
