@@ -161,8 +161,6 @@ void QueryBase::appendCustomArg(UrlFormatter &fmt, ConstStrA key, ConstStrA valu
 	fmt("&%1=%2") << key << value;
 }
 
-void QueryBase::setJsonFactory(JSON::PFactory json) {
-}
 
 void QueryBase::appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode * value ) {
 	if (value->getType() == JSON::ndString) {

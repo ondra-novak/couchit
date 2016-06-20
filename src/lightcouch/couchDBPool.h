@@ -21,7 +21,7 @@ using namespace LightSpeed;
  */
 class CouchDBManaged: public CouchDB, public AbstractResource {
 	public:
-		CouchDBManaged(const CouchDB::Config &cfg):CouchDB(cfg) {}
+		CouchDBManaged(const Config &cfg):CouchDB(cfg) {}
 };
 
 
@@ -49,13 +49,13 @@ public:
 	 * @param resTimeout how long resource can stay idle before it is released (in ms)
 	 * @param waitTimeout how long thread can (in ms) wait before TimeoutException is returned
 	 */
-	CouchDBPool(const CouchDB::Config &cfg, natural limit, natural resTimeout, natural waitTimeout);
+	CouchDBPool(const Config &cfg, natural limit, natural resTimeout, natural waitTimeout);
 
 protected:
 	virtual CouchDBManaged *createResource();
 	virtual const char *getResourceName() const;
 
-	CouchDB::Config cfg;
+	Config cfg;
 };
 
 

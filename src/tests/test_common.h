@@ -11,7 +11,7 @@
 
 namespace LightCouch {
 
-CouchDB::Config getTestCouch();
+Config getTestCouch();
 
 }
 

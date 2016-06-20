@@ -61,6 +61,7 @@ using namespace LightSpeed;
  *
  *   q.from("aaa")(10).to("aaa")(40);
  *   q.exec();
+ * @endcode
  */
 
 class QueryBase {
@@ -72,11 +73,6 @@ public:
 	QueryBase(const QueryBase &other);
 	virtual ~QueryBase();
 
-	///changes JSON factory
-	/**
-	 * @param json
-	 */
-	void setJsonFactory(JSON::PFactory json);
 
 
 	///Resets query object state. Deletes prepared query

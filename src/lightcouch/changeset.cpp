@@ -11,6 +11,7 @@
 
 #include "lightspeed/base/containers/autoArray.tcc"
 
+#include "localView.h"
 #include "validator.h"
 //#include "validator.h"
 namespace LightCouch {
@@ -162,6 +163,16 @@ Document Changeset::newDocument() {
 
 Document Changeset::newDocument(ConstStrA suffix) {
 	return db.newDocument(suffix);
+}
+
+Changeset& Changeset::preview(LocalView& view) {
+	docs->enumEntries(JSON::IEntryEnum::lambda([&](const JSON::INode *value, ConstStrA , natural){
+		view.updateDoc(value);
+		return false;
+	}));
+	return *this;
+
+
 }
 
 void Changeset::eraseConflicts(ConstValue docId, ConstValue conflictList) {

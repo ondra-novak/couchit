@@ -199,7 +199,7 @@ static void couchFindKeys(PrintTextA &a) {
 static void couchCaching(PrintTextA &a) {
 
 	QueryCache cache;
-	CouchDB::Config cfg = getTestCouch();
+	Config cfg = getTestCouch();
 	cfg.cache = &cache;
 	CouchDB db(cfg);
 	db.use(DATABASENAME);
@@ -228,7 +228,7 @@ static void couchCaching(PrintTextA &a) {
 static void couchCaching2(PrintTextA &a) {
 
 	QueryCache cache;
-	CouchDB::Config cfg = getTestCouch();
+	Config cfg = getTestCouch();
 	cfg.cache = &cache;
 	CouchDB db(cfg);
 	db.use(DATABASENAME);

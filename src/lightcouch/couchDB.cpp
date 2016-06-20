@@ -35,13 +35,15 @@ using LightSpeed::INetworkServices;
 using LightSpeed::lockInc;
 namespace LightCouch {
 
-CouchDB::HttpConfig::HttpConfig() {
+CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
 	this->keepAlive = true;
 	this->useHTTP10 = false;
 	this->userAgent = ConstStrA("LightCouch/1.0 (+https://github.com/ondra-novak/lightcouch)");
+	this->httpsProvider = cfg.httpsProvider;
+	this->proxyProvider = cfg.proxyProvider;
+	if (cfg.iotimeout != null) this->iotimeout = cfg.iotimeout;
 }
 
-CouchDB::HttpConfig CouchDB::httpConfig;
 ConstStrA CouchDB::fldTimestamp("!timestamp");
 ConstStrA CouchDB::fldPrevRevision("!prevRev");
 
@@ -59,19 +61,22 @@ static lnatural getRandom() {
 	return out;
 }
 
+StringA CouchDB::generateServerID() {
+	lnatural rnd = getRandom();
+	TextFormatBuff<char, SmallAlloc<256> > fmt;
+	fmt("%1") << setBase(62) << rnd;
+	return fmt.write();
+
+}
 
 CouchDB::CouchDB(const Config& cfg)
 	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),serverid(cfg.serverid),http(httpConfig),factory(json.factory)
-	,cache(cfg.cache),seqNumSlot(0)
+	,cache(cfg.cache),seqNumSlot(0),httpConfig(cfg)
 {
 	if (!cfg.databaseName.empty()) use(cfg.databaseName);
 	listenExitFlag = false;
 	if (serverid.empty()) {
-		//generate server id
-		lnatural rnd = getRandom();
-		TextFormatBuff<char, SmallAlloc<256> > fmt;
-		fmt("%1") << setBase(62) << rnd;
-		serverid = fmt.write();
+		serverid = generateServerID();
 	}
 }
 
@@ -456,26 +461,6 @@ atomicValue& CouchDB::trackSeqNumbers() {
 	seqNumSlot = &v;
 	return v;
 }
-/*
-Conflicts CouchDB::loadConflicts(const Document &confDoc) {
-	TextFormatBuff<char, StaticAlloc<256> > fmt;
-	StringA docId = urlencode(confDoc["_id"].getStringA());
-	StringA revList;
-	JSON::Container allRevs = factory->array();
-	allRevs.add(confDoc["_rev"]);
-	allRevs.load(confDoc["_conflicts"]);
-	revList= urlencode(factory->toString(*allRevs));
-	fmt("%1?open_revs=%2") << docId << revList;
-	JSON::ConstValue res = requestGET(fmt.write());
-	Conflicts c;
-	for (JSON::ConstIterator iter = res->getFwIter(); iter.hasItems();) {
-		const JSON::ConstKeyValue &kv = iter.getNext();
-		JSON::ConstValue doc = kv["ok"];
-		if (doc != null) c.add(Document(doc));
-	}
-	return c;
-}
-*/
 Query CouchDB::createQuery(natural viewFlags) {
 	View v("_all_docs", viewFlags);
 	return createQuery(v);
@@ -488,44 +473,6 @@ JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId, natural flags
 	return requestGET(fmt.write(),null,flgRefreshCache | (flags & flgDisableCache));
 
 }
-/*
-CouchDB::UpdateFnResult CouchDB::callUpdateFn(ConstStrA updateFnPath,
-		ConstStrA documentId, JSON::Value arguments) {
-	AutoArrayStream<char, SmallAlloc<1024> > urlline;
-	TextOut<AutoArrayStream<char, SmallAlloc<1024> > &, SmallAlloc<256> > fmt(urlline);
-	String tmp;
-	fmt("%1/%2") << updateFnPath << (tmp=urlencode(documentId));
-
-	if (arguments != null) {
-		char c = '?';
-		for (JSON::Iterator iter = arguments->getFwIter(); iter.hasItems();) {
-			const JSON::KeyValue &kv = iter.getNext();
-			fmt("%1%2=") << c << (tmp=urlencode(kv.getStringKey()));
-			if (kv->getType() == JSON::ndString) {
-				tmp = urlencode(kv->getStringUtf8());
-			} else {
-				tmp = urlencode(factory->toString(*kv));
-			}
-			fmt("%1") <<tmp;
-			c = '&';
-		}
-	}
-
-	JSON::Container h = json.object();
-	JSON::ConstValue v = requestPUT(urlline.getArray(), null, h, flgStoreHeaders);
-
-	UpdateFnResult r;
-	const JSON::INode *n = h->getPtr("X-Couch-Update-NewRev");
-	if (n) {
-		r.newRevID = n->getStringUtf8();
-	}
-	r.response = v;
-	return r;
-
-
-}
-
-*/
 
 UID CouchDB::getUID() {
 	return UID(serverid,ConstStrA());

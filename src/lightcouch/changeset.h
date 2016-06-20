@@ -16,6 +16,7 @@
 
 namespace LightCouch {
 
+class LocalView;
 
 using namespace LightSpeed;
 
@@ -35,7 +36,7 @@ public:
 	 * @return reference to this
 	 *
 	 * @note If document has no _id, it is created automatically by this function,so you can
-	 * immediatelly read it.
+	 * Immediately read it.
 	 *
 	 */
 	Changeset &update(Document &document);
@@ -48,13 +49,13 @@ public:
 	 * @return reference to Changeset to allow create chains
 	 *
 	 * @note erasing document without its content causes, that minimal tombstone will be created, however
-	 * any filters that triggers on contenr will not triggered. This is best for erasing conflicts because they are
+	 * any filters that triggers on content will not triggered. This is best for erasing conflicts because they are
 	 * no longer valid.
 	 */
 	Changeset &erase(ConstValue docId, ConstValue revId);
 
 
-	///Commints all changes in the database
+	///Commits all changes in the database
 	/**
 	 * @param db database where data will be committed
 	 * @param all_or_nothing ensures that whole batch of changes will be updated at
@@ -68,7 +69,34 @@ public:
 	Changeset &commit(CouchDB &db, bool all_or_nothing=true);
 
 
+	///Commits all changes in the database
+	/**
+	 * @param all_or_nothing ensures that whole batch of changes will be updated at
+	 * once. If some change is rejected, nothing written to the database. In this
+	 * mode, conflict are not checked, so you can easy created conflicted state similar
+	 * to conflict during replication. If you set this variable to false, function
+	 * writes documents one-by-one and also rejects conflicts
+	 *
+	 * @note change will be committed to the database connection which was used for creation of this
+	 * changeset
+	 *
+	 * @return reference to the Changeset to create chains
+	 */
 	Changeset &commit(bool all_or_nothing=true);
+
+
+	///Preview all changes in a local view
+	/** Function just only sends all changes to a local view, without making the
+	 * set "committed". You can use this function to preview all changes in the view
+	 * before it is committed to the database
+	 * @param view local view
+     *
+	 * @return reference to the Changeset to create chains
+	 *
+	 * @note it is recomended to define map function to better preview, because the function
+	 * preview() will use updateDoc()
+	 */
+	Changeset &preview(LocalView &view);
 
 
 	///Mark current state of changeset
@@ -80,8 +108,8 @@ public:
 	 *
 	 * @param mark mark stored by mark()
 	 *
-	 * @note function only removes document from the change-set. It cannot
-	 * revert changes made in the document
+	 * @note function only removes documents from the change-set. It cannot
+	 * revert changes made in the documents
 	 */
 
 	void revert(natural mark);

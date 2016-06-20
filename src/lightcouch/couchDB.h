@@ -18,7 +18,7 @@
 #include "ichangeNotify.h"
 
 #include "view.h"
-
+#include "config.h"
 #include "lightspeed/mt/fastlock.h"
 
 #include "lightspeed/base/actions/message.h"
@@ -41,6 +41,19 @@ class Conflicts;
 class Document;
 class Validator;
 
+///Client connection to CouchDB server
+/** Each instance can keep only one connection at time. However, you can create
+ * multiple instances, or use CouchDBPool to manage multiple connections to the database.
+ *
+ * Although CouchDB uses http/https protocol, keeping one connection can benefit from keep-alive
+ * feature.
+ *
+ * The instance should be MT safe, however, you are limited to max one request at time. This also
+ * includes listenChanges() feature which means that request can take a long time to process blocking
+ * other threads to process other requests. Then you should consider to use extra instances
+ * of CouchDB class.
+ *
+ */
 class CouchDB {
 public:
 
@@ -91,34 +104,6 @@ public:
 	static const natural flgConflicts = 0x200;
 	///Retrieve all deleted conflicts
 	static const natural flgDeletedConflicts = 0x400;
-
-
-	struct Config {
-		ConstStrA baseUrl;
-		///name of database (optional) if set, object initializes self to work with database
-		ConstStrA databaseName;
-		///JSON factory to create JSON objects
-		JSON::PFactory factory;
-		///Pointer to query cache.
-		/** This pointer can be NULL to disable caching
-		 * Otherwise, you have to keep pointer valid until the CouchDB object is destroyed
-		 * QueryCache can be shared between many instances of CouchDB of the same server.
-		 * Please don't share query cache between instances of different servers.
-		 *
-		 * QueryCache causes, that  every GET query will be stored in the cache. Next time
-		 * ETags will be used to determine, whether cache will be used. Using cache
-		 * can reduce time by skipping data transfering and parsing
-		 */
-		Pointer<QueryCache> cache;
-		///Pointer to object validator
-		/** Everytime anything is being put into database, validator is called. Failed
-		 * validation is thrown as exception.
-		 */
-		Pointer<Validator> validator;
-		///Server's id. If empty, server will generate own
-		StringA serverid;
-	};
-
 	CouchDB(const Config &cfg);
 	~CouchDB();
 
@@ -548,12 +533,11 @@ public:
 
 
 	struct HttpConfig: BredyHttpClient::ClientConfig {
-		HttpConfig();
+		HttpConfig(const Config &cfg);
 	};
 
-	static HttpConfig httpConfig;
 
-
+	static StringA generateServerID();
 
 
 protected:
@@ -577,6 +561,8 @@ protected:
 	atomicValue *seqNumSlot;
 
 	StringA lastConnectError;
+
+	HttpConfig httpConfig;
 
 
 

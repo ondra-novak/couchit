@@ -10,7 +10,7 @@
 namespace LightCouch {
 
 CouchDBPool::CouchDBPool(
-		const CouchDB::Config &cfg,
+		const Config &cfg,
 		natural limit,
 		natural resTimeout,
 		natural waitTimeout)
