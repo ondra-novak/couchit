@@ -223,6 +223,24 @@ public:
 		Row(const ConstValue &jrow);
 	};
 
+	enum MergeType {
+		///merge two results keep both sides, if equal, merge values, right has priority
+		mergeUnion,
+		///merge two results keep both sides, if equal, duplicated records created
+		mergeUnionAll,
+		///merge two results, keep only equal, merge values, right has priority
+		mergeEqual,
+		///merge two results, keep only equal, duplicate records
+		mergeEqualAll,
+		///merge two results, keep not equal only
+		mergeNotEqual,
+		///merge two results, remove all keys from left, if they have result at right
+		mergeRemoveFromLeft,
+		///merge two results, remove all keys from right, if they have result at left
+		mergeRemoveFromRight
+
+	};
+
 	class Result: public IteratorBase<ConstValue, Result> {
 	public:
 		Result(ConstValue jsonResult);
@@ -237,33 +255,46 @@ public:
 		natural getRemain() const;
 		void rewind();
 
-		///perform inner join similar to SQL joins
+		///Join to the result
 		/**
-		 * @param name name of the join. Result will be joined to the value under specified name
-		 * @param otherQuery prepared query to other view. Function feed this object with keys
-		 * @param foreignKey path to foreign key. Value from this path will be used as keys. If
-		 *  path resolves to NULL, whole record will be skipped. If key doesn't exists, whole record will be skipped
-		 * @return matching records
+		 * Function collects foreign keys and executes query with the
+		 * keys. After query is executed, new record are stored with
+		 * original records.
 		 *
-		 * TODO
+		 * @param foreignKey path to the foreign key. If key doesn't exist,
+		 *  function skips it (in this case, nether member will be created).
 		 *
-		 * @note any rows read before the join will be removed from the result
+		 * @param resultName name of member field where reuslts will be stored.
+		 * Note that there can be always multiple results per single key.
+		 * Function always creates an array, which will contain results even
+		 * if there is only one result per record.
+		 *
+		 * @param q query to execute. Function will feed query with
+		 * keys and then executes it. Function is able to remove duplicate
+		 * keys, because they should return same values
+		 * @return Function returns new result.
+		 *
+		 * @note If you processed some record using the getNext(), function
+		 * will skip these records. If you need to ensure, that records will be
+		 * processed from the start, call rewind() before. After function returns,
+		 * the function hasItems() will return false
 		 */
-		const ConstValue inner_join(ConstStrA name, QueryBase &otherQuery, const JSON::Path foreignKey);
-		///perform left join similar to SQL joins
-		/**
-		 * @param name name of the join. Result will be joined to the value under specified name
-		 * @param otherQuery prepared query to other view. Function feed this object with keys
-		 * @param foreignKey path to foreign key. Value from this path will be used as keys. If
-		 *  path resolves to NULL, the value null appears in result under given name.
-		 *  If key doesn't exists, the value null appears in result under given name.
-		 * @return matching records
+		Result join(const Path foreignKey, ConstStrA resultName, Query &q);
+
+		///Merges two results
+		/** Processe two results and nerges them key by key
 		 *
-		 * TODO
+		 * Merge uses only keys. It expects, that they are ordered. However
+		 * there is small difference between LightCouch orderibg and CouchDB's
+		 * ordering (LightCouch always order members of the objects alphabetically)
 		 *
-		 * @note any rows read before the join will be removed from the result
+		 *
+		 * @param mergeType type of merge
+		 * @param other other result
+		 * @return merged result
 		 */
-		const ConstValue left_join(ConstStrA name, QueryBase &otherQuery, const JSON::Path foreignKey);
+		Result &merge(MergeType mergeType, Result &other);
+
 	protected:
 
 		ConstValue rows;
