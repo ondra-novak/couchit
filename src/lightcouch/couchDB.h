@@ -552,7 +552,6 @@ protected:
 	StringA baseUrl;
 	StringA database;
 	StringA serverid;
-	HttpClient http;
 	JSON::PFactory factory;
 	natural lastStatus;
 	bool listenExitFlag;
@@ -563,6 +562,7 @@ protected:
 	StringA lastConnectError;
 
 	HttpConfig httpConfig;
+	HttpClient http;
 
 
 

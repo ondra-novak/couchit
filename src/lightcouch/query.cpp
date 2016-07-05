@@ -8,7 +8,9 @@
 #include <lightspeed/base/text/textOut.tcc>
 #include "query.h"
 #include "lightspeed/base/containers/autoArray.tcc"
+#include "lightspeed/base/containers/map.tcc"
 
+#include "collation.h"
 #include "couchDB.h"
 
 namespace LightCouch {
@@ -349,7 +351,7 @@ void QueryBase::finishCurrent()
 }
 
 
-QueryBase::Result::Result(ConstValue jsonResult)
+Result::Result(ConstValue jsonResult)
 :rows(jsonResult["rows"])
 ,rowIter(jsonResult["rows"]->getFwIter())
 {
@@ -359,51 +361,48 @@ QueryBase::Result::Result(ConstValue jsonResult)
 	if (joffset) offset = joffset->getUInt(); else offset = 0;
 }
 
-const ConstValue& QueryBase::Result::getNext() {
+const ConstValue& Result::getNext() {
 	out = rowIter.getNext();
 	return out;
 }
 
-const ConstValue& QueryBase::Result::peek() const {
+const ConstValue& Result::peek() const {
 	out = rowIter.peek();
 	return out;
 }
 
-bool QueryBase::Result::hasItems() const {
+bool Result::hasItems() const {
 	return rowIter.hasItems();
 }
 
-natural QueryBase::Result::getTotal() const {
+natural Result::getTotal() const {
 	return total;
 }
 
-natural QueryBase::Result::getOffset() const {
+natural Result::getOffset() const {
 	return offset;
 }
 
-natural QueryBase::Result::length() const {
+natural Result::length() const {
 	return rows->length();
 }
 
-natural QueryBase::Result::getRemain() const {
+natural Result::getRemain() const {
 	return rowIter.getRemain();
 }
 
-void QueryBase::Result::rewind() {
+void Result::rewind() {
 	rowIter = rows->getFwIter();
 }
 
-static ConstStrA getIDFromRow(const ConstValue & jrow) {
-	const JSON::INode *nd = jrow->getPtr("id");
-	if (nd) return nd->getStringUtf8();
-	else return ConstStrA();
-}
 
-QueryBase::Row::Row(const ConstValue& jrow)
-	:key(jrow->getPtr("key"))
+Row::Row(const ConstValue& jrow)
+	:ConstValue(jrow)
+	,key(jrow->getPtr("key"))
 	,value(jrow->getPtr("value"))
 	,doc(jrow->getPtr("doc"))
-	,id(getIDFromRow(jrow))
+	,id(jrow->getPtr("id"))
+	,error(jrow->getPtr("error"))
 {}
 
 JSON::Value QueryBase::initArgs() {
@@ -428,5 +427,84 @@ Query::~Query() {
 
 }
 
+Result Result::join(const JSON::Path foreignKey,QueryBase& q,ConstStrA resultName) {
+
+
+	Container newRows = q.json.array();
+	Container result = q.json("rows",newRows);
+
+
+		typedef Map<ConstValue, Container, JsonIsLess> Keys;
+		Keys keys;
+
+		while (hasItems()) {
+			Row rw = getNext();
+			ConstValue frKey = foreignKey(rw.value);
+			if (frKey == null) {
+				result.add(rw);
+			} else {
+				Container newObj = q.json.object();
+				newObj.load(rw);
+				Container &target = keys(frKey);
+				if (target == nil) {
+					target = q.json.array();
+				}
+				Container newVal;
+				if (rw.value == null) {
+					newVal = q.json.array();
+					newVal.add(target);
+				} else if (rw.value->isArray()) {
+					newVal.load(rw.value);
+					newVal.add(target);
+				} else if (rw.value->isObject() && !resultName.empty()) {
+					newVal = q.json.object();
+					newVal.load(rw.value);
+					newVal.set(resultName,target);
+				} else {
+					newVal = q.json.array();
+					newVal.add(rw.value);
+					newVal.add(target);
+				}
+				newObj.set("value",newVal);
+			}
+		}
+
+	for (auto iter = keys.getFwIter(); iter.hasItems();) {
+		q.selectKey(iter.getNext().key);
+	}
+
+	Result r = q.exec();
+
+	Keys::Iterator kiter = keys.getFwIter();
+	while (r.hasItems()) {
+		bool notMatch = true;
+		Row rr = r.getNext();
+		while (kiter.hasItems() && notMatch) {
+			const Keys::KeyValue &kv = kiter.peek();
+			CompareResult r = compareJson(kv.key,rr.key);
+			if (r == cmpResultEqual) {
+				kv.value.add(rr.value);
+				notMatch = false;
+			} else if (r == cmpResultGreater) {
+				Container *c = keys.find(rr.key);
+				if (c) c->add(rr.value);
+				notMatch = false;
+			} else if (r == cmpResultLess) {
+				kiter.skip();
+			}
+		}
+		if (notMatch) {
+			Container *c = keys.find(rr.key);
+			if (c) c->add(rr.value);
+		}
+	}
+
+	return Result(result);
+}
+/*
+Result& Result::merge(MergeType mergeType,Result& other) {
+}
+
+*/
 }
 

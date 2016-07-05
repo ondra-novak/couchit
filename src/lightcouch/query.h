@@ -209,101 +209,6 @@ public:
 	virtual ConstValue exec() = 0;
 
 
-	class Row {
-	public:
-		///contains key
-		const ConstValue key;
-		///contains value
-		const ConstValue value;
-		///contains document - will be nil, if documents are not requested in the query
-		const ConstValue doc;
-		///contains source document ID
-		const ConstStrA id;
-
-		Row(const ConstValue &jrow);
-	};
-
-	enum MergeType {
-		///merge two results keep both sides, if equal, merge values, right has priority
-		mergeUnion,
-		///merge two results keep both sides, if equal, duplicated records created
-		mergeUnionAll,
-		///merge two results, keep only equal, merge values, right has priority
-		mergeEqual,
-		///merge two results, keep only equal, duplicate records
-		mergeEqualAll,
-		///merge two results, keep not equal only
-		mergeNotEqual,
-		///merge two results, remove all keys from left, if they have result at right
-		mergeRemoveFromLeft,
-		///merge two results, remove all keys from right, if they have result at left
-		mergeRemoveFromRight
-
-	};
-
-	class Result: public IteratorBase<ConstValue, Result> {
-	public:
-		Result(ConstValue jsonResult);
-
-		const ConstValue &getNext();
-		const ConstValue &peek() const;
-		bool hasItems() const;
-
-		natural getTotal() const;
-		natural getOffset() const;
-		natural length() const;
-		natural getRemain() const;
-		void rewind();
-
-		///Join to the result
-		/**
-		 * Function collects foreign keys and executes query with the
-		 * keys. After query is executed, new record are stored with
-		 * original records.
-		 *
-		 * @param foreignKey path to the foreign key. If key doesn't exist,
-		 *  function skips it (in this case, nether member will be created).
-		 *
-		 * @param resultName name of member field where reuslts will be stored.
-		 * Note that there can be always multiple results per single key.
-		 * Function always creates an array, which will contain results even
-		 * if there is only one result per record.
-		 *
-		 * @param q query to execute. Function will feed query with
-		 * keys and then executes it. Function is able to remove duplicate
-		 * keys, because they should return same values
-		 * @return Function returns new result.
-		 *
-		 * @note If you processed some record using the getNext(), function
-		 * will skip these records. If you need to ensure, that records will be
-		 * processed from the start, call rewind() before. After function returns,
-		 * the function hasItems() will return false
-		 */
-		Result join(const Path foreignKey, ConstStrA resultName, Query &q);
-
-		///Merges two results
-		/** Processe two results and nerges them key by key
-		 *
-		 * Merge uses only keys. It expects, that they are ordered. However
-		 * there is small difference between LightCouch orderibg and CouchDB's
-		 * ordering (LightCouch always order members of the objects alphabetically)
-		 *
-		 *
-		 * @param mergeType type of merge
-		 * @param other other result
-		 * @return merged result
-		 */
-		Result &merge(MergeType mergeType, Result &other);
-
-	protected:
-
-		ConstValue rows;
-		JSON::ConstIterator rowIter;
-		mutable ConstValue out;
-		natural total;
-		natural offset;
-	};
-
 
 
 	const Json json;
@@ -403,6 +308,123 @@ protected:
 
 };
 
+
+
+class Row: public ConstValue {
+public:
+	///contains key
+	const ConstValue key;
+	///contains value
+	const ConstValue value;
+	///contains document - will be nil, if documents are not requested in the query
+	const ConstValue doc;
+	///contains source document ID
+	const ConstValue id;
+	///contains error information for this row
+	const ConstValue error;
+
+	Row(const ConstValue &jrow);
+
+	///Returns 'true' if row exists (it is not error)
+	bool exists() const {return error != null;}
+
+};
+
+enum MergeType {
+	///combine rows from both results.
+	mergeUnion,
+	///make intersection - keep only rows with matching keys in both sides
+	mergeIntersection,
+	///make symetricall difference - keep only rows which doesn't match to each other
+	mergeSymDiff,
+	///remove rows from left results matching the keys from right result
+	mergeMinus,
+};
+
+
+class Result: public IteratorBase<ConstValue, Result> {
+public:
+	Result(ConstValue jsonResult);
+
+	const ConstValue &getNext();
+	const ConstValue &peek() const;
+	bool hasItems() const;
+
+	natural getTotal() const;
+	natural getOffset() const;
+	natural length() const;
+	natural getRemain() const;
+	void rewind();
+
+	///Join to the result
+	/**
+	 * Function collects foreign keys and executes query with the
+	 * keys. After query is executed, new record are stored with
+	 * original records.
+	 *
+	 * @param foreignKey path to the foreign key. If key doesn't exist,
+	 *  function skips it (in this case, nether member will be created).
+	 *
+	 * @param q query to execute. Function will feed query with
+	 * keys and then executes it. Function is able to remove duplicate
+	 * keys, because they should return same values
+	 * @return Function returns new result.
+	 *
+	 * @param resultName name of member field where reuslts will be stored.
+	 * Note that there can be always multiple results per single key.
+	 * Function always creates an array, which will contain results even
+	 * if there is only one result per record. Argument is ignored, if values
+	 * aren't objects. When values are arrays, result is appended at the
+	 * end of the array. If values are scalar, function converts them to arrays.
+	 * (so there will be ['scalarValue',[joined result]]). This also happen,
+	 * when resultName is empty for objects (so there will be [{result1},[joined result]])
+	 *
+	 *
+	 * @note If you processed some record using the getNext(), function
+	 * will skip these records. If you need to ensure, that records will be
+	 * processed from the start, call rewind() before. After function returns,
+	 * the function hasItems() will return false
+	 */
+	Result join(const JSON::Path foreignKey, QueryBase &q, ConstStrA resultName = ConstStrA());
+
+	///Merges two results
+	/** Processe two results and merges them key by key
+	 *
+	 * Merge uses only keys. It expects, that they are ordered. However
+	 * there is small difference between LightCouch orderibg and CouchDB's
+	 * ordering (LightCouch always order members of the objects alphabetically)
+	 *
+	 *
+	 * @param json json object need to create new result
+	 * @param mergeType type of merge
+	 * @param other other result
+	 * @return merged result
+	 */
+	Result merge(const Json &json, MergeType mergeType, Result &other);
+
+	///Makes result unique
+	/** For every row, array is created instead value and
+	 * values of duplicated keys are put together to the array
+	 * @return new result
+	 * @note included documents are not put to the arrays
+	 */
+	Result unique();
+
+	///Removes dupliced rows
+	/** Function removes duplicated keys and values. Note that
+	 * included documents are not considered as values.
+	 * @return new result
+	 */
+	Result distinct();
+
+protected:
+
+	ConstValue rows;
+	JSON::ConstIterator rowIter;
+	mutable ConstValue out;
+	natural total;
+	natural offset;
+};
 
 }
 
