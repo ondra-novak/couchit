@@ -248,7 +248,22 @@ private:
 	ConstValue commandReReduce(const ConstValue &req);
 	ConstValue commandDDoc(const ConstValue &req, const PInOutStream &stream);
 
+	ConstValue commandReduceGen(const ConstValue &req, RegReduceFn &regReduce);
+
+	ConstValue commandShow(const ConstValue &fn, const ConstValue &args);
+	ConstValue commandList(const ConstValue &fn, const ConstValue &args, const PInOutStream &stream);
+	ConstValue commandUpdate(const ConstValue &fn, const ConstValue &args);
+	ConstValue commandView(const ConstValue &fn, const ConstValue &args);
+	ConstValue commandFilter(const ConstValue &fn, const ConstValue &args);
+
+
 	static void splitToNameAndArgs(ConstStrA cmd, ConstStrA &name, ConstStrA &args);
+
+	Container ddcache;
+
+	ConstValue compileDesignDocument(const ConstValue &document);
+	template<typename T>
+	ConstValue compileDesignSection(T &reg, const ConstValue &section, ConstStrA sectionName);
 
 };
 
