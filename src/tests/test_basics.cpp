@@ -143,9 +143,9 @@ static void couchFindWildcard(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
-	Query::Result res = q("K")(Query::isArray)(Query::wildcard).exec();
+	Result res = q("K")(Query::isArray)(Query::wildcard).exec();
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
 				<<row.value[0]->getUInt()
 				<<row.value[1]->getUInt();
@@ -158,9 +158,9 @@ static void couchFindGroup(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_age_group));
-	Query::Result res = q(40)(Query::any).exec();
+	Result res = q(40)(Query::any).exec();
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		a("%1 ") << row.value->getStringUtf8();
 	}
 }
@@ -171,9 +171,9 @@ static void couchFindRange(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_age));
-	Query::Result res = q.from(20).to(40).reverseOrder().exec();
+	Result res = q.from(20).to(40).reverseOrder().exec();
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		a("%1 ") << row.value->getStringUtf8();
 	}
 }
@@ -184,12 +184,12 @@ static void couchFindKeys(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
-	Query::Result res = q.select("Kermit Byrd")(Query::isArray)
+	Result res = q.select("Kermit Byrd")(Query::isArray)
 					 .select("Owen Dillard")
 					 .select("Nicole Jordan")
 					 .exec();
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
 				<<row.value[0]->getUInt()
 				<<row.value[1]->getUInt();
@@ -206,12 +206,12 @@ static void couchCaching(PrintTextA &a) {
 
 	for (natural i = 0; i < 3; i++) {
 		Query q(db.createQuery(by_name_cacheable));
-		Query::Result res = q.select("Kermit Byrd")(Query::isArray)
+		Result res = q.select("Kermit Byrd")(Query::isArray)
 						 .select("Owen Dillard")
 						 .select("Nicole Jordan")
 						 .exec();
 		while (res.hasItems()) {
-			Query::Row row = res.getNext();
+			Row row = res.getNext();
 			a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
 					<<row.value[0]->getUInt()
 					<<row.value[1]->getUInt();
@@ -250,12 +250,12 @@ static void couchCaching2(PrintTextA &a) {
 		}
 
 		Query q(db.createQuery(by_name_cacheable));
-		Query::Result res = q.select("Kermit Byrd")(Query::isArray)
+		Result res = q.select("Kermit Byrd")(Query::isArray)
 						 .select("Owen Dillard")
 						 .select("Nicole Jordan")
 						 .exec();
 		while (res.hasItems()) {
-			Query::Row row = res.getNext();
+			Row row = res.getNext();
 			a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
 					<<row.value[0]->getUInt()
 					<<row.value[1]->getUInt();
@@ -280,10 +280,10 @@ static void couchReduce(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(age_group_height));
-	Query::Result res = q.group(1).exec();
+	Result res = q.group(1).exec();
 
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		a("%1:%2 ") << row.key[0]->getUInt()
 				<<(row.value["sum"]->getUInt()/row.value["count"]->getUInt());
 	}
@@ -418,10 +418,10 @@ static void couchRetrieveDocument(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
-	Query::Result res = q.select("Kermit Byrd")(Query::isArray).exec();
-	Query::Row row = res.getNext();
+	Result res = q.select("Kermit Byrd")(Query::isArray).exec();
+	Row row = res.getNext();
 
-	ConstValue doc = db.retrieveDocument(row.id, CouchDB::flgSeqNumber);
+	ConstValue doc = db.retrieveDocument(row.id.getStringA(), CouchDB::flgSeqNumber);
 	Container r = db.json.object(doc);
 	r.unset("_id");
 	//this is random - cannot be tested

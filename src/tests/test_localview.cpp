@@ -91,12 +91,12 @@ static void localView_ByName(PrintTextA &print) {
 	loadData(view);
 
 	LocalView::Query q = view.createQuery(0);
-	Query::Result res = q.select("Kermit Byrd")
+	Result res = q.select("Kermit Byrd")
 					 .select("Owen Dillard")
 					 .select("Nicole Jordan")
 					 .exec();
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		print("%1,%2,%3 ") << row.key[0]->getStringUtf8()
 				<<row.value[0]->getUInt()
 				<<row.value[1]->getUInt();
@@ -110,9 +110,9 @@ static void localView_wildcard(PrintTextA &print) {
 	loadData(view);
 
 	LocalView::Query q = view.createQuery(0);
-	Query::Result res = q("K")(Query::wildcard).exec();
+	Result res = q("K")(Query::wildcard).exec();
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		print("%1,%2,%3 ") << row.key[0]->getStringUtf8()
 				<<row.value[0]->getUInt()
 				<<row.value[1]->getUInt();
@@ -126,9 +126,9 @@ static void localView_FindGroup(PrintTextA &a) {
 	loadData(view);
 
 	LocalView::Query q = view.createQuery(0);
-	Query::Result res = q(40)(Query::any).exec();
+	Result res = q(40)(Query::any).exec();
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		a("%1 ") << row.value->getStringUtf8();
 	}
 }
@@ -139,9 +139,9 @@ static void localView_FindRange(PrintTextA &a) {
 	loadData(view);
 
 	LocalView::Query q = view.createQuery(0);
-	Query::Result res = q.from(20).to(40).reverseOrder().exec();
+	Result res = q.from(20).to(40).reverseOrder().exec();
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		a("%1 ") << row.value->getStringUtf8();
 	}
 }
@@ -152,10 +152,10 @@ static void localView_couchReduce(PrintTextA &a) {
 	loadData(view);
 
 	LocalView::Query q = view.createQuery(0);
-	Query::Result res = q.group(1).exec();
+	Result res = q.group(1).exec();
 
 	while (res.hasItems()) {
-		Query::Row row = res.getNext();
+		Row row = res.getNext();
 		a("%1:%2 ") << row.key[0]->getUInt()
 				<<(row.value["sum"]->getUInt()/row.value["count"]->getUInt());
 	}
