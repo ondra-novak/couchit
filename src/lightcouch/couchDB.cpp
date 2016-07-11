@@ -12,6 +12,7 @@
 #include <lightspeed/base/text/textFormat.tcc>
 #include <lightspeed/base/text/textOut.tcc>
 #include <lightspeed/mt/atomic.h>
+#include <lightspeed/utils/json/jsonserializer.tcc>
 #include <lightspeed/utils/urlencode.h>
 #include "lightspeed/base/streams/secureRandom.h"
 #include "lightspeed/base/exceptions/errorMessageException.h"
@@ -32,6 +33,7 @@
 
 #include "document.h"
 using LightSpeed::INetworkServices;
+using LightSpeed::JSON::serialize;
 using LightSpeed::lockInc;
 namespace LightCouch {
 
@@ -70,8 +72,8 @@ StringA CouchDB::generateServerID() {
 }
 
 CouchDB::CouchDB(const Config& cfg)
-	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),serverid(cfg.serverid),http(httpConfig),factory(json.factory)
-	,cache(cfg.cache),seqNumSlot(0),httpConfig(cfg)
+	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),serverid(cfg.serverid),factory(json.factory)
+	,cache(cfg.cache),seqNumSlot(0),httpConfig(cfg),http(httpConfig)
 {
 	if (!cfg.databaseName.empty()) use(cfg.databaseName);
 	listenExitFlag = false;
@@ -146,7 +148,7 @@ JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natura
 
 		}
 		http.close();
-		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+		throw RequestError(THISLOCATION,requestUrl,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		JSON::Value v = factory->fromStream(response);
 		if (usecache) {
@@ -195,7 +197,7 @@ JSON::ConstValue CouchDB::requestDELETE(ConstStrA path, JSON::Value headers, nat
 
 		}
 		http.close();
-		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+		throw RequestError(THISLOCATION,requestUrl,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		JSON::Value v = factory->fromStream(response);
 		if (flags & flgStoreHeaders && headers != null) {
@@ -228,7 +230,10 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 	}));
 
 	SeqFileOutput out = http.beginBody(HttpClient::psoDefault);
-	if (data != null) factory->toStream(*data, out);
+	if (data != null) {
+		SeqTextOutA textout(out);
+		JSON::serialize(data,textout,true);
+	}
 	SeqFileInput response = http.send();
 	if (http.getStatus()/100 != 2) {
 
@@ -239,7 +244,7 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 
 		}
 		http.close();
-		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+		throw RequestError(THISLOCATION,requestUrl,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		JSON::Value v = factory->fromStream(response);
 		if (flags & flgStoreHeaders && headers != null) {
@@ -380,7 +385,7 @@ natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const
 
 				}
 				http.close();
-				throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+				throw RequestError(THISLOCATION,gline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
 			} else {
 
 
@@ -618,7 +623,7 @@ StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,C
 
 		}
 		http.close();
-		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+		throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		JSON::Value v = factory->fromStream(in);
 		http.close();
@@ -649,7 +654,7 @@ void CouchDB::downloadAttachment(Document& document, ConstStrA attachmentName, c
 
 		}
 		http.close();
-		throw RequestError(THISLOCATION,http.getStatus(), http.getStatusMessage(), errorVal);
+		throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		HttpClient::HeaderValue ctx = http.getHeader(HttpClient::fldContentType);
 		HttpClient::HeaderValue len = http.getHeader(HttpClient::fldContentLength);

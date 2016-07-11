@@ -10,6 +10,7 @@
 #include <lightspeed/base/containers/string.h>
 #include <lightspeed/base/exceptions/exception.h>
 #include <lightspeed/base/containers/constStr.h>
+#include <lightspeed/base/exceptions/httpStatusException.h>
 #include <lightspeed/utils/json/json.h>
 #include "object.h"
 
@@ -17,19 +18,15 @@ namespace LightCouch {
 
 using namespace LightSpeed;
 
-class RequestError: public Exception {
+class RequestError: public HttpStatusException {
 public:
 	LIGHTSPEED_EXCEPTIONFINAL;
 
-	RequestError(const ProgramLocation &loc, natural code, ConstStrA message, JSON::Value extraInfo);
+	RequestError(const ProgramLocation &loc, StringA url, natural code, StringA message, JSON::Value extraInfo);
 
-	natural getStatus() const {return code;}
-	ConstStrA getMessage() const {return msg;}
 	JSON::Value getExtraInfo() const {return extraInfo;}
 	virtual ~RequestError() throw();
 protected:
-	natural code;
-	StringA msg;
 	JSON::Value extraInfo;
 
     virtual void message(ExceptionMsg &msg) const;
