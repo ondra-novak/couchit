@@ -21,6 +21,12 @@ View::View(StringA viewPath, natural flags,ConstStringT<ListArg> args)
 {
 }
 
+View::View(StringA viewPath, natural flags,const Postprocessing &ppfunction, ConstStringT<ListArg> args)
+:viewPath(viewPath),flags(flags),args(args),postprocess(ppfunction)
+
+{
+}
+
 Filter::Filter(StringA filter, natural flags, ConstStringT<ListArg> args)
 	:View(filter,flags,args)
 {

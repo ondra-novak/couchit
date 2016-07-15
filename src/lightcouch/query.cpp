@@ -238,6 +238,8 @@ ConstValue Query::exec(CouchDB &db) {
 	case smStale: urlformat("&stale=ok");break;
 	}
 
+	ConstValue result;
+
 	if (keys == nil) {
 
 		if (startkey != nil) {
@@ -247,19 +249,23 @@ ConstValue Query::exec(CouchDB &db) {
 			urlformat(descent?"&startkey=%1":"&endkey=%1") << (hlp=CouchDB::urlencode(json.factory->toString(*endkey)));
 		}
 
-		return db.requestGET(urlline.getArray());
+		result = db.requestGET(urlline.getArray());
 	} else if (keys->length() == 1) {
 		urlformat("&key=%1") << (hlp=CouchDB::urlencode(json.factory->toString(*(keys[0]))));
-		return db.requestGET(urlline.getArray());
+		result = db.requestGET(urlline.getArray());
 	} else {
 		if (viewDefinition.flags & View::forceGETMethod) {
 			urlformat("&keys=%1") << (hlp=CouchDB::urlencode(json.factory->toString(*keys)));
-			return db.requestGET(urlline.getArray());
+			result = db.requestGET(urlline.getArray());
 		} else {
 			JSON::Container req = json("keys",keys);
-			return db.requestPOST(urlline.getArray(), req);
+			result = db.requestPOST(urlline.getArray(), req);
 		}
 	}
+	if (viewDefinition.postprocess) {
+		result = viewDefinition.postprocess(&db, args,result);
+	}
+	return result;
 
 }
 

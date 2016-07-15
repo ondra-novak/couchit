@@ -203,7 +203,7 @@ ConstValue LocalView::searchOneKey(const ConstValue &key) const {
 }
 
 LocalView::Query LocalView::createQuery(natural viewFlags) const {
-	return Query(*this,json,viewFlags);
+	return Query(*this,json,viewFlags, PostProcessFn());
 }
 
 void LocalView::cancelStream() {
@@ -226,6 +226,11 @@ void LocalView::setUpdateStream(const UpdateStream& stream) {
 		setUpdateStreamLk(stream);
 	}
 }
+
+LocalView::Query LocalView::createQuery(natural viewFlags, PostProcessFn fn) const {
+	return Query(*this,json,viewFlags,fn);
+}
+
 void LocalView::setUpdateStreamLk(UpdateStream stream) {
 
 	updateStream = stream;
@@ -390,8 +395,8 @@ bool excludeEnd) const {
 
 
 }
-LocalView::Query::Query(const LocalView& lview, const Json& json, natural viewFlags, RefCntPtr<IListFn> listFn)
-	:QueryBase(json,viewFlags),lview(lview),listFn(listFn) {
+LocalView::Query::Query(const LocalView& lview, const Json& json, natural viewFlags, PostProcessFn ppfn)
+	:QueryBase(json,viewFlags),lview(lview),ppfn(ppfn) {
 
 }
 
@@ -403,7 +408,7 @@ ConstValue LocalView::Query::exec() {
 	} else {
 		result = lview.searchKeys(keys,groupLevel);
 	}
-	if (listFn != null) result = (*listFn)(result, args);
+	if (ppfn) result = ppfn(json, args, result);
 	return result;
 }
 

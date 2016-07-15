@@ -7,12 +7,16 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_VIEW_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_VIEW_H_
+#include <functional>
 #include <lightspeed/base/types.h>
 #include <lightspeed/base/containers/string.h>
+#include <lightspeed/utils/json.h>
+#include "object.h"
 
 namespace LightCouch {
 
 using namespace LightSpeed;
+class CouchDB;
 
 ///Uses to configure the query
 /**
@@ -76,6 +80,17 @@ public:
 	};
 
 	typedef ConstStringT<ListArg> ListArgs;
+	///Function called to postprocess to view
+	/**
+	 * @param CouchDb* pointer to an active instance of CouchDB (currently used for query)
+	 * @param ConstValue arguments of the query
+	 * @param ConstValue result from map-reduce-list executed by the query
+	 * @return Modified result
+	 *
+	 * Function have to update result and return it as return value. It have allowed to
+	 * perform other
+	 */
+	typedef std::function<ConstValue(CouchDB *, ConstValue, ConstValue)> Postprocessing;
 
 	///Declare the view
 	/** Declare single view or list by the path only */
@@ -87,6 +102,16 @@ public:
      * @param args additional arguments preconfigured for this view
      */
 	View(StringA viewPath, natural flags, ListArgs args = ListArgs());
+
+	///Declare more specific view
+	/**
+	 * @param viewPath path to the view relative to the database's root. It can be also path to the list
+	 * @param flags various view flags
+	 * @param ppfunction function called to post-process result. Note, results from post-processing are
+	 * not cached. If you need to cache results, use Lists on the server side instead
+	 * @param args additional arguments preconfigured for this view
+	 */
+	View(StringA viewPath, natural flags, const Postprocessing &ppfunction, ListArgs args = ListArgs() );
 
 	View addArg(ConstStringT<ListArg> args) const;
 
@@ -100,6 +125,7 @@ public:
 	const StringA viewPath;
 	const natural flags;
 	const StringCore<ListArg> args;
+	Postprocessing postprocess;
 };
 
 ///Define filtering for changes feed
@@ -120,8 +146,11 @@ public:
 	/**
 	 * @param view view that will be used to filter results
 	 * @param allConflicts include all conflicted documents
+	 *
+	 * @note postprocess function is not used for filtering
 	 */
 	Filter(const View &view, bool allConflicts = false);
+
 
 	///Declare filter without flags (convert string name of the filter to the filter definition)
 	Filter(StringA filter);

@@ -95,12 +95,15 @@ public:
 	ConstValue getDocument(const ConstStrA docId) const;
 
 
-
-	class IListFn: public RefCntObj {
-	public:
-		virtual ConstValue operator()(const ConstValue &result, const ConstValue &args) const = 0;
-		virtual ~IListFn() {}
-	};
+	///Postprocess function
+	/**
+	 * @param Json json object
+	 * @param ConstValue arguments from query
+	 * @param ConstValue result from query
+	 * @return Modified result
+	 *
+	 */
+	typedef std::function<ConstValue(Json , ConstValue , ConstValue )> PostProcessFn;
 
 	///Query object which can ask LocalView
 	/** You can create Query using createQuery() function.
@@ -109,13 +112,13 @@ public:
 	 */
 	class Query: public QueryBase {
 	public:
-		Query(const LocalView &lview, const Json &json, natural viewFlags, RefCntPtr<IListFn> listFn = null);
+		Query(const LocalView &lview, const Json &json, natural viewFlags, PostProcessFn ppfn);
 
 		virtual ConstValue exec() override;
 
 	protected:
 		const LocalView &lview;
-		RefCntPtr<IListFn> listFn;
+		PostProcessFn ppfn;
 	};
 
 	///Creates Query object to ask LocalView
@@ -131,12 +134,15 @@ public:
 	/**
 	 *
 	 * @param viewFlags various flags defined by View object. You cannot supply View object directly
-	 * @param listFn list function. The name of the function can be confusing, but it is best to match
-	 *  CouchDB's terminology. The list function receives result, performs
-	 * @return
+	 * @param fn function to postprocess results.
+	 *
+	 *
+	 * @return query
+	 *
+	 * @note function is not compatible with function from View, because it cannot supply active
+	 *  CouchDB client. You have to supply it in function instance.
 	 */
-	template<typename Fn>
-	Query createQuery(natural viewFlags, const Fn &listFn) const;
+	Query createQuery(natural viewFlags, PostProcessFn fn) const;
 
 
 	///Item of update stream
@@ -323,24 +329,6 @@ private:
 	void cancelStream();
 	void setUpdateStreamLk(UpdateStream stream);
 };
-
-template<typename Fn>
-inline LocalView::Query LocalView::createQuery(natural viewFlags, const Fn& listFn) const {
-
-	class CB: public IListFn {
-	public:
-		CB(const Fn &fn):fn(fn) {}
-		virtual ConstValue operator()(const ConstValue &result, const ConstValue &args) const {
-			return fn(result,args);
-		}
-
-	protected:
-		Fn fn;
-	};
-
-	RefCntPtr<IListFn> ptr = new CB(listFn);
-	return Query(*this,json,viewFlags,ptr.getMT());
-}
 
 
 } /* namespace LightCouch */
