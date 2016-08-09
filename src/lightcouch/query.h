@@ -417,6 +417,9 @@ public:
 	 */
 	Result distinct();
 
+	///Retrieve whole result as array of rows;
+	ConstValue getRows() const {return rows;}
+
 protected:
 
 	ConstValue rows;

@@ -507,6 +507,8 @@ Result Result::join(const JSON::Path foreignKey,QueryBase& q,ConstStrA resultNam
 
 	return Result(result);
 }
+
+
 /*
 Result& Result::merge(MergeType mergeType,Result& other) {
 }
