@@ -10,11 +10,14 @@
 namespace LightCouch {
 
 CouchDBPool::CouchDBPool(
-		const Config &cfg,
+		const LightCouch::Config &cfg,
 		natural limit,
 		natural resTimeout,
 		natural waitTimeout)
 :AbstractResourcePool(limit,resTimeout,waitTimeout),cfg(cfg) {}
+
+CouchDBPool::CouchDBPool(const Config &cfg)
+:AbstractResourcePool(cfg.limit,cfg.resTimeout,cfg.waitTimeout),cfg(cfg) {}
 
 CouchDBManaged* CouchDBPool::createResource() {
 	return new CouchDBManaged(cfg);

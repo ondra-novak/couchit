@@ -35,6 +35,7 @@ class CouchDBManaged: public CouchDB, public AbstractResource {
  */
 typedef ResourcePtr<CouchDBManaged> MCouchDB;
 
+
 ///Pool of CouchDB connections.
 /**
  * To receive new connection, use CouchDBPool to construct MCouchDB reference. It holds
@@ -42,6 +43,13 @@ typedef ResourcePtr<CouchDBManaged> MCouchDB;
  */
 class CouchDBPool: public AbstractResourcePool {
 public:
+
+	struct Config: public LightCouch::Config {
+		natural limit;
+		natural resTimeout;
+		natural waitTimeout;
+	};
+
 	///Construct the pool
 	/**
 	 * @param cfg configuration of the pool
@@ -49,13 +57,15 @@ public:
 	 * @param resTimeout how long resource can stay idle before it is released (in ms)
 	 * @param waitTimeout how long thread can (in ms) wait before TimeoutException is returned
 	 */
-	CouchDBPool(const Config &cfg, natural limit, natural resTimeout, natural waitTimeout);
+	CouchDBPool(const LightCouch::Config &cfg, natural limit, natural resTimeout, natural waitTimeout);
+
+	CouchDBPool(const Config &cfg);
 
 protected:
 	virtual CouchDBManaged *createResource();
 	virtual const char *getResourceName() const;
 
-	Config cfg;
+	LightCouch::Config cfg;
 };
 
 

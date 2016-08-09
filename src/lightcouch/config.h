@@ -32,9 +32,9 @@ struct Config {
 	/** Put there database's root url (path to the server's root). Don't specify path to
 	 * particular database.
 	 */
-	ConstStrA baseUrl;
+	StringA baseUrl;
 	///name of database (optional) if set, object initializes self to work with database
-	ConstStrA databaseName;
+	StringA databaseName;
 	///JSON factory to create JSON objects
 	/** If this object is NULL, every instance calls JSON::create() to receive its own
 	 * copy of standard json factory. (recomended)
