@@ -483,7 +483,7 @@ UID CouchDB::getUID() {
 	return UID(serverid,ConstStrA());
 }
 
-UID CouchDB::getUID(ConstStrA suffix) {
+UID CouchDB::getUID(ConstStrA prefix) {
 	return UID(serverid,suffix);
 }
 
@@ -701,8 +701,8 @@ Value CouchDB::newDocument() {
 	return json("_id",ConstStrA(getUID()));
 }
 
-Value CouchDB::newDocument(ConstStrA suffix) {
-	return json("_id",ConstStrA(getUID(suffix)));
+Value CouchDB::newDocument(ConstStrA prefix) {
+	return json("_id",ConstStrA(getUID(prefix)));
 }
 
 } /* namespace assetex */

@@ -20,7 +20,7 @@ using namespace LightSpeed;
 class UID: public AutoArray<char, SmallAlloc<32> > {
 public:
 
-	UID(ConstStrA dbsuffix, ConstStrA userSuffix);
+	UID(ConstStrA dbsuffix, ConstStrA userPrefix);
 
 };
 

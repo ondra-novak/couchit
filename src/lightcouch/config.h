@@ -18,6 +18,7 @@ namespace LightCouch {
 
 class QueryCache;
 class Validator;
+class IIDGen;
 
 
 
@@ -56,6 +57,11 @@ struct Config {
 	 * validation is thrown as exception.
 	 */
 	Pointer<Validator> validator;
+
+	///Pointer to function that is responsible toUID generation
+	/** Pointer can be NULL, then default UID generator is used - See: DefaultUIDGen; */
+	Pointer<IIDGen> uidgen;
+
 	///Server's id. If empty, server will generate own
 	StringA serverid;
 

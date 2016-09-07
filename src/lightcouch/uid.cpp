@@ -21,17 +21,17 @@ static atomic counter = 0;
 
 
 
-UID::UID(ConstStrA dbsuffix, ConstStrA userSuffix) {
+UID::UID(ConstStrA dbsuffix, ConstStrA userPrefix) {
 
 	time_t tval;
 	time(&tval);
 	TextOut<UID::WriteIter, SmallAlloc<256> > fmt(getWriteIterator());
 	fmt.setBase(62);
 	atomicValue v = lockInc(counter);
-	fmt("%{08}1%%{06}2%%3%%4")
+	fmt("%4%{08}1%%{06}2%%3%")
 		<< (lnatural)tval
 		<< (Bin::natural32)(v & 0x3FFFFFFF)
-		<< dbsuffix << userSuffix;
+		<< dbsuffix << userPrefix;
 
 }
 

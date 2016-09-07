@@ -158,6 +158,10 @@ public:
 	JSON::ConstValue requestDELETE(ConstStrA path, JSON::Value headers = null, natural flags = 0);
 
 
+
+
+	ConstStrA
+
 	///Generates new unique ID
 	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
 	 * counter part and random part. The random is choosen when application starts. The counter
@@ -194,7 +198,7 @@ public:
 	 *
 	 * @return UUID object which can be converted to ConstStrA
 	 */
-	UID getUID(ConstStrA suffix);
+	UID getUID(ConstStrA prefix);
 	///Generates new unique ID
 	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
 	 * counter part and random part. The random is choosen when application starts. The counter
@@ -391,10 +395,10 @@ public:
 	///Creates new document
 	/**
 	 * Function creates new object and puts _id in it. Generates new id
-	 * @param suffix suffix append to UID - can be used to specify type of the document
+	 * @param prefix prefix append to UID - can be used to specify type of the document
 	 * @return Value which can be converted to Document object
 	 */
-	Value newDocument(ConstStrA suffix);
+	Value newDocument(ConstStrA prefix);
 
 	///Retrieves pointer to validator
 	/**

@@ -39,6 +39,7 @@ public:
 	LIGHTSPEED_EXCEPTIONFINAL;
 
 	DocumentNotEditedException(const ProgramLocation &location, ConstValue docId):Exception(location),documentId(docId) {}
+	virtual ~DocumentNotEditedException() throw() {}
 
 	const ConstValue documentId;
 
