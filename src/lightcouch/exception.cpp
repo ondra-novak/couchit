@@ -31,8 +31,26 @@ void RequestError::message(ExceptionMsg& msg) const {
 		<< details;
 }
 
+
+UpdateException::UpdateException(
+		const ProgramLocation& loc, const StringCore<ErrorItem>& errors)
+
+	:Exception(loc),errors(errors)
+{
+}
+
+ConstStringT<UpdateException::ErrorItem> UpdateException::getErrors() const {
+	return errors;
+}
+
+void UpdateException::message(ExceptionMsg& msg) const {
+	msg(msgText) << errors.length();
+}
+
+
 const char *DocumentNotEditedException::msgText = "Document %1 is not edited. You have to call edit() first";
 const char *DocumentNotEditedException::msgNone = "<n/a>";
+const char *UpdateException::msgText = "Update exception - some items was not written: %1";
 
 
 

@@ -52,6 +52,30 @@ public:
 
 };
 
+class UpdateException: public Exception{
+public:
+	struct ErrorItem {
+		ConstStrA errorType;
+		ConstStrA reason;
+		JSON::ConstValue document;
+		JSON::ConstValue errorDetails;
+	};
+
+
+	LIGHTSPEED_EXCEPTIONFINAL;
+	UpdateException(const ProgramLocation &loc, const StringCore<ErrorItem> &errors);
+	ConstStringT<ErrorItem> getErrors() const;
+
+	static const char *msgText;
+
+
+protected:
+	StringCore<ErrorItem> errors;
+
+	void message(ExceptionMsg &msg) const;
+};
+
+
 }
 
 

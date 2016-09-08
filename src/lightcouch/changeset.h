@@ -143,27 +143,10 @@ public:
 	Document newDocument(ConstStrA suffix);
 
 
-	struct ErrorItem {
-		ConstStrA errorType;
-		ConstStrA reason;
-		JSON::ConstValue document;
-		JSON::ConstValue errorDetails;
-	};
 
 	CouchDB &getDatabase() {return db;}
 	const CouchDB &getDatabase() const {return db;}
 
-	class UpdateException: public Exception{
-	public:
-		LIGHTSPEED_EXCEPTIONFINAL;
-		UpdateException(const ProgramLocation &loc, const StringCore<ErrorItem> &errors);
-		ConstStringT<ErrorItem> getErrors() const;
-
-	protected:
-		StringCore<ErrorItem> errors;
-
-		void message(ExceptionMsg &msg) const;
-	};
 
 	const JSON::Builder json;
 protected:

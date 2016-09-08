@@ -29,6 +29,7 @@
 
 #include "lightspeed/base/exceptions/netExceptions.h"
 
+#include "defaultUIDGen.h"
 #include "queryCache.h"
 
 #include "document.h"
@@ -73,7 +74,9 @@ StringA CouchDB::generateServerID() {
 
 CouchDB::CouchDB(const Config& cfg)
 	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),serverid(cfg.serverid),factory(json.factory)
-	,cache(cfg.cache),seqNumSlot(0),httpConfig(cfg),http(httpConfig)
+	,cache(cfg.cache),seqNumSlot(0)
+	,uidGen(cfg.uidgen == null?DefaultUIDGen::getInstance():*cfg.uidgen)
+	,httpConfig(cfg),http(httpConfig)
 {
 	if (!cfg.databaseName.empty()) use(cfg.databaseName);
 	listenExitFlag = false;
@@ -479,12 +482,12 @@ JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId, natural flags
 
 }
 
-UID CouchDB::getUID() {
-	return UID(serverid,ConstStrA());
+ConstStrA CouchDB::genUID() {
+	return uidGen(uidBuffer,ConstStrA());
 }
 
-UID CouchDB::getUID(ConstStrA prefix) {
-	return UID(serverid,suffix);
+ConstStrA CouchDB::genUID(ConstStrA prefix) {
+	return uidGen(uidBuffer,prefix);
 }
 
 ConstValue CouchDB::retrieveDocument(ConstStrA docId, ConstStrA revId, natural flags) {
@@ -664,12 +667,14 @@ void CouchDB::downloadAttachment(Document& document, ConstStrA attachmentName, c
 	}
 }
 
-Value CouchDB::getUIDValue() {
-	return json(ConstStrA(getUID()));
+Value CouchDB::genUIDValue() {
+	Synchronized<FastLock> _(lock);
+	return json(genUID());
 }
 
-Value CouchDB::getUIDValue(ConstStrA suffix) {
-	return json(ConstStrA(getUID(suffix)));
+Value CouchDB::genUIDValue(ConstStrA prefix) {
+	Synchronized<FastLock> _(lock);
+	return json(genUID(prefix));
 }
 
 StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,
@@ -698,11 +703,25 @@ AttachmentData CouchDB::downloadAttachment(Document& document,
 
 
 Value CouchDB::newDocument() {
-	return json("_id",ConstStrA(getUID()));
+	Synchronized<FastLock> _(lock);
+	return json("_id",genUID());
 }
 
 Value CouchDB::newDocument(ConstStrA prefix) {
-	return json("_id",ConstStrA(getUID(prefix)));
+	Synchronized<FastLock> _(lock);
+	return json("_id",genUID(prefix));
 }
 
 } /* namespace assetex */
+
+void CouchDB::uploadDesignDocument(ConstStrA name, Value content,
+		DesignDocUpdateRule updateRule) {
+}
+
+void CouchDB::uploadDesignDocument(ConstStrA name, ConstStrW pathname,
+		DesignDocUpdateRule updateRule) {
+}
+
+void CouchDB::uploadDesignDocument(ConstStrA name, const char* content,
+		natural contentLen, DesignDocUpdateRule updateRule) {
+}

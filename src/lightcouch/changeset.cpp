@@ -26,7 +26,7 @@ Changeset::Changeset(CouchDB &db):json(db.json), db(db) {
 Changeset& Changeset::update(Document &document) {
 	if (!document.dirty()) return *this;
 	if (document["_id"] == null) {
-		document.set("_id",json(db.getUID()));
+		document.set("_id",db.genUIDValue());
 	}
 	docs.add(document.getEditing());
 	eraseConflicts(document["_id"], document.getConflictsToDelete());
@@ -65,7 +65,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 	JSON::ConstValue out = db.requestPOST("_bulk_docs", wholeRequest);
 
 
-	AutoArray<ErrorItem> errors;
+	AutoArray<UpdateException::ErrorItem> errors;
 
 	natural index = 0;
 	for (JSON::ConstIterator iter = out->getFwIter(); iter.hasItems();) {
@@ -76,7 +76,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 
 		JSON::ConstValue err = kv["error"];
 		if (err != null) {
-			ErrorItem e;
+			UpdateException::ErrorItem e;
 			e.errorDetails = kv;
 			e.document = docs[index];
 			e.errorType = err->getStringUtf8();
@@ -128,21 +128,6 @@ void Changeset::init() {
 	wholeRequest = json("docs",docs);
 }
 
-
-Changeset::UpdateException::UpdateException(
-		const ProgramLocation& loc, const StringCore<ErrorItem>& errors)
-
-	:Exception(loc),errors(errors)
-{
-}
-
-ConstStringT<Changeset::ErrorItem> Changeset::UpdateException::getErrors() const {
-	return errors;
-}
-
-void Changeset::UpdateException::message(ExceptionMsg& msg) const {
-	msg("Update exception - some items was not written: %1") << errors.length();
-}
 
 Changeset& Changeset::commit(bool all_or_nothing) {
 	return commit(db,all_or_nothing);

@@ -159,62 +159,45 @@ public:
 
 
 
-
-	ConstStrA
-
-	///Generates new unique ID
-	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
-	 * counter part and random part. The random is choosen when application starts. The counter
-	 * part counts number of objects created from the start of the application. If the application
-	 * is restarted, counter is reset, however, the application generates different random part, so
-	 * newly generated UID will be truly unique. The timestamp parts allows to order objects
-	 * by time of creation.
-	 * @return UUID object which can be converted to ConstStrA
+	///Generates new UID using preconfigured generator
+	/** See Config how to setup custom generator
+	 *
+	 * @return string reference to UID. Note that reference is valid until method is called again. You
+	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
+	 * lost in time of return
+	 *
 	 */
-	UID getUID();
-	///Generates new unique ID
-	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
-	 * counter part and random part. The random is choosen when application starts. The counter
-	 * part counts number of objects created from the start of the application. If the application
-	 * is restarted, counter is reset, however, the application generates different random part, so
-	 * newly generated UID will be truly unique. The timestamp parts allows to order objects
-	 * by time of creation.
-	 * @return Value object which can be put directly to the document
-	 */
-	Value getUIDValue();
+	ConstStrA genUID();
 
-	///Generates new unique ID
-	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
-	 * counter part and random part. The random is choosen when application starts. The counter
-	 * part counts number of objects created from the start of the application. If the application
-	 * is restarted, counter is reset, however, the application generates different random part, so
-	 * newly generated UID will be truly unique. The timestamp parts allows to order objects
-	 * by time of creation.
+	///Generates new UID using preconfigured generator
+	/**See Config how to setup custom generator
 	 *
-	 * @param suffix - user defined suffix - it can be used to identify type of the document. If
-	 * you need a separator between the UID and suffix, you have to specify it with the suffix.
-	 * For example ".invoice" will add ".invoice" to the UID, so any filter can take advantage
-	 * from knowledge, that document is invoice.
-	 *
-	 * @return UUID object which can be converted to ConstStrA
+	 * @param prefix user defined prefix which is put at the beginning of the ID
+	 * @return string reference to UID. Note that reference is valid until method is called again. You
+	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
+	 * lost in time of return
 	 */
-	UID getUID(ConstStrA prefix);
-	///Generates new unique ID
-	/** Unique ID is generated as series numbers and letters. It consists from timestamp part,
-	 * counter part and random part. The random is choosen when application starts. The counter
-	 * part counts number of objects created from the start of the application. If the application
-	 * is restarted, counter is reset, however, the application generates different random part, so
-	 * newly generated UID will be truly unique. The timestamp parts allows to order objects
-	 * by time of creation.
+	ConstStrA genUID(ConstStrA prefix);
+
+	///Generates new UID and returns it as Value. It can be directly used to create new document.
+	/**
+	 * @return UID stored as Value object
 	 *
-	 * @param suffix - user defined suffix - it can be used to identify type of the document. If
-	 * you need a separator between the UID and suffix, you have to specify it with the suffix.
-	 * For example ".invoice" will add ".invoice" to the UID, so any filter can take advantage
-	 * from knowledge, that document is invoice.
+	 * @note In contrast to the function getUID(), this function can be called
+	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
+	 * in MT environment or use additional synchronization
+	 */
+	Value genUIDValue();
+	///Generates new UID and returns it as Value. It can be directly used to create new document.
+	/**
+	 * @param prefix user defined prefix which is put at the beginning of the ID
+	 * @return UID stored as Value object
 	 *
-	 * @return Value object which can be put directly to the document
-	 **/
-	Value getUIDValue(ConstStrA suffix);
+	 * @note In contrast to the function getUID(), this function can be called
+	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
+	 * in MT environment or use additional synchronization
+	 */
+	Value genUIDValue(ConstStrA prefix);
 
 
 	///Changes current database
@@ -466,7 +449,7 @@ public:
 	 *
 	 * @b content - string or binary or parsed json value if possible.
 	 * @b content-type - content type. If you need to parse response as json, specify application/json here.
-1	 * @b id - id of the document
+	 * @b id - id of the document
 	 *
 	 *
 	 * @note contenr can be binary string. It is not valid in json, however, in C++ it is simply
@@ -529,6 +512,61 @@ public:
 	 */
 	AttachmentData downloadAttachment(Document &document, ConstStrA attachmentName);
 
+	///For function updateDesignDocument
+	enum DesignDocUpdateRule {
+		///if design document exists, skip upload
+		ddurSkipExisting,
+		///if design documenr exists, check whether it is the same, and throw exception when it is different
+		ddurCheck,
+		///Always overwrite design document
+		ddurOverwrite,
+		///Merges documents leaving skipping existing parts
+		ddurMergeSkip,
+		///Merges documents overwritting existing parts
+		ddurMergeOverwrite,
+	};
+
+
+	///Uploads design document to the server
+	/**
+	 * @note the connection needs administration permissions to do that!
+	 *
+	 * @param name name of the design document. It don't need to have "_design/" prefix, however, function
+	 * will accept both variants with or without
+	 *
+	 * @param content content of design document as pure JSON
+	 * @param updateRule specifies rule how to handle existing design document
+	 * @exception UpdateException document cannot be updated because it already exists and it is different
+	 */
+	void uploadDesignDocument(ConstStrA name, Value content, DesignDocUpdateRule updateRule);
+
+	///Uploads design document from the file
+	/**
+	 * @note the connection needs administration permissions to do that!
+	 *
+	 * @param name name of the design document. It don't need to have "_design/" prefix, however, function
+	 * will accept both variants with or without
+	 *
+	 * @param pathcontent name of file that contains design document. Document must be valid JSON
+	 * @param updateRule specifies rule how to handle existing design document
+	 * @exception UpdateException document cannot be updated because it already exists and it is different
+	 *
+	 */
+	void uploadDesignDocument(ConstStrA name, ConstStrW pathname, DesignDocUpdateRule updateRule);
+
+	///Uploads design document from the resource
+	/**
+	 * It allows to upload design document from resource generated by bin2c utility distributed with jsonrpcserver.
+	 * Result of this utility is put into two variables. The content which contains pointer to the resource, and
+	 * the contentLen which contains length of the resource
+	 *
+	 * @param name name of the design document. It don't need to have "_design/" prefix, however, function
+	 * will accept both variants with or without
+	 * @param content pointer to the resource
+	 * @param contentLen length of the resource
+	 * @param updateRule specifies rule how to handle existing design document
+	 */
+	void uploadDesignDocument(ConstStrA name, const char *content, natural contentLen, DesignDocUpdateRule updateRule);
 
 	///Use json variable to build objects
 	const Json json;
@@ -562,6 +600,8 @@ protected:
 	Pointer<QueryCache> cache;
 	Pointer<Validator> validator;
 	atomicValue *seqNumSlot;
+	AutoArray<char> uidBuffer;
+	IIDGen& uidGen;
 
 	StringA lastConnectError;
 
@@ -609,5 +649,9 @@ natural CouchDB::listenChanges(natural fromSeq, natural filterFlags, ListenMode 
 
 
 } /* namespace assetex */
+
+template<typename C>
+inline void LightCouch::CouchDB::urlEncodeToStream(ConstStrA str, C& output) {
+}
 
 #endif /* ASSETEX_SRC_COUCHDB_H_BREDY_5205456032 */
