@@ -9,9 +9,11 @@
 #include "changeset.h"
 #include "couchDB.h"
 #include <lightspeed/base/containers/convertString.h>
+#include <lightspeed/base/containers/stack.tcc>
 #include <lightspeed/base/text/textFormat.tcc>
 #include <lightspeed/base/text/textOut.tcc>
 #include <lightspeed/mt/atomic.h>
+#include <lightspeed/utils/json/jsonparser.h>
 #include <lightspeed/utils/json/jsonserializer.tcc>
 #include <lightspeed/utils/urlencode.h>
 #include "lightspeed/base/streams/secureRandom.h"
@@ -36,6 +38,7 @@
 using LightSpeed::INetworkServices;
 using LightSpeed::JSON::serialize;
 using LightSpeed::lockInc;
+using LightSpeed::Stack;
 namespace LightCouch {
 
 CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
@@ -712,16 +715,195 @@ Value CouchDB::newDocument(ConstStrA prefix) {
 	return json("_id",genUID(prefix));
 }
 
-} /* namespace assetex */
+template<typename T>
+class DesignDocumentParse: public JSON::Parser<T> {
+public:
+	AutoArray<char> functionBuff;
 
-void CouchDB::uploadDesignDocument(ConstStrA name, Value content,
-		DesignDocUpdateRule updateRule) {
+	typedef JSON::Parser<T> Super;
+
+	DesignDocumentParse(IIterator<char, T> &iter, JSON::PFactory factory)
+		:Super(iter,factory) {}
+
+
+	virtual Value parseValue(char firstChar) {
+		while (isspace(firstChar)) {
+			firstChar = Super::iter.getNext();
+		}
+		if (firstChar != 'f') {
+			return Super::parseValue(firstChar);
+		}
+		Super::parseCheck("unction");
+		functionBuff.clear();
+		functionBuff.append(ConstStrA("function"));
+
+		AutoArray<char>::WriteIter wr = functionBuff.getWriteIterator();
+
+		Stack<char, SmallAlloc<256> > levelStack;
+		while(true) {
+			char c = Super::iter.getNext();
+			wr.write(c);
+			if (c == '(' || c == '[' || c == '{') {
+				levelStack.push(c);
+			} else if (c == ')' || c == ']' || c == '}') {
+				if (levelStack.empty() || levelStack.top() != c)
+					throw JSON::ParseError_t(THISLOCATION,ConstStrA(functionBuff));
+				levelStack.pop();
+				if (levelStack.empty() && c == '}') break;
+			} else if (c == '"') {
+				Super::parseRawString();
+				for (natural i = 0; i < Super::strBuff.length(); i++) {
+					JSON::Serializer<AutoArray<char>::WriteIter>::writeChar(Super::strBuff[i],wr);
+				}
+				wr.write(c);
+			}
+		}
+		return Super::factory->newValue(ConstStrA(functionBuff));
+	}
+
+
+};
+
+static const ConstStrA _designSlash("_design/");
+
+
+void CouchDB::uploadDesignDocument(ConstStrA name, ConstValue content, DesignDocUpdateRule updateRule) {
+
+
+	class DDResolver: public ConflictResolver {
+	public:
+		DDResolver(CouchDB &db, bool attachments, DesignDocUpdateRule rule):
+			ConflictResolver(db,attachments),rule(rule) {}
+
+		virtual ConstValue resolveConflict(Document &doc, const Path &path,
+				const ConstValue &leftValue, const ConstValue &rightValue) {
+
+			switch (rule) {
+				case ddurMergeSkip: return leftValue;
+				case ddurMergeOverwrite: return rightValue;
+				default: return ConflictResolver::resolveConflict(doc,path,left,right);
+			}
+		}
+
+	protected:
+		DesignDocUpdateRule rule;
+	};
+
+	if (name.head(8) != _designSlash) {
+		AutoArray<char, SmallAlloc<256> > newName;
+		newName.append(_designSlash);
+		newName.append(name);
+		return uploadDesignDocument(name,content,updateRule);
+	}
+
+	Changeset chset = createChangeset();
+
+	try {
+		Document curddoc = this->retrieveDocument(name,0);
+
+		///design document already exists, skip uploading
+		if (updateRule == ddurSkipExisting) return;
+
+		///no change in design document, skip uploading
+		if (!compareDesignDoc(curddoc, content)) return false;
+
+		if (updateRule == ddurCheck) {
+			UpdateException::ErrorItem errItem;
+			errItem.document = content;
+			errItem.errorDetails = json.object();
+			errItem.errorType = "conflict";
+			errItem.reason = "ddurCheck in effect, cannot update design document";
+			throw UpdateException(THISLOCATION,ConstStringT<UpdateException::ErrorItem>(&errItem,1));
+		}
+
+		if (updateRule == ddurOverwrite) {
+			curddoc.setRevision(json, content);
+			chset.update(curddoc);
+		} else {
+			DDResolver resolver(*this,true,updateRule);
+			Value v = resolver.merge3w(curddoc,content,json.object());
+			curddoc.setRev(v);
+			chset.update(curddoc);
+		}
+
+
+
+	} catch (HttpStatusException &e) {
+		if (e.getStatus() == 404) {
+			Document ddoc(content);
+			ddoc.edit(json);
+			ddoc.setID(json(name));
+			chset.update(ddoc);
+		} else {
+			throw;
+		}
+	}
+
+
+	try {
+		chset.commit(false);
+	} catch (UpdateException &e) {
+		if (e.getErrors()[0].errorType == "conflict") {
+			return uploadDesignDocument(name,content,updateRule);
+		}
+	}
+
+}
+
+template<typename T>
+JSON::Value parseDesignDocument(IIterator<char, T> &stream, JSON::PFactory factory) {
+	DesignDocumentParse<T> parser(stream, factory);
+	return parser.parse();
 }
 
 void CouchDB::uploadDesignDocument(ConstStrA name, ConstStrW pathname,
 		DesignDocUpdateRule updateRule) {
+
+	SeqFileInBuff<> infile(pathname,0);
+	SeqTextInA intextfile(infile);
+	uploadDesignDocument(name, parseDesignDocument(intextfile,json.factory), updateRule);
+
 }
 
 void CouchDB::uploadDesignDocument(ConstStrA name, const char* content,
 		natural contentLen, DesignDocUpdateRule updateRule) {
+
+	ConstStrA ctt(content, contentLen);
+	ConstStrA::Iterator iter = ctt.getFwIter();
+	uploadDesignDocument(name, parseDesignDocument(iter,json.factory), updateRule);
+
 }
+
+
+} /* namespace assetex */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

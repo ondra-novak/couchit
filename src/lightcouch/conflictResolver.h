@@ -72,7 +72,7 @@ protected:
 
 	///Performs merge of values
 	/**
-	 * @param doc top document
+	 * @param doc base document
 	 * @param path path to the value (key name)
 	 * @param oldValue current value in the top document. The variable is nil, if newValue is inserted
 	 * @param newValue new value. The variable is nil, if key is being erased

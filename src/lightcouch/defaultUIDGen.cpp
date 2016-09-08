@@ -23,7 +23,7 @@ DefaultUIDGen::DefaultUIDGen() {
 	int32_t seed;
 	secrand.blockRead(&seed, sizeof(seed),true);
 	secrand.blockRead(&counter,sizeof(counter),true);
-	rgn.setSeed(seed);
+	rgn = Rand(seed);
 	counter &= 0x7FFFFF;
 
 }
@@ -59,7 +59,7 @@ ConstStrA DefaultUIDGen::generateUID(AutoArray<char>& buffer, ConstStrA prefix,
 	return buffer;
 }
 
-static DefaultUIDGen &getInstance() {
+DefaultUIDGen &DefaultUIDGen::getInstance() {
 	return Singleton<DefaultUIDGen>::getInstance();
 }
 

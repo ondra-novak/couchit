@@ -118,7 +118,7 @@ static void couchConflicted(PrintTextA &print) {
 		}
 		chset.commit(db,false);
 		print("failed");
-	} catch (Changeset::UpdateException &e) {
+	} catch (UpdateException &e) {
 		print("%1") << e.getErrors().length();
 	}
 
@@ -321,7 +321,7 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	UID uid = db.getUID();
+	ConstStrA uid = db.genUID();
 	bool isok = false;
 
 	Thread thr;
@@ -360,7 +360,7 @@ static void couchChangeSetWaitForData3(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	UID uid = db.getUID();
+	ConstStrA uid = db.genUID();
 	bool isok = false;
 	int counter=0;
 

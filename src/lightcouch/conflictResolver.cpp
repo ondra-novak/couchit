@@ -125,7 +125,7 @@ Document ConflictResolver::resolve(const ConstStrA& docId) {
 }
 
 Value ConflictResolver::merge3w(const ConstValue& topdoc,const ConstValue& conflict, const ConstValue& base) {
-	Document doc(topdoc);
+	Document doc(base);
 	ConstValue mainDiff = makeDiffObject(doc,Path::root,base,doc);
 	ConstValue conflictDiff = makeDiffObject(doc,Path::root,base,conflict);
 	ConstValue mergedDiffs = mergeDiffs(doc,Path::root,mainDiff,conflictDiff);
@@ -227,44 +227,7 @@ JSON::ConstValue ConflictResolver::makeDiffObject(Document& doc, const Path& pat
 					diff.set(keyName, x);
 			}
 		});
-/*
-
-		JSON::ConstIterator o = oldValue->getFwConstIter();
-		JSON::ConstIterator n = newValue->getFwConstIter();
-
-		while (n.hasItems() && o.hasItems()) {
-			const JSON::ConstKeyValue &nkv = n.peek();
-			const JSON::ConstKeyValue &okv = o.peek();
-			ConstStrA nk = nkv.getStringKey();
-			ConstStrA ok = okv.getStringKey();
-			if (nk.head(1) == ConstStrA("_")) {
-				n.skip();
-			} else if (ok.head(1) == ConstStrA("_")) {
-				o.skip();
-			} else if (nk < ok) {
-				diff.set(nk, nkv);
-				n.skip();
-			} else if (nk > ok) {
-				diff.set(ok, deletedItem);
-				o.skip();
-			} else {
-				ConstValue x= diffValue(doc,Path(path,nk),okv,nkv);
-				if (x != nil)
-					diff.set(nk, x);
-				n.skip();
-				o.skip();
-			}
-		}
-		while (n.hasItems()) {
-			const JSON::ConstKeyValue &nkv = n.getNext();
-			diff.set(nkv.getStringKey(), nkv);
-		}
-		while (o.hasItems()) {
-			const JSON::ConstKeyValue &okv = o.getNext();
-			diff.set(okv.getStringKey(), deletedItem);
-		}
-*/
-		if (diff.empty()) return null;
+	if (diff.empty()) return null;
 		diff.set("_diff",deletedItem);
 		return diff;
 
@@ -292,52 +255,7 @@ Value ConflictResolver::patchObject(Document& doc, const Path& path, const Const
 		});
 
 
-/*		JSON::ConstIterator o = oldValue->getFwConstIter();
-		JSON::ConstIterator n = newValue->getFwConstIter();
 
-		while (n.hasItems() && o.hasItems()) {
-			const JSON::ConstKeyValue &nkv = n.peek();
-			const JSON::ConstKeyValue &okv = o.peek();
-
-
-
-			ConstStrA nk = nkv.getStringKey();
-			ConstStrA ok = okv.getStringKey();
-			if (nk.head(1) == ConstStrA("_")) {
-				n.skip();
-			} else if (ok.head(1) == ConstStrA("_")) {
-				o.skip();
-			} else if (nk < ok) {
-				if (nkv != deletedItem && !isObjectDiff(nkv)) {
-						res.set(nk, nkv->copy(db.json.factory));
-				}
-				n.skip();
-			} else if (nk > ok) {
-				res.set(ok, okv->copy(db.json.factory));
-				o.skip();
-			} else {
-				if (nkv != deletedItem) {
-					if (nkv->isObject())
-						res.set(nk,patchObject(doc,Path(path,nk),okv,nkv));
-					else {
-						res.set(nk, nkv->copy(db.json.factory));
-					}
-				}
-				n.skip();
-				o.skip();
-			}
-		}
-		while (n.hasItems()) {
-			const JSON::ConstKeyValue &nkv = n.getNext();
-			if (nkv != deletedItem && !isObjectDiff(nkv)) {
-				res.set(nkv.getStringKey(), nkv->copy(db.json.factory));
-			}
-		}
-		while ( o.hasItems()) {
-			const JSON::ConstKeyValue &okv = o.getNext();
-			res.set(okv.getStringKey(), okv->copy(db.json.factory));
-		}
-		*/
 		return res;
 	} else {
 		return newValue->copy(db.json.factory);

@@ -54,7 +54,7 @@ public:
 	virtual void map(const ConstValue &doc) override {
 		emit(json << doc["age"].getUInt()/10 * 10 << doc["age"],doc["height"]);
 	}
-	virtual ConstValue reduce(const ConstStringT<KeyAndDocId>  &, const ConstStringT<ConstValue> &values, bool rereduce) const {
+	virtual ConstValue reduce(const ConstStringT<KeyAndDocId>  &, const ConstStringT<ConstValue> &values, bool rereduce) const override {
 		if (rereduce) throwUnsupportedFeature(THISLOCATION,this,"rereduce not implemented");
 		natural sum = 0;
 		natural count = values.length();

@@ -25,7 +25,7 @@ static void genFastUUIDS(PrintTextA &print) {
 	CouchDB db(getTestCouch());
 
 	for (natural i = 0; i < 50; i++) {
-		StringA uuid = db.getUID();
+		StringA uuid = db.genUID();
 //		print("%1\n") << uuid;
 		uuidmap.insert(uuid);
 	}

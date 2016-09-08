@@ -538,7 +538,7 @@ public:
 	 * @param updateRule specifies rule how to handle existing design document
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	void uploadDesignDocument(ConstStrA name, Value content, DesignDocUpdateRule updateRule);
+	void uploadDesignDocument(ConstStrA name, ConstValue content, DesignDocUpdateRule updateRule);
 
 	///Uploads design document from the file
 	/**
@@ -649,9 +649,5 @@ natural CouchDB::listenChanges(natural fromSeq, natural filterFlags, ListenMode 
 
 
 } /* namespace assetex */
-
-template<typename C>
-inline void LightCouch::CouchDB::urlEncodeToStream(ConstStrA str, C& output) {
-}
 
 #endif /* ASSETEX_SRC_COUCHDB_H_BREDY_5205456032 */
