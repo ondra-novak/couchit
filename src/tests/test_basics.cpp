@@ -60,10 +60,11 @@ static const char *strdata="[[\"Kermit Byrd\",76,184],[\"Odette Hahn\",44,181],"
 
 static const char *designs[]={
 		"{\"_id\":\"_design/testview\",\"language\":\"javascript\",\"views\":{"
-		"\"by_name\":{\"map\":\"function (doc) {\n\t\t\t\t\temit([doc.name], [doc.age,doc.height]);\n\t\t\t\t}\"},"
-		"\"by_age\":{\"map\":\"function (doc) {\n\t\t\t\t\temit(doc.age, doc.name);\n\t\t\t\t}\"},"
-		"\"by_age_group\":{\"map\":\"function (doc) {\n\t\t\t\t\temit([Math.floor(doc.age/10)*10, doc.age], doc.name);\n\t\t\t\t}\"},"
-		"\"age_group_height\":{\"map\":\"function (doc) {\n\t\t\t\t\temit([Math.floor(doc.age/10)*10, doc.age], doc.height);\n\t\t\t\t}\",\"reduce\":\"_stats\"}}}"
+		"\"by_name\":{\"map\":function (doc) {emit([doc.name], [doc.age,doc.height]);}},"
+		"\"by_age\":{\"map\":function (doc) {emit(doc.age, doc.name);\n\t\t\t\t}},"
+		"\"by_age_group\":{\"map\":function (doc) {emit([Math.floor(doc.age/10)*10, doc.age], doc.name);}},"
+		"\"age_group_height\":{\"map\":function (doc) {emit([Math.floor(doc.age/10)*10, doc.age], doc.height);},\"reduce\":\"_stats\"}},"
+		"\"dummy\":false}"
 };
 
 static View by_name("_design/testview/_view/by_name");
@@ -81,6 +82,7 @@ static void couchLoadData(PrintTextA &print) {
 	AutoArray<Document, SmallAlloc<50> > savedDocs;
 
 	Changeset chset(db.createChangeset());
+	natural id=10000;
 	JSON::Value data = db.json.factory->fromString(strdata);
 	for (JSON::Iterator iter = data->getFwIter(); iter.hasItems();) {
 		const JSON::KeyValue &kv= iter.getNext();
@@ -88,11 +90,13 @@ static void couchLoadData(PrintTextA &print) {
 		doc.edit(db.json)
 				("name",kv[0])
 				("age",kv[1])
-				("height",kv[2]);
+				("height",kv[2])
+				("_id",ToString<natural>(id,16));
+		id+=14823;
 		savedDocs.add(doc);
 		chset.update(doc);
 	}
-	chset.commit(db);
+	chset.commit(false);
 	Set<StringA> uuidmap;
 
 	for (natural i = 0; i < savedDocs.length(); i++) {
@@ -110,16 +114,9 @@ static void couchConflicted(PrintTextA &print) {
 
 
 	try {
-		Changeset chset(db.createChangeset());
-		for (natural i = 0; i < countof(designs); i++) {
-
-			Document doc(db.json.factory->fromString(designs[i]));
-			chset.update(doc);
-		}
-		chset.commit(db,false);
-		print("failed");
+		couchLoadData(print);
 	} catch (UpdateException &e) {
-		print("%1") << e.getErrors().length();
+		print("conflicts-%1") << e.getErrors().length();
 	}
 
 }
@@ -129,12 +126,16 @@ static void couchLoadDesign(PrintTextA &) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	Changeset chset(db.createChangeset());
+
 	for (natural i = 0; i < countof(designs); i++) {
-		Document doc(db.json.factory->fromString(designs[i]));
-		chset.update(doc);
+		db.uploadDesignDocument(designs[i],strlen(designs[i]));
 	}
-	chset.commit(db);
+
+	//try twice
+	for (natural i = 0; i < countof(designs); i++) {
+		db.uploadDesignDocument(designs[i],strlen(designs[i]));
+	}
+
 }
 
 static void couchFindWildcard(PrintTextA &a) {
@@ -454,12 +455,12 @@ defineTest test_couchConnect("couchdb.connect","Welcome",&couchConnect);
 defineTest test_couchCreateDB("couchdb.createDB","",&rawCreateDB);
 defineTest test_couchLoadData("couchdb.loadData","12",&couchLoadData);
 defineTest test_couchLoadDesign("couchdb.loadDesign","",&couchLoadDesign);
-defineTest test_couchConflict("couchdb.detectConflict","1",&couchConflicted);
+defineTest test_couchConflict("couchdb.detectConflict","conflicts-12",&couchConflicted);
 defineTest test_couchFindWildcard("couchdb.findWildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ",&couchFindWildcard);
 defineTest test_couchFindGroup("couchdb.findGroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ",&couchFindGroup);
 defineTest test_couchFindRange("couchdb.findRange","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRange);
 defineTest test_couchFindKeys("couchdb.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&couchFindKeys);
-defineTest test_couchRetrieveDocument("couchdb.retrieveDoc","{\"_local_seq\":1,\"age\":76,\"height\":184,\"name\":\"Kermit Byrd\"}",&couchRetrieveDocument);
+defineTest test_couchRetrieveDocument("couchdb.retrieveDoc","{\"_local_seq\":8,\"age\":76,\"height\":184,\"name\":\"Kermit Byrd\"}",&couchRetrieveDocument);
 defineTest test_couchCaching("couchdb.caching","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,100,100 Owen Dillard,100,100 Nicole Jordan,100,100 ",&couchCaching);
 defineTest test_couchReduce("couchdb.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce);
 defineTest test_couchCaching2("couchdb.caching2","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,76,184 Nicole Jordan,75,150 ",&couchCaching2);

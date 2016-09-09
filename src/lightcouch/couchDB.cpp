@@ -31,6 +31,7 @@
 
 #include "lightspeed/base/exceptions/netExceptions.h"
 
+#include "conflictResolver.h"
 #include "defaultUIDGen.h"
 #include "queryCache.h"
 
@@ -131,20 +132,34 @@ JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natura
 
 	Synchronized<FastLock> _(lock);
 	http.open(HttpClient::mGET, requestUrl);
-	http.setHeader(HttpClient::fldAccept,"application/json");
-	if (cachedItem != nil) {
-		http.setHeader(HttpClient::fldIfNoneMatch, cachedItem->etag);
-	}
-	if (headers!= null) headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
-		this->http.setHeader(key,nd->getStringUtf8());
-		return false;
-	}));
+	bool redirectRetry = false;
+	SeqFileInput response(NULL);
+    do {
+    	redirectRetry = false;
+		http.setHeader(HttpClient::fldAccept,"application/json");
+		if (cachedItem != nil) {
+			http.setHeader(HttpClient::fldIfNoneMatch, cachedItem->etag);
+		}
+		if (headers!= null) headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
+			this->http.setHeader(key,nd->getStringUtf8());
+			return false;
+		}));
 
-	SeqFileInput response = http.send();
-	if (http.getStatus() == 304 && cachedItem != null) {
-		http.close();
-		return cachedItem->value;
-	}
+		response = http.send();
+		if (http.getStatus() == 304 && cachedItem != null) {
+			http.close();
+			return cachedItem->value;
+		}
+		if (http.getStatus() == 301 || http.getStatus() == 302 || http.getStatus() == 303 || http.getStatus() == 307) {
+			HttpClient::HeaderValue val = http.getHeader(http.fldLocation);
+			if (!val.defined) throw RequestError(THISLOCATION,requestUrl,http.getStatus(),http.getStatusMessage(), factory->newValue("Redirect without Location"));
+			http.close();
+			http.open(HttpClient::mGET, val);
+			redirectRetry = true;
+		}
+    }
+	while (redirectRetry);
+
 	if (http.getStatus()/100 != 2) {
 
 		JSON::Value errorVal;
@@ -726,48 +741,63 @@ public:
 		:Super(iter,factory) {}
 
 
-	virtual Value parseValue(char firstChar) {
-		while (isspace(firstChar)) {
-			firstChar = Super::iter.getNext();
+	virtual Value parse() {
+		const char *functionkw = "function";
+		char x = Super::iter.peek();
+		while (isspace(x)) {
+			Super::iter.skip();
+			x = Super::iter.peek();
 		}
-		if (firstChar != 'f') {
-			return Super::parseValue(firstChar);
-		}
-		Super::parseCheck("unction");
-		functionBuff.clear();
-		functionBuff.append(ConstStrA("function"));
+		if (x == 'f') {
+			Super::iter.skip();
+			x = Super::iter.getNext();
+			if (x == 'a') {
+				Super::parseCheck(JSON::strFalse+2);
+				return JSON::getConstant(JSON::constFalse);
+			} else if (x == 'u') {
+				Super::parseCheck(functionkw+2);
+				functionBuff.clear();
+				functionBuff.append(ConstStrA(functionkw));
 
-		AutoArray<char>::WriteIter wr = functionBuff.getWriteIterator();
+				AutoArray<char>::WriteIter wr = functionBuff.getWriteIterator();
 
-		Stack<char, SmallAlloc<256> > levelStack;
-		while(true) {
-			char c = Super::iter.getNext();
-			wr.write(c);
-			if (c == '(' || c == '[' || c == '{') {
-				levelStack.push(c);
-			} else if (c == ')' || c == ']' || c == '}') {
-				if (levelStack.empty() || levelStack.top() != c)
-					throw JSON::ParseError_t(THISLOCATION,ConstStrA(functionBuff));
-				levelStack.pop();
-				if (levelStack.empty() && c == '}') break;
-			} else if (c == '"') {
-				Super::parseRawString();
-				for (natural i = 0; i < Super::strBuff.length(); i++) {
-					JSON::Serializer<AutoArray<char>::WriteIter>::writeChar(Super::strBuff[i],wr);
+				Stack<char, SmallAlloc<256> > levelStack;
+				while(true) {
+					char c = Super::iter.getNext();
+					wr.write(c);
+					if (c == '(' || c == '[' || c == '{') {
+						levelStack.push(c);
+					} else if (c == ')' || c == ']' || c == '}') {
+						if (levelStack.empty() ||
+								(c == ')' && levelStack.top() != '(') ||
+								(c == '}' && levelStack.top() != '{') ||
+								(c == ']' && levelStack.top() != '['))
+							throw JSON::ParseError_t(THISLOCATION,ConstStrA(functionBuff));
+						levelStack.pop();
+						if (levelStack.empty() && c == '}') break;
+					} else if (c == '"') {
+						Super::parseRawString();
+						for (natural i = 0; i < Super::strBuff.length(); i++) {
+							JSON::Serializer<AutoArray<char>::WriteIter>::writeChar(Super::strBuff[i],wr);
+						}
+						wr.write(c);
+					}
 				}
-				wr.write(c);
+				return Super::factory->newValue(ConstStrA(functionBuff));
+			} else {
+				throw JSON::ParseError_t(THISLOCATION,"expected 'false' or 'function' ");
 			}
+		} else {
+			return Super::parse();
 		}
-		return Super::factory->newValue(ConstStrA(functionBuff));
 	}
-
-
 };
 
 static const ConstStrA _designSlash("_design/");
 
 
-void CouchDB::uploadDesignDocument(ConstStrA name, ConstValue content, DesignDocUpdateRule updateRule) {
+
+void CouchDB::uploadDesignDocument(ConstValue content, DesignDocUpdateRule updateRule, ConstStrA name) {
 
 
 	class DDResolver: public ConflictResolver {
@@ -781,31 +811,41 @@ void CouchDB::uploadDesignDocument(ConstStrA name, ConstValue content, DesignDoc
 			switch (rule) {
 				case ddurMergeSkip: return leftValue;
 				case ddurMergeOverwrite: return rightValue;
-				default: return ConflictResolver::resolveConflict(doc,path,left,right);
+				default: return ConflictResolver::resolveConflict(doc,path,leftValue,rightValue);
 			}
+		}
+		virtual bool isEqual(const ConstValue &leftValue, const ConstValue &rightValue) {
+			Document doc(leftValue);
+			ConstValue res = ConflictResolver::makeDiffObject(doc,Path::root, leftValue, rightValue);
+			return res == null;
+
 		}
 
 	protected:
 		DesignDocUpdateRule rule;
 	};
 
-	if (name.head(8) != _designSlash) {
+	if (name.empty()) {
+		name = content["_id"].getStringA();
+	} else if (name.head(8) != _designSlash) {
 		AutoArray<char, SmallAlloc<256> > newName;
 		newName.append(_designSlash);
 		newName.append(name);
-		return uploadDesignDocument(name,content,updateRule);
+		return uploadDesignDocument(content,updateRule,name);
 	}
 
 	Changeset chset = createChangeset();
 
 	try {
+		DDResolver resolver(*this,true,updateRule);
+
 		Document curddoc = this->retrieveDocument(name,0);
 
 		///design document already exists, skip uploading
 		if (updateRule == ddurSkipExisting) return;
 
 		///no change in design document, skip uploading
-		if (!compareDesignDoc(curddoc, content)) return false;
+		if (resolver.isEqual(curddoc, content)) return;
 
 		if (updateRule == ddurCheck) {
 			UpdateException::ErrorItem errItem;
@@ -817,10 +857,9 @@ void CouchDB::uploadDesignDocument(ConstStrA name, ConstValue content, DesignDoc
 		}
 
 		if (updateRule == ddurOverwrite) {
-			curddoc.setRevision(json, content);
+			curddoc.setContent(json, content,1);
 			chset.update(curddoc);
 		} else {
-			DDResolver resolver(*this,true,updateRule);
 			Value v = resolver.merge3w(curddoc,content,json.object());
 			curddoc.setRev(v);
 			chset.update(curddoc);
@@ -844,7 +883,7 @@ void CouchDB::uploadDesignDocument(ConstStrA name, ConstValue content, DesignDoc
 		chset.commit(false);
 	} catch (UpdateException &e) {
 		if (e.getErrors()[0].errorType == "conflict") {
-			return uploadDesignDocument(name,content,updateRule);
+			return uploadDesignDocument(content,updateRule,name);
 		}
 	}
 
@@ -856,21 +895,20 @@ JSON::Value parseDesignDocument(IIterator<char, T> &stream, JSON::PFactory facto
 	return parser.parse();
 }
 
-void CouchDB::uploadDesignDocument(ConstStrA name, ConstStrW pathname,
-		DesignDocUpdateRule updateRule) {
+void CouchDB::uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule, ConstStrA name) {
 
 	SeqFileInBuff<> infile(pathname,0);
 	SeqTextInA intextfile(infile);
-	uploadDesignDocument(name, parseDesignDocument(intextfile,json.factory), updateRule);
+	uploadDesignDocument(parseDesignDocument(intextfile,json.factory), updateRule, name);
 
 }
 
-void CouchDB::uploadDesignDocument(ConstStrA name, const char* content,
-		natural contentLen, DesignDocUpdateRule updateRule) {
+void CouchDB::uploadDesignDocument(const char* content,
+		natural contentLen, DesignDocUpdateRule updateRule, ConstStrA name) {
 
 	ConstStrA ctt(content, contentLen);
 	ConstStrA::Iterator iter = ctt.getFwIter();
-	uploadDesignDocument(name, parseDesignDocument(iter,json.factory), updateRule);
+	uploadDesignDocument(parseDesignDocument(iter,json.factory), updateRule, name);
 
 }
 

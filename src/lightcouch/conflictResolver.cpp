@@ -105,15 +105,15 @@ Document ConflictResolver::resolve(const ConstStrA& docId) {
 				const ConstValue *b = openedRevs.find(baseRevStr);
 				if (b) {
 					Value merged = merge3w(headRev, *r,*b);
-					if (merged != null) headRev.setRevision(merged);
+					if (merged != null) headRev.setContent(merged);
 
 				} else {
 					Value merged = merge2w(headRev,*r);
-					if (merged != null) headRev.setRevision(merged);
+					if (merged != null) headRev.setContent(merged);
 				}
 			} else {
 				Value merged = merge2w(headRev,*r);
-				if (merged != null) headRev.setRevision(merged);
+				if (merged != null) headRev.setContent(merged);
 			}
 		}
 		return false;
@@ -126,7 +126,7 @@ Document ConflictResolver::resolve(const ConstStrA& docId) {
 
 Value ConflictResolver::merge3w(const ConstValue& topdoc,const ConstValue& conflict, const ConstValue& base) {
 	Document doc(base);
-	ConstValue mainDiff = makeDiffObject(doc,Path::root,base,doc);
+	ConstValue mainDiff = makeDiffObject(doc,Path::root,base,topdoc);
 	ConstValue conflictDiff = makeDiffObject(doc,Path::root,base,conflict);
 	ConstValue mergedDiffs = mergeDiffs(doc,Path::root,mainDiff,conflictDiff);
 	Value mergedDoc = patchObject(doc,Path::root,base,mergedDiffs);
@@ -134,7 +134,7 @@ Value ConflictResolver::merge3w(const ConstValue& topdoc,const ConstValue& confl
 	if (v != null) {
 		Validator::Result res = v->validateDoc(mergedDoc);
 		if (!res) {
-			return merge2w(doc,conflict);
+			return merge2w(topdoc,conflict);
 		}
 	}
 	return mergedDoc;
@@ -234,6 +234,9 @@ JSON::ConstValue ConflictResolver::makeDiffObject(Document& doc, const Path& pat
 }
 
 Value ConflictResolver::patchObject(Document& doc, const Path& path, const ConstValue& oldValue, const ConstValue& newValue) {
+	if (newValue == null) {
+		return oldValue->copy(db.json.factory,1);
+	}
 	if (isObjectDiff(newValue)) {
 		Value res = db.json.object();
 
@@ -258,7 +261,7 @@ Value ConflictResolver::patchObject(Document& doc, const Path& path, const Const
 
 		return res;
 	} else {
-		return newValue->copy(db.json.factory);
+		return newValue->copy(db.json.factory,1);
 	}
 
 }
@@ -283,7 +286,13 @@ ConstValue ConflictResolver::resolveConflict(Document& doc, const Path& path ,co
 Container ConflictResolver::mergeDiffs(Document& doc, const Path& path, const ConstValue& leftValue, const ConstValue& rightValue) {
 	Container res = db.json.object();
 
-	mergeTwoObjects(leftValue,rightValue,[&](const ConstStrA keyName, const ConstValue &lkv, const ConstValue &rkv) {
+	if (leftValue == null) {
+		if (rightValue == null) return null;
+		res.load(rightValue);
+	} else if (rightValue == null) {
+		res.load(leftValue);
+	} else {
+		mergeTwoObjects(leftValue,rightValue,[&](const ConstStrA keyName, const ConstValue &lkv, const ConstValue &rkv) {
 
 			if (lkv == null) {
 				//add it to result
@@ -337,6 +346,7 @@ Container ConflictResolver::mergeDiffs(Document& doc, const Path& path, const Co
 				}
 			}
 		});
+	}
 	return res;
 }
 

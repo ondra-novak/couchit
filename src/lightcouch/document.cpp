@@ -61,8 +61,8 @@ void Document::resolveConflicts() {
 	conflictsToDelete = base["_conflicts"];
 }
 
-void Document::setRevision(const Json& json, const ConstValue& v) {
-	editing = v->copy(json.factory);
+void Document::setContent(const Json& json, const ConstValue& v,natural depth) {
+	editing = v->copy(json.factory,depth);
 	ConstValue::operator = (editing);
 	cleanup();
 }
@@ -112,7 +112,7 @@ void Document::setDeleted(const Json& json, ConstStringT<ConstStrA> fieldsToKept
 		Value oldV = editing[fld];
 		if (oldV != null) delDoc.set(fld,oldV);
 	}
-	setRevision(delDoc);
+	setContent(delDoc);
 	delDoc.set("_deleted",json(true));
 	enableTimestamp();
 }

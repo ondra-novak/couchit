@@ -62,6 +62,8 @@ public:
 
 	static DefaultUIDGen &getInstance();
 
+	virtual StringA operator()(ConstStrA prefix);
+
 protected:
 	natural counter;
 	Rand rgn;

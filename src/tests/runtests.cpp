@@ -1,7 +1,10 @@
 #include "lightspeed/base/framework/app.h"
 #include "lightspeed/base/framework/testapp.h"
 #include "lightspeed/base/streams/standardIO.tcc"
-namespace LightSpeedTest {
+
+namespace LightCouch {
+
+	void runQueryServer();
 
 	using namespace LightSpeed;
 
@@ -27,6 +30,10 @@ namespace LightSpeedTest {
 			if (itm == L"list") {
 				StringA lst = collector.listTests();
 				console.print("%1") << lst;
+				console.print("\nQueryServer backend: queryserver");
+
+			} else if (itm == L"queryserver") {
+				runQueryServer();
 			}
 			else {
 				SeqFileOutBuff<> out(StdOutput().getStream());

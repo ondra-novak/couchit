@@ -7,7 +7,7 @@
 
 #include "../lightcouch/document.h"
 #include "../lightcouch/localView.h"
-#include "../lightcouch/uid.h"
+#include "../lightcouch/defaultUIDGen.h"
 #include "lightspeed/base/framework/testapp.h"
 
 #include "test_common.h"
@@ -67,6 +67,8 @@ public:
 
 static void loadData(LocalView &view) {
 
+	DefaultUIDGen &gen = DefaultUIDGen::getInstance();
+	AutoArray<char> buffer;
 
 	AutoArray<Document, SmallAlloc<50> > savedDocs;
 
@@ -78,7 +80,7 @@ static void loadData(LocalView &view) {
 				("name",kv[0])
 				("age",kv[1])
 				("height",kv[2])
-				("_id",UID(".local",".doc"));
+				("_id",gen(buffer,""));
 
 		view.updateDoc(doc);
 	}

@@ -41,13 +41,13 @@ void QueryServer::Error::message(ExceptionMsg& msg) const {
 	msg("QueryServer error: %1 - %2") << type << explain;
 }
 integer QueryServerApp::start(const Args& args) {
-	return QueryServer::start(args);
-}
-
-integer QueryServer::start(const LightSpeed::App::Args& args) {
-
 	integer init = initServer(args);
 	if (init) return init;
+	return QueryServer::runDispatchStdIO();
+}
+
+integer QueryServer::runDispatchStdIO() {
+
 
 
 	IFileIOServices &svc = IFileIOServices::getIOServices();
@@ -151,14 +151,12 @@ ConstValue QueryServer::commandAddLib(const ConstValue& ) {
 }
 
 ConstValue QueryServer::commandAddFun(const ConstValue& req) {
-	ConstStrA name, args;
-	splitToNameAndArgs(req[1].getStringA(), name, args);
-
-	natural versep = args.find('@');
+	ConstStrA name = req[1].getStringA();
+	natural versep = name.find('@');
 	if (versep == naturalNull)
-		throw Error(THISLOCATION,"no_version_defined", "View definition must contain version marker @version (as last argument of commandline)");
-	ConstStrA ver = args.offset(versep+1);
-	args = args.head(versep);
+		throw Error(THISLOCATION,"no_version_defined", "View definition must contain version marker @version");
+	ConstStrA ver = name.offset(versep+1);
+	name = name.head(versep);
 	natural verid;
 	if (!parseUnsignedNumber(ver.getFwIter(), verid,10))
 		throw Error(THISLOCATION,"invald version", "Version must be number");
@@ -170,7 +168,7 @@ ConstValue QueryServer::commandAddFun(const ConstValue& req) {
 	}
 	if ((*fn)->getVersion() != verid)
 		throw VersionMistmatch(THISLOCATION);
-	preparedMaps.add(PreparedMap(*(*fn),args));
+	preparedMaps.add(PreparedMap(*(*fn)));
 	return trueVal;
 }
 
@@ -198,7 +196,7 @@ ConstValue QueryServer::commandMapDoc(const ConstValue& req) {
 	for (natural i = 0; i < preparedMaps.length(); i++) {
 		Container subres = json.array();
 		Emit emit(subres,json);
-		preparedMaps[i].fn(doc,emit,preparedMaps[i].args);
+		preparedMaps[i].fn(doc,emit);
 		result.add(subres);
 	}
 
@@ -219,7 +217,7 @@ ConstValue QueryServer::commandReduceGen(const ConstValue& req, RegReduceFn &reg
 			throw Error(THISLOCATION,"not_found",StringA(ConstStrA("Reduce Function '")+name+ConstStrA("' not found")));
 		}
 		IReduceFn &reduce = *(*fn);
-		output.add(reduce(values, args));
+		output.add(reduce(values));
 	}
 	return json << true << output;
 }
@@ -350,12 +348,8 @@ ConstValue QueryServer::commandDDoc(const ConstValue& req, const PInOutStream& s
 
 ConstValue QueryServer::commandShow(const ConstValue& fn, const ConstValue& args) {
 	IShowFunction &showFn = fn->getIfc<FnCallValue<IShowFunction> >().getFunction();
-	Context ctx;
-	ctx.args = fn.getStringA();
-	ctx.request = args[1];
-	ctx.response = json.object();
-	showFn(Document(args[0]), ctx);
-	return json << "resp" << ctx.response;
+	ConstValue resp = showFn(Document(args[0]), args[1]);
+	return json << "resp" << resp;
 }
 
 ConstValue QueryServer::commandList(const ConstValue& fn, const ConstValue& args, const PInOutStream& stream) {
@@ -365,9 +359,9 @@ ConstValue QueryServer::commandList(const ConstValue& fn, const ConstValue& args
 		SeqFileInput requests;
 		SeqFileOutput responses;
 		Json &json;
-		ListCtx(const PInOutStream &stream, Json &json, ConstValue headerObj, ConstValue viewHeader)
+		ListCtx(const PInOutStream &stream, Json &json, ConstValue viewHeader)
 			: requests(PInOutStream(stream)), responses(PInOutStream(stream)), json(json)
-			,headerObj(headerObj)
+			,headerObj(json.object())
 			,viewHeader(viewHeader)
 			,eof(false) {
 			chunks = json.array();
@@ -411,19 +405,15 @@ ConstValue QueryServer::commandList(const ConstValue& fn, const ConstValue& args
 
 	protected:
 		Container chunks;
-		ConstValue headerObj;
+		Container headerObj;
 		ConstValue viewHeader;
 		bool eof;
 	};
 
 	IListFunction &listFn = fn->getIfc<FnCallValue<IListFunction> >().getFunction();
 
-	Context ctx;
-	ctx.args = fn.getStringA();
-	ctx.request = args[1];
-	ctx.response = json.object();
-	ListCtx listCtx(stream,json,ctx.response,args[0]);
-	listFn(listCtx,ctx);
+	ListCtx listCtx(stream,json,args[0]);
+	listFn(listCtx,args[1]);
 	return listCtx.finish();
 
 
@@ -436,7 +426,7 @@ ConstValue QueryServer::commandUpdate(const ConstValue& fn, const ConstValue& ar
 	ctx.request = args[1];
 	ctx.response = json.object();
 	Document doc(args[0]);
-	updateFn(doc, ctx);
+	updateFn(doc, args[1]);
 	if (doc.dirty()) {
 		return json << "up" << doc.getEditing() << ctx.response;
 	} else {
@@ -460,10 +450,9 @@ ConstValue QueryServer::commandView(const ConstValue& fn,
 
 	ConstValue docs= args[0];
 	Json::Array results = json.array();
-	ConstStrA fnargs = fn.getStringA();
 	docs->enumEntries(JSON::IEntryEnum::lambda([&](const JSON::INode *doc, ConstStrA, natural){
 		FakeEmit emit;
-		mapDocFn(Document(doc), emit, fnargs);
+		mapDocFn(Document(doc), emit);
 		results << emit.result;
 		return false;
 	}));
@@ -476,11 +465,9 @@ ConstValue QueryServer::commandFilter(const ConstValue& fn, const ConstValue& ar
 
 	ConstValue docs= args[0];
 	Context ctx;
-	ctx.args = fn.getStringA();;
-	ctx.request = args[1];
 	Json::Array results = json.array();
 	docs->enumEntries(JSON::IEntryEnum::lambda([&](const JSON::INode *doc, ConstStrA, natural){
-		results << filterFn(Document(doc), ctx);
+		results << filterFn(Document(doc), args[1]);
 		return false;
 	}));
 
@@ -502,7 +489,7 @@ Value QueryServer::createDesignDocument(Value container, ConstStrA fnName, Const
 
 
 	Value doc = container[docName];
-	if (docName == null) {
+	if (doc == null) {
 		doc = json("_id",StringA(ConstStrA("_design/")+docName))
 				("language", qserverName);
 
@@ -522,7 +509,7 @@ ConstValue QueryServer::generateDesignDocuments() {
 		ConstStrA itemName;
 		Json::Object ddoc = json.object(createDesignDocument(ddocs,kv.key, itemName));
 		Json::Object view = (ddoc/"views"/itemName);
-		view("map",kv.key);
+		view("map",StringA(ConstStrA(kv.key)+ConstStrA("@")+ToString<natural>(kv.value->getVersion())));
 		if (hasReduce) {
 			view("reduce",kv.key);
 		}
@@ -559,11 +546,7 @@ ConstValue QueryServer::generateDesignDocuments() {
 	Container output = json.array();
 	ddocs->forEach([&](const JSON::INode *doc, ConstStrA, natural) {
 
-		HashMD5<char> hash;
-		JSON::serialize(doc,hash,false);
 		Json::CObject finDoc = json.object(ConstValue(doc));
-		hash.finish();
-		finDoc("hash", hash.hexdigest());
 		output.add(finDoc);
 		return false;
 
@@ -574,31 +557,16 @@ ConstValue QueryServer::generateDesignDocuments() {
 }
 
 
-void QueryServer::syncDesignDocuments(ConstValue designDocuments, CouchDB& couch) {
+void QueryServer::syncDesignDocuments(ConstValue designDocuments, CouchDB& couch, CouchDB::DesignDocUpdateRule updateRule) {
 
 	Changeset chset = couch.createChangeset();
 
 	designDocuments->forEach([&](ConstValue doc, ConstStrA, natural) {
-
-		try {
-			Document curDoc = couch.retrieveDocument(doc["_id"].getStringA());
-			if (curDoc["hash"] != doc["hash"]) {
-				curDoc.setRevision(chset.json, doc);
-				chset.update(curDoc);
-			}
-		} catch (HttpStatusException &e) {
-			if (e.getStatus() == 404) {
-				Document newdoc;
-				newdoc.setRevision(chset.json,doc);
-				chset.update(newdoc);
-			} else {
-				throw;
-			}
-		}
+		couch.uploadDesignDocument(doc,updateRule);
 		return false;
 	});
 
-	chset.commit();
+
 
 }
 

@@ -95,21 +95,29 @@ public:
 
 
 
-	///Sets complete revision from value
+	///Sets complete revision content from a value
 	/**
-	 * @param v new document replaces old one. However, you cannot change _id and _revision (which are
-	 * restored from base revision)
+	 * @param v content of new document which replaces old document. The value must be
+	 *  JSON object. The keys _id and _rev are replaced by values from the document.
+	 *  You can use this function to set new content to current document while its _id and _rev
+	 *  persists
 	 */
-	void setRevision(const Value &v) {editing = v;ConstValue::operator=(v);cleanup();}
+	void setContent(const Value &v) {editing = v;ConstValue::operator=(v);cleanup();}
 
-	///Sets revision from another const document, it creates copy
+	///Sets complete revision content from a value
 	/**
-	 *
-	 * @param json JSON factory that provides new value creation
-	 * @param v new revision - it will replace current editing revision
+	 * @param json reference to JSON factory
+	 * @param v content of new document which replaces old document. The value must be
+	 *  JSON object. The keys _id and _rev are replaced by values from the document.
+	 *  You can use this function to set new content to current document while its _id and _rev
+	 *  persists
+	 * @param depth specifies depth of copying. The content must be copied, because the
+	 * keys _id and _rev must be replaced. You can specify depth how deep the object will be
+	 * copied. Specify 1 to copy only first level, which is always necessary. Note that limiting
+	 * depth can break const protection.
 	 *
 	 */
-	void setRevision(const Json &json, const ConstValue &v);
+	void setContent(const Json &json, const ConstValue &v, natural depth = naturalNull);
 
 	///Sets document deleted
 	/** Document marked as deleted updated through Changeset object will be deleted. You

@@ -63,4 +63,10 @@ DefaultUIDGen &DefaultUIDGen::getInstance() {
 	return Singleton<DefaultUIDGen>::getInstance();
 }
 
+StringA DefaultUIDGen::operator()(ConstStrA prefix) {
+	AutoArray<char> buffer;
+	return this->operator ()(buffer,prefix);
+}
+
 } /* namespace LightCouch */
+
