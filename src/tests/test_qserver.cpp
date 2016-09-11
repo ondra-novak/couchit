@@ -33,26 +33,75 @@ using namespace BredyHttpClient;
 
 
 static void prepareQueryServer(QueryServer &qserver) {
-	Json &json = qserver.json;
-	qserver.regMapFn("testview/by_name", 1, [&](const Document &doc,  QueryServer::IEmitFn &emit) {
-		emit( (json,doc["name"]), (json,doc["age"],doc["height"]));
-	});
-	qserver.regMapFn("testview/by_age", 1, [&](const Document &doc,  QueryServer::IEmitFn &emit) {
+
+	class ByName: public AbstractViewMapOnly<1> {
+		virtual void map(const Document &doc, IEmitFn &emit) override {
+			emit( (json << doc["name"]), (json << doc["age"],doc["height"]));
+		}
+	};
+	qserver.regView("testview/by_name", new ByName);
+
+	class ByAge: public AbstractViewMapOnly<1> {
+		virtual void map(const Document &doc, IEmitFn &emit) override {
 			emit(doc["age"], doc["name"]);
-	});
-	qserver.regMapFn("testview/by_age_group", 1, [&](const Document &doc,  QueryServer::IEmitFn &emit) {
-		emit( (json, doc["age"].getUInt()/10, doc["age"]), doc["name"]);
-	});
-	qserver.regMapReduceFn("testview/age_group_height", 1,
-			[&](const Document &doc,  QueryServer::IEmitFn &emit) {
-					emit( (json,doc["age"].getUInt()/10,doc["age"]), doc["height"]);
-			},
-			[&](const ConstValue &kvlist) {
-				return json(kvlist.length());
-			},
-			[&](const ConstValue &values) {
-				return json(values.length());
-	});
+		}
+	};
+
+	qserver.regView("testview/by_age", new ByAge);
+
+	class ByAgeGroup: public AbstractViewMapOnly<1> {
+		virtual void map(const Document &doc, IEmitFn &emit) override {
+			emit( (json, doc["age"].getUInt()/10*10, doc["age"]), doc["name"]);
+		}
+	};
+	qserver.regView("testview/by_age_group", new ByAgeGroup);
+
+	class ByGroupHeight: public AbstractView<2> {
+		virtual void map(const Document &doc, IEmitFn &emit) override {
+			emit( (json,doc["age"].getUInt()/10*10,doc["age"]), doc["height"]);
+		}
+		virtual ConstValue reduce(const Rows &rows) override {
+			natural sum = 0;
+			for (natural i = 0; i < rows.length(); i++) {
+				sum+=rows[i].value.getUInt();
+			}
+			return json("sum",sum)("count",rows.length());
+		}
+		virtual ConstValue rereduce(const ReducedRows &rows) override {
+			natural count = 0;
+			natural sum = 0;
+			for (natural i = 0; i < rows.length(); i++) {
+				sum+=rows[i].value["sum"].getUInt();
+				count+=rows[i].value["count"].getUInt();
+			}
+			return json("sum",sum)("count",rows.length());
+		}
+	};
+	qserver.regView("testview/age_group_height", new ByGroupHeight);
+
+	class ByGroupHeight2: public AbstractViewBuildin<2, AbstractViewBase::rmStats> {
+		virtual void map(const Document &doc, IEmitFn &emit) override {
+			emit( (json,doc["age"].getUInt()/10*10,doc["age"]), doc["height"]);
+		}
+	};
+	qserver.regView("testview/age_group_height2", new ByGroupHeight2);
+
+	class TestList: public AbstractList<1> {
+		virtual void run(IListContext &list, ConstValue ) {
+			list.start(json("headers",json("Content-Type","application/json")));
+			ConstValue row;
+			list.send("{\"blabla\":\"ahoj\",\"rows\":[");
+			bool second = false;
+			while ((row = list.getRow()) != null) {
+				if (second) list.send(",");
+				list.send(row);
+				second = true;
+			}
+			list.send("]}");
+		}
+
+	};
+	qserver.regList("testview/rowcopy", new TestList);
 }
 
 
@@ -91,7 +140,9 @@ static View by_name("_design/testview/_view/by_name");
 static View by_name_cacheable("_design/testview/_view/by_name", View::forceGETMethod|View::includeDocs);
 static View by_age_group("_design/testview/_view/by_age_group");
 static View by_age("_design/testview/_view/by_age");
+static View by_age_list("_design/testview/_list/rowcopy/by_age");
 static View age_group_height("_design/testview/_view/age_group_height");
+static View age_group_height2("_design/testview/_view/age_group_height2");
 
 
 static void couchLoadData(PrintTextA &print) {
@@ -170,6 +221,19 @@ static void couchFindRange(PrintTextA &a) {
 	}
 }
 
+static void couchFindRangeList(PrintTextA &a) {
+
+	CouchDB db(getTestCouch());
+	db.use(DATABASENAME);
+
+	Query q(db.createQuery(by_age_list));
+	Result res = q.from(20).to(40).reverseOrder().exec();
+	while (res.hasItems()) {
+		Row row = res.getNext();
+		a("%1 ") << row.value->getStringUtf8();
+	}
+}
+
 static void couchFindKeys(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
@@ -203,15 +267,32 @@ static void couchReduce(PrintTextA &a) {
 	}
 }
 
+static void couchReduce2(PrintTextA &a) {
+
+	CouchDB db(getTestCouch());
+	db.use(DATABASENAME);
+
+	Query q(db.createQuery(age_group_height2));
+	Result res = q.group(1).exec();
+
+	while (res.hasItems()) {
+		Row row = res.getNext();
+		a("%1:%2 ") << row.key[0]->getUInt()
+				<<(row.value["sum"]->getUInt()/row.value["count"]->getUInt());
+	}
+}
+
 
 
 defineTest qtest_couchCreateDB("couchdb.qserver.createDB","",&rawCreateDB);
 defineTest qtest_couchLoadData("couchdb.qserver.loadData","12",&couchLoadData);
+defineTest qtest_couchFindKeys("couchdb.qserver.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&couchFindKeys);
 defineTest qtest_couchFindWildcard("couchdb.qserver.findWildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ",&couchFindWildcard);
 defineTest qtest_couchFindGroup("couchdb.qserver.findGroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ",&couchFindGroup);
 defineTest qtest_couchFindRange("couchdb.qserver.findRange","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRange);
-defineTest qtest_couchFindKeys("couchdb.qserver.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&couchFindKeys);
+defineTest qtest_couchFindRangeList("couchdb.qserver.findRangeList","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRangeList);
 defineTest qtest_couchReduce("couchdb.qserver.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce);
+defineTest qtest_couchReduce2("couchdb.qserver.reduce2","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce2);
 defineTest qtest_couchDeleteDB("couchdb.qserver.deleteDB","",&deleteDB);
 }
 

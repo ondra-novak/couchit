@@ -104,6 +104,10 @@ public:
 	static const natural flgConflicts = 0x200;
 	///Retrieve all deleted conflicts
 	static const natural flgDeletedConflicts = 0x400;
+
+	static const natural flgTryAgainCounterMask = 0xF800;
+	static const natural flgTryAgainCounterStep = 0x0800;
+
 	CouchDB(const Config &cfg);
 	~CouchDB();
 
@@ -535,11 +539,13 @@ public:
 	 * @param content content of design document as pure JSON
 	 * @param updateRule specifies rule how to handle existing design document
 	 * @param name name of the design document. It don't need to have "_design/" prefix, however, function
+	 * @retval true design document has been updated
+	 * @retval false design document unchanged
 	 * will accept both variants with or without. If parameter is empty, function picks name from
 	 * the document (under _id key)
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	void uploadDesignDocument(ConstValue content, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
+	bool uploadDesignDocument(ConstValue content, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
 
 	///Uploads design document from the file
 	/**
@@ -551,10 +557,12 @@ public:
 	 * @param name name of the design document. It don't need to have "_design/" prefix, however, function
 	 * will accept both variants with or without.If parameter is empty, function picks name from
 	 * the document (under _id key)
+	 * @retval true design document has been updated
+	 * @retval false design document unchanged
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 *
 	 */
-	void uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
+	bool uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
 
 	///Uploads design document from the resource
 	/**
@@ -568,9 +576,11 @@ public:
 	 * @param name name of the design document. It don't need to have "_design/" prefix, however, function
 	 * will accept both variants with or without.If parameter is empty, function picks name from
 	 * the document (under _id key)
+	 * @retval true design document has been updated
+	 * @retval false design document unchanged
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	void uploadDesignDocument(const char *content, natural contentLen, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
+	bool uploadDesignDocument(const char *content, natural contentLen, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
 
 	///Use json variable to build objects
 	const Json json;
@@ -611,7 +621,6 @@ protected:
 
 	HttpConfig httpConfig;
 	HttpClient http;
-
 
 
 	natural listenChangesInternal(IChangeNotify &cb,  natural fromSeq, const Filter &filter, ListenMode lm);

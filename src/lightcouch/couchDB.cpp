@@ -165,6 +165,13 @@ JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natura
 		JSON::Value errorVal;
 		try{
 			errorVal = factory->fromStream(response);
+			//LightCouch's query server will return try_again in case that version mistmatch
+			//This allows to start fresh version of query server. However we need to repeat the request
+			//There is limit to repeat max 31x, then return error
+			if (errorVal["error"].getStringA() == "try_again" && (flags & flgTryAgainCounterMask) != flgTryAgainCounterMask) {
+				SyncReleased<FastLock> _(lock);
+				return requestGET(path, headers, flags + flgTryAgainCounterStep);
+			}
 		} catch (...) {
 
 		}
@@ -261,6 +268,13 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 		JSON::Value errorVal;
 		try{
 			errorVal = factory->fromStream(response);
+			//LightCouch's query server will return try_again in case that version mistmatch
+			//This allows to start fresh version of query server. However we need to repeat the request
+			//There is limit to repeat max 31x, then return error
+			if (errorVal["error"].getStringA() == "try_again" && (flags & flgTryAgainCounterMask) != flgTryAgainCounterMask) {
+				SyncReleased<FastLock> _(lock);
+				return jsonPUTPOST(method,path, data,headers, flags + flgTryAgainCounterStep);
+			}
 		} catch (...) {
 
 		}
@@ -797,7 +811,7 @@ static const ConstStrA _designSlash("_design/");
 
 
 
-void CouchDB::uploadDesignDocument(ConstValue content, DesignDocUpdateRule updateRule, ConstStrA name) {
+bool CouchDB::uploadDesignDocument(ConstValue content, DesignDocUpdateRule updateRule, ConstStrA name) {
 
 
 	class DDResolver: public ConflictResolver {
@@ -842,10 +856,10 @@ void CouchDB::uploadDesignDocument(ConstValue content, DesignDocUpdateRule updat
 		Document curddoc = this->retrieveDocument(name,0);
 
 		///design document already exists, skip uploading
-		if (updateRule == ddurSkipExisting) return;
+		if (updateRule == ddurSkipExisting) return false;
 
 		///no change in design document, skip uploading
-		if (resolver.isEqual(curddoc, content)) return;
+		if (resolver.isEqual(curddoc, content)) return false;
 
 		if (updateRule == ddurCheck) {
 			UpdateException::ErrorItem errItem;
@@ -886,6 +900,7 @@ void CouchDB::uploadDesignDocument(ConstValue content, DesignDocUpdateRule updat
 			return uploadDesignDocument(content,updateRule,name);
 		}
 	}
+	return true;
 
 }
 
@@ -895,20 +910,20 @@ JSON::Value parseDesignDocument(IIterator<char, T> &stream, JSON::PFactory facto
 	return parser.parse();
 }
 
-void CouchDB::uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule, ConstStrA name) {
+bool CouchDB::uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule, ConstStrA name) {
 
 	SeqFileInBuff<> infile(pathname,0);
 	SeqTextInA intextfile(infile);
-	uploadDesignDocument(parseDesignDocument(intextfile,json.factory), updateRule, name);
+	return uploadDesignDocument(parseDesignDocument(intextfile,json.factory), updateRule, name);
 
 }
 
-void CouchDB::uploadDesignDocument(const char* content,
+bool  CouchDB::uploadDesignDocument(const char* content,
 		natural contentLen, DesignDocUpdateRule updateRule, ConstStrA name) {
 
 	ConstStrA ctt(content, contentLen);
 	ConstStrA::Iterator iter = ctt.getFwIter();
-	uploadDesignDocument(parseDesignDocument(iter,json.factory), updateRule, name);
+	return uploadDesignDocument(parseDesignDocument(iter,json.factory), updateRule, name);
 
 }
 
