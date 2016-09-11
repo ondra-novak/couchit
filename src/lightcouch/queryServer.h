@@ -89,10 +89,15 @@ class AbstractViewBase: public QueryServerHandler {
 public:
 
 	enum ReduceMode {
+		///View has no reduce
 		rmNone,
+		///View has defined reduce() and rereduce() functions
 		rmFunction,
+		///View uses build-in _count function
 		rmCount,
+		///View uses build-in _sum function
 		rmSum,
+		///View uses build-in _stats function
 		rmStats
 	};
 
