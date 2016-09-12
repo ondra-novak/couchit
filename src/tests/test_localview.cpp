@@ -46,7 +46,6 @@ public:
 	virtual void map(const ConstValue &doc) override {
 		emit(doc["age"],doc["name"]);
 	}
-
 };
 
 class LocalView_age_group_height: public LocalView {
@@ -61,7 +60,6 @@ public:
 		for(natural i = 0; i<count;i++) sum+=values[i].getUInt();
 		return json("sum",sum)("count",count);
 	}
-
 };
 
 
@@ -84,7 +82,6 @@ static void loadData(LocalView &view) {
 
 		view.updateDoc(doc);
 	}
-
 }
 
 static void localView_ByName(PrintTextA &print) {
@@ -103,7 +100,6 @@ static void localView_ByName(PrintTextA &print) {
 				<<row.value[0]->getUInt()
 				<<row.value[1]->getUInt();
 	}
-
 }
 
 
@@ -162,6 +158,8 @@ static void localView_couchReduce(PrintTextA &a) {
 				<<(row.value["sum"]->getUInt()/row.value["count"]->getUInt());
 	}
 }
+
+
 
 
 defineTest test_localView_byName("couchdb.localview.byName","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&localView_ByName);

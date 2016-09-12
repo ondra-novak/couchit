@@ -102,6 +102,25 @@ static void prepareQueryServer(QueryServer &qserver) {
 
 	};
 	qserver.regList("testview/rowcopy", new TestList);
+
+	class FilterView_Young: public AbstractViewMapOnly<1> {
+		virtual void map(const Document &doc, IEmitFn &emit) override {
+			if (doc.getID().head(8) == ConstStrA("_design/")) return;
+			if (doc["age"].getUInt() < 40) emit();
+		}
+	};
+	qserver.regView("testview/young", new FilterView_Young);
+	class Filter_AgeRange: public AbstractFilter<1> {
+		virtual bool run(const Document &doc, ConstValue request) {
+			if (doc.getID().head(8) == ConstStrA("_design/")) return false;
+			ConstValue q = request["query"];
+			natural agemin = q["agemin"].getUInt();
+			natural agemax = q["agemax"].getUInt();
+			natural age = doc["age"].getUInt();
+			return age >= agemin && age <= agemax;
+		}
+	};
+	qserver.regFilter("testview/young", new Filter_AgeRange);
 }
 
 
@@ -143,6 +162,7 @@ static View by_age("_design/testview/_view/by_age");
 static View by_age_list("_design/testview/_list/rowcopy/by_age");
 static View age_group_height("_design/testview/_view/age_group_height");
 static View age_group_height2("_design/testview/_view/age_group_height2");
+static Filter age_range("_design/testview/young",0);
 
 
 static void couchLoadData(PrintTextA &print) {
@@ -282,7 +302,20 @@ static void couchReduce2(PrintTextA &a) {
 	}
 }
 
+/*
+static void couchFilter(PrintTextA &a) {
 
+	CouchDB db(getTestCouch());
+	db.use(DATABASENAME);
+
+	db.listenChanges(0,age_range,CouchDB::lmOneShot, [&](const ChangedDoc &doc) {
+		lastId = doc.seqId;
+		return true;
+	});
+
+	a("%1") << (lastId > 10);
+}
+*/
 
 defineTest qtest_couchCreateDB("couchdb.qserver.createDB","",&rawCreateDB);
 defineTest qtest_couchLoadData("couchdb.qserver.loadData","12",&couchLoadData);

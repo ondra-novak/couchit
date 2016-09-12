@@ -326,9 +326,11 @@ ConstValue QueryServer::compileDesignSection(T &reg, const ConstValue &section, 
 
 	Container out = json.object();
 	section->enumEntries(JSON::IEntryEnum::lambda([&](const JSON::INode *value, ConstStrA itemname, natural){
+		bool inmap = false;
 		if (value->isObject()) {
 			value = value->getPtr("map");
 			if (value == 0) return false;
+			inmap = true;
 		}
 		ConstStrA name = value->getStringUtf8();
 		natural verId = extractVersion(name);
@@ -343,6 +345,7 @@ ConstValue QueryServer::compileDesignSection(T &reg, const ConstValue &section, 
 		}
 
 		ConstValue compiled = createCompiledFnRef(*fnptr);
+		if (inmap) compiled = json("map", compiled);
 		out.set(itemname, compiled);
 		return false;
 	}));
