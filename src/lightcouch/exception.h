@@ -75,6 +75,20 @@ protected:
 	void message(ExceptionMsg &msg) const;
 };
 
+class CanceledException: public Exception{
+public:
+
+	LIGHTSPEED_EXCEPTIONFINAL;
+	CanceledException(const ProgramLocation &loc):Exception(loc) {}
+
+	static const char *msgText;
+
+
+protected:
+
+	void message(ExceptionMsg &msg) const;
+};
+
 
 }
 

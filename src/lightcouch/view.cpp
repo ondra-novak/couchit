@@ -32,8 +32,8 @@ Filter::Filter(StringA filter, natural flags, ConstStringT<ListArg> args)
 {
 }
 
-Filter::Filter(const View& view, bool allConflicts)
-	:View(view.viewPath, view.flags | (allConflicts?Filter::allConflicts:0), view.args)
+Filter::Filter(const View& view, bool allRevs)
+	:View(view.viewPath, view.flags | (allRevs?Filter::allRevs:0), view.args)
 {
 }
 

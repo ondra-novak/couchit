@@ -11,7 +11,7 @@
 #include <lightspeed/base/text/textstream.tcc>
 #include "../lightcouch/couchDB.h"
 #include "../lightcouch/query.h"
-#include "../lightcouch/changedDoc.h"
+#include "../lightcouch/changes.h"
 #include "lightspeed/base/framework/testapp.h"
 
 #include "test_common.h"
@@ -298,10 +298,12 @@ static void couchChangeSetOneShot(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	db.listenChanges(0,0,CouchDB::lmOneShot, [&](const ChangedDoc &doc) {
+	ChangesSink chsink (db.createChangesSink());
+	Changes chngs = chsink.exec();
+	while (chngs.hasItems()) {
+		ChangedDoc doc(chngs.getNext());
 		lastId = doc.seqId;
-		return true;
-	});
+	}
 
 	a("%1") << (lastId > 10);
 }
@@ -323,23 +325,24 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	ConstStrA uid = db.genUID();
-	bool isok = false;
 
 	Thread thr;
 	thr.start(ThreadFunction::create(&loadSomeDataThread,uid));
 
+	ChangesSink chsink (db.createChangesSink());
+	chsink.setTimeout(10000);
+	chsink.fromSeq(lastId);
+	try {
+		chsink >> [&](const ChangedDoc &doc) {
+			if (doc.id == uid && !doc.deleted) {
+				throw CanceledException(THISLOCATION);
 
-	db.listenChanges(lastId,0,CouchDB::lmForever,[&](const ChangedDoc &doc) {
-		if (doc.id == uid && !doc.deleted) {
-			isok = true;
-			return false;
-		} else {
-			return true;
-		}
-	});
-	if (isok) a("ok"); else a("fail");
-
-
+			}
+		};
+		a("fail");
+	} catch (CanceledException &) {
+		a("ok");
+	}
 }
 
 static void loadSomeDataThread3(ConstStrA locId) {
@@ -362,27 +365,30 @@ static void couchChangeSetWaitForData3(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	ConstStrA uid = db.genUID();
-	bool isok = false;
 	int counter=0;
 
 	Thread thr;
 	thr.start(ThreadFunction::create(&loadSomeDataThread3,uid));
 
+	ChangesSink chsink (db.createChangesSink());
+	chsink.setTimeout(10000);
+	chsink.fromSeq(lastId);
+	try {
+		chsink >> [&](const ChangedDoc &doc) {
+			if (doc.id == uid && !doc.deleted) {
+				counter++;
+				thr.wakeUp();
+			} else if (counter) {
+				counter++;
+				thr.wakeUp();
+				if (counter == 3) throw CanceledException(THISLOCATION);
+			}
+		};
+		a("fail");
+	} catch (CanceledException &e) {
+		a("ok");
+	}
 
-	db.listenChanges(lastId,0,CouchDB::lmForever,[&](const ChangedDoc &doc) {
-		if (doc.id == uid && !doc.deleted) {
-			counter++;
-			thr.wakeUp();
-			return true;
-		} else if (counter) {
-			isok=true;
-			counter++;
-			thr.wakeUp();
-			return (counter < 3);
-		} else
-			return true;
-	});
-	if (isok) a("ok"); else a("fail");
 
 
 }
@@ -392,16 +398,23 @@ static void couchChangesStopWait(PrintTextA &a) {
 	db.use(DATABASENAME);
 	Thread thr;
 
-	thr.start(ThreadFunction::create([&db]() {
-		Thread::sleep(1000);
-		db.stopListenChanges();
-	}));
-	db.listenChanges(0,0,CouchDB::lmForever,[](const ChangedDoc &) {
-		return true;
-	});
+	ChangesSink chsink (db.createChangesSink());
+	chsink.setTimeout(10000);
 
-	ConstValue v = db.requestGET("/");
-	a("%1") << v["couchdb"]->getStringUtf8();
+
+	thr.start(ThreadFunction::create([&chsink]() {
+		Thread::sleep(1000);
+		chsink.cancelWait();
+	}));
+
+	try {
+		chsink >> [](const ChangedDoc &) {};
+		a("fail");
+	} catch (CanceledException &) {
+		ConstValue v = db.requestGET("/");
+		a("%1") << v["couchdb"]->getStringUtf8();
+	}
+
 }
 
 static void couchGetSeqNumber(PrintTextA &a) {

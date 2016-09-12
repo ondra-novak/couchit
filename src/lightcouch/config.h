@@ -62,9 +62,6 @@ struct Config {
 	/** Pointer can be NULL, then default UID generator is used - See: DefaultUIDGen; */
 	Pointer<IIDGen> uidgen;
 
-	///Server's id. If empty, server will generate own
-	StringA serverid;
-
 	///Define provider for https.
 	/** Standard http client has disabled https unless you specify https provider. You
 	 * can use SimpleHttps::getInstance from the library "jsonrpcserver". However you will

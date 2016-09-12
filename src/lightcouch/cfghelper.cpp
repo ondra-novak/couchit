@@ -24,7 +24,6 @@ void LightCouch::readConfig(LightCouch::CouchDBPool::Config& cfg,
 void LightCouch::readConfig(LightCouch::Config& cfg,const LightSpeed::IniConfig::Section& parser) {
 	parser.required(cfg.baseUrl,"url");
 	parser.required(cfg.databaseName,"dbname");
-	parser.get(cfg.serverid,"serverId");
 	LightSpeed::natural iotimeout;
 	if (parser.get(iotimeout,"iotimeout")) {
 		cfg.iotimeout = iotimeout;

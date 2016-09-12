@@ -48,10 +48,16 @@ void UpdateException::message(ExceptionMsg& msg) const {
 }
 
 
+void LightCouch::CanceledException::message(ExceptionMsg& msg) const {
+	msg(msgText);
+}
+
 const char *DocumentNotEditedException::msgText = "Document %1 is not edited. You have to call edit() first";
 const char *DocumentNotEditedException::msgNone = "<n/a>";
 const char *UpdateException::msgText = "Update exception - some items was not written: %1";
+const char *CanceledException::msgText = "Operation has been canceled";
 
 
 
 }
+

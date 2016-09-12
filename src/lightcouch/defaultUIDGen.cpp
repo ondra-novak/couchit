@@ -51,7 +51,7 @@ ConstStrA DefaultUIDGen::generateUID(AutoArray<char>& buffer, ConstStrA prefix,
 	out("%{06}1%%{04}2") << timeparam << counterparam;
 
 	if (randomGen) {
-		while (buffer.length() < totalCount) {
+		while (buffer.length() < totalCount+prefix.length()) {
 			out("%1") << (randomGen->getNext() % 62);
 		}
 	}

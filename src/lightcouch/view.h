@@ -154,10 +154,8 @@ public:
 
 	///Declare filter without flags (convert string name of the filter to the filter definition)
 	Filter(StringA filter);
-	///in case of conflic, return all documents
-	static const natural allConflicts = 0x10000;
-	///filter is view
-	static const natural isView  = 0x20000;
+	///return all current revisions, including deleted
+	static const natural allRevs = 0x10000;
 
 	Filter addArg(ConstStringT<ListArg> args) const;
 

@@ -40,6 +40,8 @@ class QueryCache;
 class Conflicts;
 class Document;
 class Validator;
+class Changes;
+class ChangesSink;
 
 ///Client connection to CouchDB server
 /** Each instance can keep only one connection at time. However, you can create
@@ -221,73 +223,6 @@ public:
 	void deleteDatabase();
 
 
-	enum ListenMode {
-
-		lmForever,
-		lmOneShot,
-		lmNoWait
-
-	};
-
-
-	///Starts listening for changes processed by a filter
-	/** Function block while it process all changes for indefinite time. Every
-	 * change is passed to the callback. During this process, this object cannot process
-	 * any other requests, expect time, when callback is running. It is also
-	 * allowed to work with this connection inside the handler.
-	 *
-	 * Calling any function expect stopListenChanges() will block until change is received
-	 *
-	 * There are two ways, how to stop listening
-	 *  1. handler itself can return false and cause stop listening
-	 *  2. calling stopListenChanges from the other thread interrupts listening.
-	 *
-	 *  Note that object always finish current change before it leaves listening cycle
-	 *
-	 * @param cb callback object which will receive changes
-	 * @param fromSeq start with give sequence number
-	 * @param filter filter definition
-	 * @param lm behaviour of the function.
-	 * @return returns last processed sequence number. You can use number to resume listening by
-	 * simple passing this number as the argument fromSeq
-	 */
-	template<typename Fn>
-	natural listenChanges(natural fromSeq, const Filter &filter, ListenMode lm, const Fn &cb);
-
-	///Starts listening without filtering
-	/** Function block while it process all changes for indefinite time. Every
-	 * change is passed to the callback. During this process, this object cannot process
-	 * any other requests, expect time, when callback is running. It is also
-	 * allowed to work with this connection inside the handler.
-	 *
-	 * Calling any function expect stopListenChanges() will block until change is received
-	 *
-	 * There are two ways, how to stop listening
-	 *  1. handler itself can return false and cause stop listening
-	 *  2. calling stopListenChanges from the other thread interrupts listening.
-	 *
-	 *  Note that object always finish current change before it leaves listening cycle
-	 *
-	 * @param cb callback function bool operator()(ChangeDoc doc)
-	 * @param fromSeq start with given sequence number
-	 * @param filterFlags combination of flags defined for Filter / View
-	 * @param lm behaviour of the function.
-	 * @return returns last processed sequence number. You can use number to resume listening by
-	 * simple passing this number as the argument fromSeq
-	 */
-	template<typename Fn>
-	natural listenChanges(natural fromSeq, natural filterFlags, ListenMode lm, const Fn &cb);
-
-
-
-
-	///Stops listening changes
-	/** Function just requests current listening to finish as soon as possible. It doesn't
-	 * wait for real finish. You have to use proper multi-thread comunication to
-	 * achieve this. Function can be also called from the handler. It doesn't matter
-	 * from which thread it is called
-	 */
-	void stopListenChanges();
 
 	///Determines last sequence number
 	/** Function requests server to retrieve last sequence number. You will need
@@ -319,6 +254,9 @@ public:
 	 */
 	Changeset createChangeset();
 
+
+	///Creates object which is used to receive database changes
+	ChangesSink createChangesSink();
 
 
 	///Enables tracking of sequence numbers for caching
@@ -418,6 +356,7 @@ public:
 	 *    "rev":"...",
 	 *    "id":"..."
 	 * }
+	 * @endcode
 	 *
 	 * @b content - string or binary or parsed json value if possible.
 	 * @b content-type - content type. If you need to parse response as json, specify application/json here.
@@ -450,6 +389,7 @@ public:
 	 *    "content-type":"...",
 	 *    "id":"..."
 	 * }
+	 * @endcode
 	 *
 	 * @b content - string or binary or parsed json value if possible.
 	 * @b content-type - content type. If you need to parse response as json, specify application/json here.
@@ -593,9 +533,6 @@ public:
 	};
 
 
-	static StringA generateServerID();
-
-
 protected:
 
 	mutable FastLock lock;
@@ -607,10 +544,8 @@ protected:
 
 	StringA baseUrl;
 	StringA database;
-	StringA serverid;
 	JSON::PFactory factory;
 	natural lastStatus;
-	bool listenExitFlag;
 	Pointer<QueryCache> cache;
 	Pointer<Validator> validator;
 	atomicValue *seqNumSlot;
@@ -623,7 +558,6 @@ protected:
 	HttpClient http;
 
 
-	natural listenChangesInternal(IChangeNotify &cb,  natural fromSeq, const Filter &filter, ListenMode lm);
 
 	template<typename C>
 	void reqPathToFullPath(ConstStrA reqPath, C &output);
@@ -633,31 +567,17 @@ protected:
 
 
 	JSON::ConstValue jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags);
+
+
+	friend class ChangesSink;
+
+	Changes receiveChanges(ChangesSink &sink);
+
 public:
 
 
 };
 
-template<typename Fn>
-natural CouchDB::listenChanges(natural fromSeq, const Filter &filter, ListenMode lm, const Fn &cb) {
-
-	class CB: public IChangeNotify {
-	public:
-		Fn cb;
-		CB(const Fn &cb):cb(cb) {}
-		virtual bool onChange(const ChangedDoc &changeInfo) throw() {
-			return cb(changeInfo);
-		}
-	};
-	CB cbc(cb);
-	return listenChangesInternal(cbc,fromSeq,filter,lm);
-}
-
-template<typename Fn>
-natural CouchDB::listenChanges(natural fromSeq, natural filterFlags, ListenMode lm, const Fn &cb) {
-	Filter f(StringA(), filterFlags);
-	return listenChanges(fromSeq, f, lm, cb);
-}
 
 
 

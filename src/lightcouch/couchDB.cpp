@@ -27,7 +27,7 @@
 
 #include "lightspeed/base/streams/netio_ifc.h"
 
-#include "changedDoc.h"
+#include "changes.h"
 
 #include "lightspeed/base/exceptions/netExceptions.h"
 
@@ -54,39 +54,20 @@ CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
 ConstStrA CouchDB::fldTimestamp("!timestamp");
 ConstStrA CouchDB::fldPrevRevision("!prevRev");
 
-typedef AutoArrayStream<char, SmallAlloc<256> > UrlLine;
+typedef AutoArrayStream<char, SmallAlloc<1024> > UrlLine;
 
 static JSON::PFactory createFactory(JSON::PFactory jfact) {
 	if (jfact != null) return jfact;
 	else return JSON::create();
 }
 
-static lnatural getRandom() {
-	SecureRandom srand;
-	natural out;
-	srand.blockRead(&out,sizeof(out));
-	return out;
-}
-
-StringA CouchDB::generateServerID() {
-	lnatural rnd = getRandom();
-	TextFormatBuff<char, SmallAlloc<256> > fmt;
-	fmt("%1") << setBase(62) << rnd;
-	return fmt.write();
-
-}
-
 CouchDB::CouchDB(const Config& cfg)
-	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),serverid(cfg.serverid),factory(json.factory)
+	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),factory(json.factory)
 	,cache(cfg.cache),seqNumSlot(0)
 	,uidGen(cfg.uidgen == null?DefaultUIDGen::getInstance():*cfg.uidgen)
 	,httpConfig(cfg),http(httpConfig)
 {
 	if (!cfg.databaseName.empty()) use(cfg.databaseName);
-	listenExitFlag = false;
-	if (serverid.empty()) {
-		serverid = generateServerID();
-	}
 }
 
 
@@ -331,144 +312,6 @@ CouchDB::~CouchDB() {
 
 enum ListenExceptionStop {listenExceptionStop};
 
-natural CouchDB::listenChangesInternal(IChangeNotify &cb, natural fromSeq, const Filter &filter, ListenMode lm) {
-
-	AutoArrayStream<char, SmallAlloc<4096> > gline;
-	StringA hlp;
-
-
-	class WHandle: public INetworkResource::WaitHandler {
-	public:
-		bool &listenExitFlag;;
-
-		virtual natural wait(const INetworkResource *resource, natural waitFor, natural ) const {
-			while (!listenExitFlag) {
-				if (limitTm.expired())
-					return 0;
-				//each 150 ms check exit flag.
-				//TODO Find better solution later
-				natural r = INetworkResource::WaitHandler::wait(resource,waitFor,150);
-				if (r) {
-					limitTm = Timeout(100000);
-					return r;
-				}
-			}
-			throw listenExceptionStop;
-		}
-
-		WHandle(bool &listenExitFlag):listenExitFlag(listenExitFlag),limitTm(100000) {}
-		mutable Timeout limitTm;
-
-	};
-
-
-
-
-	bool rep = true;
-	do {
-
-		if (listenExitFlag) break;
-
-		gline.clear();
-		TextOut<AutoArrayStream<char, SmallAlloc<4096> > &, StaticAlloc<256> > fmt(gline);
-		fmt("%1%%2/_changes?since=%3") << baseUrl << database << fromSeq;
-		if (!filter.viewPath.empty()) {
-			if (filter.flags & Filter::isView) {
-				fmt("&filter=_view&view=%1") << (hlp=urlencode(filter.viewPath));
-			}else{
-				fmt("&filter=%1") << (hlp=urlencode(filter.viewPath));
-			}
-						}
-		if(filter.flags & Filter::allConflicts) {
-			fmt("&style=all_docs");
-		}
-		if (filter.flags & Filter::includeDocs) {
-			fmt("&include_docs=true");
-			if (filter.flags & Filter::attachments) {
-				fmt("&attachments=true");
-			}
-			if (filter.flags & Filter::conflicts) {
-				fmt("&conflicts=true");
-			}
-			if (filter.flags & Filter::attEncodingInfo) {
-				fmt("&att_encoding_info=true");
-			}
-		}
-		if (filter.flags & Filter::reverseOrder) {
-			fmt("&descending=true");
-		}
-		if (lm  != lmNoWait) fmt("&feed=longpoll");
-
-		for (natural i = 0; i<filter.args.length(); i++) {
-			fmt("&%1=%2") << filter.args[i].key << (hlp=urlencode(filter.args[i].value));
-		}
-
-		JSON::Value v;
-		{
-			Synchronized<FastLock> _(lock);
-			WHandle whandle(listenExitFlag);
-			http.open(HttpClient::mGET,gline.getArray());
-			http.setHeader(HttpClient::fldAccept,"application/json");
-			SeqFileInput in = http.send();
-
-			if (http.getStatus()/100 != 2) {
-
-				JSON::Value errorVal;
-				try{
-					errorVal = factory->fromStream(in);
-				} catch (...) {
-
-				}
-				http.close();
-				throw RequestError(THISLOCATION,gline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
-			} else {
-
-
-				PNetworkStream conn = http.getConnection();
-
-				if (lm != lmNoWait)
-					conn->setWaitHandler(&whandle);
-
-				try {
-					v = factory->fromStream(in);
-				} catch (ListenExceptionStop &) {
-					listenExitFlag = false;
-					http.closeConnection();
-					return fromSeq;
-				} catch (...) {
-					listenExitFlag = false;
-					http.closeConnection();
-					throw;
-				}
-
-				if (lm != lmNoWait)
-					conn->setWaitHandler(0);
-				http.close();
-			}
-		}
-
-
-		JSON::Value results=v["results"];
-
-		natural lastSeq = v["last_seq"]->getUInt();
-		if (seqNumSlot) *seqNumSlot = lastSeq;
-
-		bool cbok;
-		for (JSON::Iterator iter = results->getFwIter(); iter.hasItems();) {
-			ChangedDoc doc(iter.getNext());
-			fromSeq = doc.seqId;
-			cbok = cb.onChange(doc);
-			if (!cbok) break;
-		}
-
-		fromSeq =  lastSeq;
-
-		rep = lm == lmForever && listenExitFlag == false && cbok;
-	}
-	while (rep);
-
-	return fromSeq;
-}
 
 Query CouchDB::createQuery(const View &view) {
 	return Query(*this, view);
@@ -479,17 +322,13 @@ Changeset CouchDB::createChangeset() {
 }
 
 
-void CouchDB::stopListenChanges() {
-	listenExitFlag = true;
-}
 
 
 natural CouchDB::getLastSeqNumber() {
-	Filter::ListArg arg;
-	arg.key = ConstStrA("limit");
-	arg.value = ConstStrA("1");
-	return listenChanges(0,Filter(StringA(),Filter::reverseOrder,Filter::ListArgs(&arg,1))
-			,lmNoWait,[](const ChangedDoc &){return true;});
+	ChangesSink chsink = createChangesSink();
+	Changes chgs = chsink.setFilterFlags(Filter::reverseOrder).limit(1).exec();
+	if (chgs.hasItems()) return ChangedDoc(chgs.getNext()).seqId;
+	else return 0;
 }
 
 atomicValue& CouchDB::trackSeqNumbers() {
@@ -501,6 +340,8 @@ atomicValue& CouchDB::trackSeqNumbers() {
 	seqNumSlot = &v;
 	return v;
 }
+
+
 Query CouchDB::createQuery(natural viewFlags) {
 	View v("_all_docs", viewFlags);
 	return createQuery(v);
@@ -927,36 +768,181 @@ bool  CouchDB::uploadDesignDocument(const char* content,
 
 }
 
+Changes CouchDB::receiveChanges(ChangesSink& sink) {
+	UrlLine reqline;
+	reqPathToFullPath("_changes",reqline.getArray());
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(reqline);
+
+	urlfmt("?since=%1") << sink.seqNumber;
+	if (sink.outlimit != naturalNull) {
+		urlfmt("&limit=%1") << sink.outlimit;
+	}
+	if (sink.timeout > 0) {
+		urlfmt("&feed=longpoll");
+		if (sink.timeout == naturalNull) {
+			urlfmt("&heartbeat=true");
+		} else {
+			urlfmt("&timeout=%1") << sink.timeout;
+		}
+	}
+	if (sink.filter != null) {
+		const Filter &flt = sink.filter;
+		if (!flt.viewPath.empty()) {
+			ConstStrA fltpath = flt.viewPath;
+			ConstStrA ddocName;
+			ConstStrA filterName;
+			bool isView = false;
+			ConstStrA::SplitIterator iter = fltpath.split('/');
+			ConstStrA x = iter.getNext();
+			if (x == "_design") x = iter.getNext();
+			ddocName = x;
+			x = iter.getNext();
+			if (x == "_view") {
+				isView = true;
+				x = iter.getNext();
+			}
+			filterName = x;
+
+
+
+			if (isView) {
+				urlfmt("&filter=_view&view=%1/%2") << ddocName << filterName;
+			} else {
+				urlfmt("&filter=%1/%2") << ddocName << filterName;
+			}
+		}
+		if (flt.flags & Filter::allRevs) urlfmt("&style=all_docs");
+		if (flt.flags & Filter::includeDocs) {
+			urlfmt("&include_docs=true");
+			if (flt.flags & Filter::attachments) {
+				urlfmt("&attachments=true");
+			}
+			if (flt.flags & Filter::conflicts) {
+				urlfmt("&conflicts=true");
+			}
+			if (flt.flags & Filter::attEncodingInfo) {
+				urlfmt("&att_encoding_info=true");
+			}
+		}
+		if (flt.flags & Filter::reverseOrder) {
+			urlfmt("&descending=true");
+		}
+		for (natural i = 0; i<flt.args.length(); i++) {
+			ConvertReadIter<UrlEncodeConvert,StringA::Iterator> cnv(flt.args[i].value.getFwIter());
+			urlfmt("&%1=%2") << flt.args[i].key << &cnv;
+		}
+	}
+	if (sink.filterArgs != null) {
+		sink.filterArgs->forEach([&](ConstValue v, ConstStrA key, natural) {
+			if (v->isString()) {
+				ConvertReadIter<UrlEncodeConvert,ConstStrA::Iterator> cnv(v.getStringA().getFwIter());
+				urlfmt("&%1=%2") << key << &cnv;
+			} else {
+				urlfmt("&%1=") << key;
+				JSON::serialize(v, reqline, true);
+			}
+			return false;
+		});
+	}
+
+	if (lockCompareExchange(sink.cancelState,1,0)) {
+		throw CanceledException(THISLOCATION);
+	}
+
+	class WHandle: public INetworkResource::WaitHandler {
+	public:
+		atomic &cancelState;
+
+		virtual natural wait(const INetworkResource *resource, natural waitFor, natural ) const {
+			for(;;) {
+				if (lockCompareExchange(cancelState,1,0)) {
+					throw CanceledException(THISLOCATION);
+				}
+				if (limitTm.expired())
+					return 0;
+				//each 200 ms check exit flag.
+				//TODO Find better solution later
+				natural r = INetworkResource::WaitHandler::wait(resource,waitFor,200);
+				if (r) {
+					limitTm = Timeout(100000);
+					return r;
+				}
+			}
+		}
+
+		WHandle(atomic &cancelState):cancelState(cancelState),limitTm(100000) {}
+		mutable Timeout limitTm;
+	};
+
+	Synchronized<FastLock> _(lock);
+	WHandle whandle(sink.cancelState);
+	http.open(HttpClient::mGET,reqline.getArray());
+	http.setHeader(HttpClient::fldAccept,"application/json");
+	SeqFileInput in = http.send();
+
+	ConstValue v;
+	if (http.getStatus()/100 != 2) {
+
+		JSON::Value errorVal;
+		try{
+			errorVal = factory->fromStream(in);
+		} catch (...) {
+
+		}
+		http.close();
+		throw RequestError(THISLOCATION,reqline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
+	} else {
+
+
+		PNetworkStream conn = http.getConnection();
+
+		if (sink.timeout)
+			conn->setWaitHandler(&whandle);
+
+		try {
+			v = factory->fromStream(in);
+		} catch (JSON::ParseError_t &e) {
+			//terminate http connection
+			http.closeConnection();
+			//canceled exception can be stored in reason of ParseError_t exception
+			const Exception *r = e.getReason();
+			//process all reasons
+			while (r) {
+				//test the reason
+				const CanceledException *ce = dynamic_cast<const CanceledException *>(r);
+				//throw reason only
+				if (ce) throw *ce;
+				//continue reading reasons
+				r = r->getReason();
+			}
+
+			//in case not found, throw what you have
+			throw;
+
+		} catch (...) {
+			//any exception
+			//terminate connection
+			http.closeConnection();
+			//throw it
+			throw;
+		}
+
+		if (sink.timeout)
+			conn->setWaitHandler(0);
+		http.close();
+	}
+
+
+	ConstValue results=v["results"];
+	sink.seqNumber = v["last_seq"]->getUInt();
+	if (seqNumSlot) *seqNumSlot = sink.seqNumber;
+
+	return results;
+}
+
+ChangesSink CouchDB::createChangesSink() {
+	return ChangesSink(*this);
+}
 
 } /* namespace assetex */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
