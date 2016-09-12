@@ -129,7 +129,7 @@ static void rawCreateDB(PrintTextA &) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 	db.createDatabase();
-	QueryServer qserver(DATABASENAME);
+	QueryServer qserver(DATABASENAME,AppBase::current().getAppPathname());
 	prepareQueryServer(qserver);
 	qserver.syncDesignDocuments(qserver.generateDesignDocuments(),db);
 }
@@ -142,7 +142,7 @@ static void deleteDB(PrintTextA &) {
 
 
 void runQueryServer() {
-	QueryServer qserver(DATABASENAME);
+	QueryServer qserver(DATABASENAME,AppBase::current().getAppPathname());
 	prepareQueryServer(qserver);
 	qserver.runDispatchStdIO();
 }
@@ -164,6 +164,7 @@ static View by_age_list("_design/testview/_list/rowcopy/by_age");
 static View age_group_height("_design/testview/_view/age_group_height");
 static View age_group_height2("_design/testview/_view/age_group_height2");
 static Filter age_range("_design/testview/young",0);
+static View age_range_view("_design/testview/_view/young",0);
 
 
 static void couchLoadData(PrintTextA &print) {
@@ -303,20 +304,31 @@ static void couchReduce2(PrintTextA &a) {
 	}
 }
 
-/*
+
+static void couchFilterView(PrintTextA &a) {
+
+	CouchDB db(getTestCouch());
+	db.use(DATABASENAME);
+
+	ChangesSink chsink(db.createChangesSink());
+	chsink.setFilter(Filter(age_range_view,false));
+	Changes changes = chsink.exec();
+
+	a("%1") << changes.length();
+}
+
 static void couchFilter(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	db.listenChanges(0,age_range,CouchDB::lmOneShot, [&](const ChangedDoc &doc) {
-		lastId = doc.seqId;
-		return true;
-	});
+	ChangesSink chsink(db.createChangesSink());
+	chsink.setFilter(age_range).arg("agemin",40).arg("agemax",60);
+	Changes changes = chsink.exec();
 
-	a("%1") << (lastId > 10);
+	a("%1") << changes.length();
 }
-*/
+
 
 defineTest qtest_couchCreateDB("couchdb.qserver.createDB","",&rawCreateDB);
 defineTest qtest_couchLoadData("couchdb.qserver.loadData","12",&couchLoadData);
@@ -327,6 +339,8 @@ defineTest qtest_couchFindRange("couchdb.qserver.findRange","Daniel Cochran Ramo
 defineTest qtest_couchFindRangeList("couchdb.qserver.findRangeList","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRangeList);
 defineTest qtest_couchReduce("couchdb.qserver.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce);
 defineTest qtest_couchReduce2("couchdb.qserver.reduce2","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce2);
+defineTest qtest_couchFilterView("couchdb.qserver.filterView","3",&couchFilterView);
+defineTest qtest_couchFilter("couchdb.qserver.filter","6",&couchFilter);
 defineTest qtest_couchDeleteDB("couchdb.qserver.deleteDB","",&deleteDB);
 }
 

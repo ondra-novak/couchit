@@ -92,6 +92,10 @@ public:
 	///Retrieve whole result as array of rows;
 	ConstValue getAllChanges() const {return rows;}
 
+	natural length() const {return rows.length();}
+
+	natural getRemain() const {return rowIter.getRemain();}
+
 protected:
 
 	ConstValue rows;
@@ -239,6 +243,7 @@ inline ChangesSink& LightCouch::ChangesSink::arg(ConstStrA key, T value) {
 
 	if (filterArgs == null) filterArgs = json.object();
 	filterArgs.set(key, json(value));
+	return *this;
 
 }
 

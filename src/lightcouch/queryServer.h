@@ -352,15 +352,19 @@ protected:
 class QueryServer {
 public:
 
-	///Standard constructor
-	QueryServer();
 	///Constructor specified name of this query server
 	/**
 	 * @param name name of query server. It should match name of query server registered in
 	 * couchdb's ini section. This is important if you need to generate design documents
 	 * from the QueryServer's function defintions. Otherwise, you can use constructor without argument
+	 *
+	 * @param path path to query server's application. If path is not empty, it must be
+	 *  valid and should contain pathname to the file, which is modified everytime the
+	 *  application is updated (i.e. path to the current binary is enough).	 *
+	 *  The object will monitor the binary and drops connection anytime the referenced
+	 *  binary is updated
 	 */
-	QueryServer(ConstStrA name);
+	QueryServer(ConstStrA name, ConstStrW path);
 
 
 	///Registers view
@@ -467,6 +471,13 @@ public:
 
 protected:
 
+	///Checks, whether application has been updated.
+	/** The function compares modification time of the program with stored time
+	 * the differ, exception VersionMistmatchException is thrown.
+	 *
+	 * Function is called during "reset" phase
+	 */
+	virtual void checkAppUpdate();
 
 
 
@@ -484,10 +495,13 @@ protected:
 	RegUpdateFn updates;
 	RegFilterFn filters;
 	StringA qserverName;
+	String qserverPath;
 	Container ddcache;
 
 	AutoArray<AbstractViewBase::Row> rowBuffer;
 	AutoArray<AbstractViewBase::ReducedRow> valueBuffer;
+
+	TimeStamp appUpdateTime;
 
 private:
 	struct PreparedMap {
@@ -524,7 +538,6 @@ private:
 
 class QueryServerApp : public LightSpeed::App, public QueryServer {
 public:
-	QueryServerApp(integer priority = 0);
 	QueryServerApp(ConstStrA name, integer priority = 0);
 
 	virtual integer start(const Args &args);

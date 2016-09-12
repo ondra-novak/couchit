@@ -5,7 +5,7 @@
  *      Author: ondra
  */
 
-#include "ichangeNotify.h"
+
 #include "changeset.h"
 #include "couchDB.h"
 #include <lightspeed/base/containers/convertString.h>

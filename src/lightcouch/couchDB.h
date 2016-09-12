@@ -15,7 +15,6 @@
 #include "uid.h"
 #include "object.h"
 
-#include "ichangeNotify.h"
 
 #include "view.h"
 #include "config.h"

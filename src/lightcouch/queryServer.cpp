@@ -26,9 +26,20 @@ using LightSpeed::JSON::Null;
 using LightSpeed::NamedEnumDef;
 namespace LightCouch {
 
-QueryServer::QueryServer() {}
-QueryServer::QueryServer(ConstStrA name):qserverName(name) {}
+QueryServer::QueryServer(ConstStrA name, ConstStrW pathname)
+		:qserverName(name),qserverPath(pathname) {
+	IFileIOServices &svc = IFileIOServices::getIOServices();
+	appUpdateTime = svc.getFileInfo(pathname)->getModifiedTime();
+}
 
+
+void QueryServer::checkAppUpdate() {
+	IFileIOServices &svc = IFileIOServices::getIOServices();
+	TimeStamp updated = svc.getFileInfo(qserverPath)->getModifiedTime();
+	if (updated != appUpdateTime) {
+		throw VersionMistmatch(THISLOCATION);
+	}
+}
 
 
 const StringA& QueryServerError::getType() const {
@@ -45,6 +56,7 @@ void QueryServerError::message(ExceptionMsg& msg) const {
 integer QueryServerApp::start(const Args& args) {
 	integer init = initServer(args);
 	if (init) return init;
+	qserverPath = getAppPathname();
 	return QueryServer::runDispatchStdIO();
 }
 
@@ -146,6 +158,7 @@ void LightCouch::QueryServer::runDispatch(PInOutStream stream) {
 }
 
 ConstValue QueryServer::commandReset(const ConstValue& ) {
+	checkAppUpdate();
 	preparedMaps.clear();
 	return JSON::getConstant(JSON::constTrue);
 }
@@ -549,6 +562,7 @@ void QueryServer::regFilter(StringA filterName, AbstractFilterBase* impl) {
 	filters.insert(StrKey(filterName),impl);
 }
 
+
 Value QueryServer::createDesignDocument(Value container, ConstStrA fnName, ConstStrA &suffix) {
 	natural pos = fnName.find('/');
 	ConstStrA docName;
@@ -659,10 +673,7 @@ void QueryServer::syncDesignDocuments(ConstValue designDocuments, CouchDB& couch
 
 
 
-QueryServerApp::QueryServerApp(integer priority):LightSpeed::App(priority) {
-}
-
-QueryServerApp::QueryServerApp(ConstStrA name, integer priority):LightSpeed::App(priority), QueryServer(name) {
+QueryServerApp::QueryServerApp(ConstStrA name, integer priority):LightSpeed::App(priority), QueryServer(name, ConstStrW()) {
 }
 
 
