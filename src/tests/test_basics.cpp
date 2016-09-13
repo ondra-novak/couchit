@@ -435,12 +435,10 @@ static void couchRetrieveDocument(PrintTextA &a) {
 	Result res = q.select("Kermit Byrd")(Query::isArray).exec();
 	Row row = res.getNext();
 
-	ConstValue doc = db.retrieveDocument(row.id.getStringA(), CouchDB::flgSeqNumber);
-	Container r = db.json.object(doc);
-	r.unset("_id");
+	Document doc = db.retrieveDocument(row.id.getStringA(), CouchDB::flgSeqNumber);
 	//this is random - cannot be tested
-	r.unset("_rev");
-	a("%1") << db.json.factory->toString(*r);
+	doc.edit(db.json).unset("_id").unset("_rev");
+	a("%1") << db.json.factory->toString(*doc);
 }
 
 static void couchStoreAndRetrieveAttachment(PrintTextA &a) {

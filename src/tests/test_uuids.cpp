@@ -7,6 +7,7 @@
 
 #include "lightspeed/base/framework/testapp.h"
 #include "lightspeed/base/text/textstream.tcc"
+#include "lightspeed/base/streams/fileiobuff.tcc"
 #include "../lightcouch/couchDB.h"
 
 #include "test_common.h"
