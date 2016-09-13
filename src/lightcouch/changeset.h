@@ -10,7 +10,6 @@
 #include <lightspeed/base/containers/constStr.h>
 #include <lightspeed/base/exceptions/exception.h>
 #include <lightspeed/utils/json/json.h>
-#include "uid.h"
 #include "couchDB.h"
 
 

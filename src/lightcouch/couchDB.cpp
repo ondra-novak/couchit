@@ -22,7 +22,6 @@
 #include "lightspeed/base/streams/fileiobuff.tcc"
 #include "lightspeed/base/containers/map.tcc"
 #include "exception.h"
-#include "uid.h"
 #include "query.h"
 
 #include "lightspeed/base/streams/netio_ifc.h"

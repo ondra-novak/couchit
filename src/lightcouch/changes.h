@@ -25,11 +25,9 @@ class CouchDB;
 class Filter;
 
 ///Contains information about changed document
-class ChangedDoc {
+class ChangedDoc: public ConstValue {
 
 public:
-	///contains whole changeset as it was received from the feed
-	const ConstValue allData;
 	///sequence number
 	const natural seqId;
 	///document id

@@ -12,7 +12,6 @@
 #include <lightspeed/base/streams/netio.h>
 #include <lightspeed/utils/json/json.h>
 
-#include "uid.h"
 #include "object.h"
 
 

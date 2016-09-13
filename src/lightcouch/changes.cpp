@@ -19,7 +19,7 @@ static bool safeBool(const JSON::INode *ptr) {
 
 
 ChangedDoc::ChangedDoc(const ConstValue& allData)
-:allData(allData)
+:ConstValue(allData)
 ,seqId(allData["seq"]->getUInt())
 ,id(allData["id"]->getStringUtf8())
 ,revisions(allData["changes"])

@@ -5,7 +5,6 @@
  *      Author: ondra
  */
 
-#include "../lightcouch/uid.h"
 #include "lightspeed/base/framework/testapp.h"
 #include "lightspeed/base/text/textstream.tcc"
 #include "../lightcouch/couchDB.h"
