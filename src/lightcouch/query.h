@@ -76,7 +76,12 @@ public:
 
 
 	///Resets query object state. Deletes prepared query
-	QueryBase &reset();
+	/**
+	 * @note You @b have to call reset() everytime you need to build new query after exec(). This is not done automatically.
+	 *
+	 * @return chaining reference
+	 */
+	virtual QueryBase &reset();
 
 
 	///select one or more keys defined as json value
@@ -206,6 +211,13 @@ public:
 	template<typename T>
 	QueryBase &arg(ConstStrA key, T value);
 
+	///Execute query and return the result
+	/**
+	 * @return result of query. You can pass the result to the Result object.
+	 *
+	 * @note if you need to reuse the query object, you need to call reset(), otherwise old setup can influent the next query
+	 *
+	 */
 	virtual ConstValue exec() = 0;
 
 
