@@ -114,7 +114,7 @@ public:
 	public:
 		Query(const LocalView &lview, const Json &json, natural viewFlags, PostProcessFn ppfn);
 
-		virtual ConstValue exec() override;
+		virtual Result exec() const override;
 
 	protected:
 		const LocalView &lview;

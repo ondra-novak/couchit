@@ -23,6 +23,7 @@ namespace LightCouch {
 
 class CouchDB;
 class View;
+class Result;
 
 using namespace LightSpeed;
 
@@ -218,7 +219,7 @@ public:
 	 * @note if you need to reuse the query object, you need to call reset(), otherwise old setup can influent the next query
 	 *
 	 */
-	virtual ConstValue exec() = 0;
+	virtual Result exec() const = 0;
 
 
 
@@ -228,9 +229,9 @@ public:
 protected:
 
 
-	AutoArray<JSON::ConstValue,SmallAlloc<9> > curKeySet;
-	JSON::ConstValue startkey, endkey;
-	JSON::Container keys;
+	mutable AutoArray<JSON::ConstValue,SmallAlloc<9> > curKeySet;
+	mutable JSON::ConstValue startkey, endkey;
+	mutable JSON::Container keys;
 	enum Mode {
 		mdKeys,
 		mdStart,
@@ -255,7 +256,7 @@ protected:
 
 
 	typedef AutoArrayStream<char> UrlLine;
-	UrlLine urlline;
+	mutable UrlLine urlline;
 	typedef TextOut<UrlLine &, SmallAlloc<256> > UrlFormatter;
 
 
@@ -263,15 +264,15 @@ protected:
 
 	natural viewFlags;
 
-	JSON::ConstValue buildKey(ConstStringT<JSON::ConstValue> values);
-	JSON::Container buildRangeKey(ConstStringT<JSON::ConstValue> values);
+	JSON::ConstValue buildKey(ConstStringT<JSON::ConstValue> values) const;
+	JSON::Container buildRangeKey(ConstStringT<JSON::ConstValue> values) const;
 
 
 
-	void finishCurrent();
+	void finishCurrent() const;;
 	JSON::Value initArgs();
-	void appendCustomArg(UrlFormatter &fmt, ConstStrA key, ConstStrA value);
-	void appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode * value );
+	static void appendCustomArg(UrlFormatter &fmt, ConstStrA key, ConstStrA value) ;
+	void appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode * value ) const;
 
 };
 
@@ -308,8 +309,7 @@ public:
 	Query(const Query &other);
 	virtual ~Query();
 
-	ConstValue exec(CouchDB &db);
-	ConstValue exec();
+	virtual Result exec() const override;
 
 protected:
 	CouchDB &db;
@@ -354,9 +354,9 @@ enum MergeType {
 };
 
 
-class Result: public IteratorBase<ConstValue, Result> {
+class Result: public ConstValue, public IteratorBase<ConstValue, Result> {
 public:
-	Result(ConstValue jsonResult);
+	Result(const Json &json, ConstValue jsonResult);
 
 	const ConstValue &getNext();
 	const ConstValue &peek() const;
@@ -364,7 +364,6 @@ public:
 
 	natural getTotal() const;
 	natural getOffset() const;
-	natural length() const;
 	natural getRemain() const;
 	void rewind();
 
@@ -399,50 +398,104 @@ public:
 	 */
 	Result join(const JSON::Path foreignKey, QueryBase &q, ConstStrA resultName = ConstStrA());
 
-	///Merges two results
-	/** Processe two results and merges them key by key
+
+	///Sorts result
+	/** Function orders rows by compare function
 	 *
-	 * Merge uses only keys. It expects, that they are ordered. However
-	 * there is small difference between LightCouch orderibg and CouchDB's
-	 * ordering (LightCouch always order members of the objects alphabetically)
+	 * @param compareRowsFunction accepts two rows and returns -1, 0, or 1
+	 * @param descending set true to reverse ordering
+	 * @return
 	 *
+	 * The compareRowsFunction has following prototype
+	 * @code
+	 * int compareRowsFunction(const ConstValue &left, const ConstValue &right);
+	 * @endcode
 	 *
-	 * @param json json object need to create new result
-	 * @param mergeType type of merge
+	 * Function should return
+	 *
+	 *  - -1 if left is less than right
+	 *  - +1 if less is greater than right
+	 *  - 0 if they are equal
+	 *
+	 * If descending is set to true, result will be reversed
+	 */
+	template<typename Fn>
+	Result sort(Fn compareRowsFunction, bool descending = false) const;
+
+
+	///Aggregate groups of rows
+	/**
+	 * @param compareRowsFunction function which compares rows. It accepts 2xRow and returns -1,0, or 1
+	 * @param reduceFn function which reduces rows. It accepts ConstStringT<ConstValue> and returns ConstValue
+	 * @param descending set true to reverse ordering
+	 * @return new result
+	 *
+	 * The compareRowsFunction has following prototype
+	 * @code
+	 * int compareRowsFunction(const ConstValue &left, const ConstValue &right);
+	 * @endcode
+	 *
+	 * Function should return
+	 *
+	 *  - -1 if left is less than right
+	 *  - +1 if less is greater than right
+	 *  - 0 if they are equal
+	 *
+	 * If descending is set to true, result will be reversed
+	 *
+	 * The reduceFn has following prototype
+	 * @code
+	 * ConstValue reduceFn(const ConstStringT<ConstValue> &rows)
+	 * @endcode
+	 *
+	 * Function should return reduced row. Function should follow format of the row to allow the row
+	 * process using Row object. It should have at least "key" and "value"
+	 */
+	template<typename CmpFn, typename ReduceFn>
+	Result group(CmpFn compareRowsFunction, ReduceFn reduceFn, bool descending = false) const;
+
+
+
+	///Merges two results into one
+	/**
+	 *
 	 * @param other other result
+	 * @param mergeFn function which accepts two rows and returns one of them.
 	 * @return merged result
+	 *
+	 * The mergeFn has following prototype
+	 * @code
+	 * ConstValue mergeFn(const ConstValue &left,const ConstValue &right);
+	 * @endcode
+	 *
+	 * mergeFn can return
+	 *   - left row: left row will be put to the result and left result will advance. Note that you need
+	 *    to return directly the argument left (references are compared)
+	 *   - right row: right row will be put to the result and right result will advance. Note that you need
+	 *    to return directly the argument right (references are compared)
+	 *   - anything except null: row will be put to the result and both (left and right) results will advance
+	 *   - null: nothing will be put to the result and both (left and right) results will advance
+	 *
+	 * If the argument left is null, there is no more items in the left result.
+	 * If the argument right is null, there is no more items in the right result.
+	 * Function will never called with both arguments set to null
+	 *
+	 * @note function expect, that results are already ordered. It doesn't perform ordering. You
+	 * have to perform it before using sort()
 	 */
-	Result merge(const Json &json, MergeType mergeType, Result &other);
-
-	///Makes result unique
-	/** For every row, array is created instead value and
-	 * values of duplicated keys are put together to the array
-	 * @return new result
-	 * @note included documents are not put to the arrays
-	 */
-	Result unique();
-
-	///Removes dupliced rows
-	/** Function removes duplicated keys and values. Note that
-	 * included documents are not considered as values.
-	 * @return new result
-	 */
-	Result distinct();
-
-	///Retrieve whole result as array of rows;
-	ConstValue getRows() const {return rows;}
+	template<typename MergeFn>
+	Result merge(const Result &other, const MergeFn &mergeFn) const;
 
 protected:
 
-	ConstValue rows;
-	JSON::ConstIterator rowIter;
-	mutable ConstValue out;
+	Json json;
+	natural rdpos;
 	natural total;
 	natural offset;
+	mutable ConstValue out;
 };
 
+
 }
-
-
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_QUERY_H_ */
 

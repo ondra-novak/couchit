@@ -12,6 +12,7 @@
 
 #include "collation.h"
 #include "couchDB.h"
+#include "query.tcc"
 
 namespace LightCouch {
 
@@ -164,7 +165,7 @@ void QueryBase::appendCustomArg(UrlFormatter &fmt, ConstStrA key, ConstStrA valu
 }
 
 
-void QueryBase::appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode * value ) {
+void QueryBase::appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode * value ) const {
 	if (value->getType() == JSON::ndString) {
 		appendCustomArg(fmt,key,CouchDB::urlencode(value->getStringUtf8()));
 	} else {
@@ -173,7 +174,9 @@ void QueryBase::appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::IN
 	}
 }
 
-ConstValue Query::exec(CouchDB &db) {
+Result Query::exec() const {
+
+
 	finishCurrent();
 
 	StringA hlp;
@@ -265,7 +268,7 @@ ConstValue Query::exec(CouchDB &db) {
 	if (viewDefinition.postprocess) {
 		result = viewDefinition.postprocess(&db, args,result);
 	}
-	return result;
+	return Result(json,result);
 
 }
 
@@ -274,14 +277,14 @@ QueryBase& QueryBase::group(natural level) {
 	return *this;
 }
 
-JSON::ConstValue QueryBase::buildKey(ConstStringT<ConstValue> values) {
+JSON::ConstValue QueryBase::buildKey(ConstStringT<ConstValue> values) const {
 	if (!forceArray && values.length() == 1) {
 		return json(values[0]);
 	}
 	else return json(values);
 }
 
-JSON::Container QueryBase::buildRangeKey(ConstStringT<ConstValue> values) {
+JSON::Container QueryBase::buildRangeKey(ConstStringT<ConstValue> values) const {
 	return json(values);
 }
 
@@ -328,7 +331,7 @@ QueryBase::QueryBase(const QueryBase& other)
 }
 
 
-void QueryBase::finishCurrent()
+void QueryBase::finishCurrent() const
 {
 	if (curKeySet.empty())
 		return;
@@ -357,28 +360,27 @@ void QueryBase::finishCurrent()
 }
 
 
-Result::Result(ConstValue jsonResult)
-:rows(jsonResult["rows"])
-,rowIter(jsonResult["rows"]->getFwIter())
+Result::Result(const Json &json, ConstValue jsonResult)
+	:json(json),rdpos(0)
 {
 	JSON::INode *jtotal = jsonResult->getPtr("total_rows");
-	if (jtotal) total = jtotal->getUInt(); else total = rows->length();
+	if (jtotal) total = jtotal->getUInt(); else total = this->length();
 	JSON::INode *joffset = jsonResult->getPtr("offset");
 	if (joffset) offset = joffset->getUInt(); else offset = 0;
 }
 
 const ConstValue& Result::getNext() {
-	out = rowIter.getNext();
+	out = (*this)[rdpos++];
 	return out;
 }
 
 const ConstValue& Result::peek() const {
-	out = rowIter.peek();
+	out = (*this)[rdpos];
 	return out;
 }
 
 bool Result::hasItems() const {
-	return rowIter.hasItems();
+	return rdpos < this->length();
 }
 
 natural Result::getTotal() const {
@@ -389,16 +391,13 @@ natural Result::getOffset() const {
 	return offset;
 }
 
-natural Result::length() const {
-	return rows->length();
-}
 
 natural Result::getRemain() const {
-	return rowIter.getRemain();
+	return this->length() - rdpos;
 }
 
 void Result::rewind() {
-	rowIter = rows->getFwIter();
+	rdpos = 0;
 }
 
 
@@ -417,9 +416,6 @@ JSON::Value QueryBase::initArgs() {
 }
 
 
-ConstValue Query::exec() {
-	return exec(db);
-}
 QueryBase::~QueryBase() {
 }
 
@@ -436,8 +432,8 @@ Query::~Query() {
 Result Result::join(const JSON::Path foreignKey,QueryBase& q,ConstStrA resultName) {
 
 
-	Container newRows = q.json.array();
-	Container result = q.json("rows",newRows);
+	Container newRows = json.array();
+	Container result = json("rows",newRows);
 
 
 		typedef Map<ConstValue, Container, JsonIsLess> Keys;
@@ -449,25 +445,25 @@ Result Result::join(const JSON::Path foreignKey,QueryBase& q,ConstStrA resultNam
 			if (frKey == null) {
 				result.add(rw);
 			} else {
-				Container newObj = q.json.object();
+				Container newObj = json.object();
 				newObj.load(rw);
 				Container &target = keys(frKey);
 				if (target == nil) {
-					target = q.json.array();
+					target = json.array();
 				}
 				Container newVal;
 				if (rw.value == null) {
-					newVal = q.json.array();
+					newVal = json.array();
 					newVal.add(target);
 				} else if (rw.value->isArray()) {
 					newVal.load(rw.value);
 					newVal.add(target);
 				} else if (rw.value->isObject() && !resultName.empty()) {
-					newVal = q.json.object();
+					newVal = json.object();
 					newVal.load(rw.value);
 					newVal.set(resultName,target);
 				} else {
-					newVal = q.json.array();
+					newVal = json.array();
 					newVal.add(rw.value);
 					newVal.add(target);
 				}
@@ -505,7 +501,7 @@ Result Result::join(const JSON::Path foreignKey,QueryBase& q,ConstStrA resultNam
 		}
 	}
 
-	return Result(result);
+	return Result(json,result);
 }
 
 

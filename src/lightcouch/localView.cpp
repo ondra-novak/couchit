@@ -400,7 +400,7 @@ LocalView::Query::Query(const LocalView& lview, const Json& json, natural viewFl
 
 }
 
-ConstValue LocalView::Query::exec() {
+Result LocalView::Query::exec() const {
 	finishCurrent();
 	ConstValue result;
 	if (keys == null || keys.empty()) {
@@ -409,7 +409,7 @@ ConstValue LocalView::Query::exec() {
 		result = lview.searchKeys(keys,groupLevel);
 	}
 	if (ppfn) result = ppfn(json, args, result);
-	return result;
+	return Result(json,result);
 }
 
 
