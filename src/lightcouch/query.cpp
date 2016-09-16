@@ -361,7 +361,7 @@ void QueryBase::finishCurrent() const
 
 
 Result::Result(const Json &json, ConstValue jsonResult)
-	:json(json),rdpos(0)
+	:ConstValue(jsonResult["rows"]),json(json),rdpos(0)
 {
 	JSON::INode *jtotal = jsonResult->getPtr("total_rows");
 	if (jtotal) total = jtotal->getUInt(); else total = this->length();
@@ -429,7 +429,7 @@ Query::~Query() {
 
 }
 
-Result Result::join(const JSON::Path foreignKey,QueryBase& q,ConstStrA resultName) {
+/*Result Result::join(const JSON::Path foreignKey,QueryBase& q,ConstStrA resultName) {
 
 
 	Container newRows = json.array();
@@ -502,7 +502,7 @@ Result Result::join(const JSON::Path foreignKey,QueryBase& q,ConstStrA resultNam
 	}
 
 	return Result(json,result);
-}
+}*/
 
 
 /*
