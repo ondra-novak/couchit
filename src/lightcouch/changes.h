@@ -29,7 +29,7 @@ class ChangedDoc: public ConstValue {
 
 public:
 	///sequence number
-	const natural seqId;
+	const ConstValue seqId;
 	///document id
 	const ConstStrA id;
 	///list of revisions changed
@@ -116,12 +116,16 @@ public:
 	 */
 	ChangesSink(CouchDB &couchdb);
 
-	///specifies sequence of last seen change. Default is zero
+
+	///specifies sequence of last seen change.
 	/**
-	 * @param seqNumber last seen change. Listener will generate changes starting by this seq number
-	 * @return reference to this (chaining)
+	 * @param seqNumber last seen change. Listener will generate changes starting by this seq number.
+	 *
+	 * @return reference to this (chaining).
+	 *
 	 */
-	ChangesSink& fromSeq(natural seqNumber);
+	ChangesSink& fromSeq(ConstValue seqNumber);
+
 	///Specifies timeout how long will listener wait for changes
 	/**
 	 *
@@ -223,7 +227,7 @@ public:
 protected:
 
 	CouchDB &couchdb;
-	natural seqNumber;
+	ConstValue seqNumber;
 	natural outlimit;
 	natural timeout;
 	Optional<Filter> filter;

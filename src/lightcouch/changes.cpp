@@ -20,7 +20,7 @@ static bool safeBool(const JSON::INode *ptr) {
 
 ChangedDoc::ChangedDoc(const ConstValue& allData)
 :ConstValue(allData)
-,seqId(allData["seq"]->getUInt())
+,seqId(allData["seq"])
 ,id(allData["id"]->getStringUtf8())
 ,revisions(allData["changes"])
 ,deleted(safeBool(allData->getPtr("deleted")))
@@ -56,7 +56,7 @@ ChangesSink::ChangesSink(CouchDB& couchdb)
 {
 }
 
-ChangesSink& ChangesSink::fromSeq(natural seqNumber) {
+ChangesSink& ChangesSink::fromSeq(ConstValue seqNumber) {
 	this->seqNumber = seqNumber;
 	return *this;
 }

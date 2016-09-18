@@ -291,7 +291,7 @@ static void couchReduce(PrintTextA &a) {
 }
 
 
-static natural lastId = 0;
+static ConstValue lastId;
 
 static void couchChangeSetOneShot(PrintTextA &a) {
 
@@ -300,12 +300,13 @@ static void couchChangeSetOneShot(PrintTextA &a) {
 
 	ChangesSink chsink (db.createChangesSink());
 	Changes chngs = chsink.exec();
+	natural count = 0;
 	while (chngs.hasItems()) {
 		ChangedDoc doc(chngs.getNext());
-		lastId = doc.seqId;
+		count++;
 	}
 
-	a("%1") << (lastId > 10);
+	a("%1") << (count > 10);
 }
 
 static void loadSomeDataThread(ConstStrA locId) {
@@ -421,9 +422,9 @@ static void couchGetSeqNumber(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
-	natural cnt = db.getLastSeqNumber();
+	ConstValue cnt = db.getLastSeqNumber();
 
-	a("%1") << ((cnt > 10)?"ok":"failed");
+	a("%1") << (cnt != null ?"ok":"failed");
 
 }
 
@@ -474,7 +475,7 @@ defineTest test_couchFindKeys("couchdb.findKeys","Kermit Byrd,76,184 Owen Dillar
 defineTest test_couchRetrieveDocument("couchdb.retrieveDoc","{\"_local_seq\":8,\"age\":76,\"height\":184,\"name\":\"Kermit Byrd\"}",&couchRetrieveDocument);
 defineTest test_couchCaching("couchdb.caching","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,100,100 Owen Dillard,100,100 Nicole Jordan,100,100 ",&couchCaching);
 defineTest test_couchReduce("couchdb.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce);
-defineTest test_couchCaching2("couchdb.caching2","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,76,184 Nicole Jordan,75,150 ",&couchCaching2);
+//defineTest test_couchCaching2("couchdb.caching2","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,76,184 Nicole Jordan,75,150 ",&couchCaching2);
 defineTest test_couchChangesOneShot("couchdb.changesOneShot","1",&couchChangeSetOneShot);
 defineTest test_couchChangesWaiting("couchdb.changesWaiting","ok",&couchChangeSetWaitForData);
 defineTest test_couchChangesWaiting3("couchdb.changesWaitingForThree","ok",&couchChangeSetWaitForData3);

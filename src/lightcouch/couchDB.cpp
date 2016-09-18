@@ -323,11 +323,11 @@ Changeset CouchDB::createChangeset() {
 
 
 
-natural CouchDB::getLastSeqNumber() {
+ConstValue CouchDB::getLastSeqNumber() {
 	ChangesSink chsink = createChangesSink();
 	Changes chgs = chsink.setFilterFlags(Filter::reverseOrder).limit(1).exec();
 	if (chgs.hasItems()) return ChangedDoc(chgs.getNext()).seqId;
-	else return 0;
+	else return null;
 }
 
 atomicValue& CouchDB::trackSeqNumbers() {
@@ -772,7 +772,12 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	reqPathToFullPath("_changes",reqline.getArray());
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(reqline);
 
-	urlfmt("?since=%1") << sink.seqNumber;
+	natural qpos = reqline.length();
+
+	if (sink.seqNumber != null) {
+		ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> seqNumb(sink.seqNumber.getStringA().getFwIter());
+		urlfmt("&since=%1") << &seqNumb;
+	}
 	if (sink.outlimit != naturalNull) {
 		urlfmt("&limit=%1") << sink.outlimit;
 	}
@@ -873,6 +878,8 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		mutable Timeout limitTm;
 	};
 
+	if (qpos < reqline.length()) reqline.getArray().set(qpos,'?');
+
 	Synchronized<FastLock> _(lock);
 	WHandle whandle(sink.cancelState);
 	http.open(HttpClient::mGET,reqline.getArray());
@@ -933,7 +940,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 
 
 	ConstValue results=v["results"];
-	sink.seqNumber = v["last_seq"]->getUInt();
+	sink.seqNumber = v["last_seq"];
 	if (seqNumSlot) *seqNumSlot = sink.seqNumber;
 
 	return results;

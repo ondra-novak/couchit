@@ -229,7 +229,7 @@ public:
 	 * changes made during synchronization
 	 * @return last sequence number
 	 */
-	natural getLastSeqNumber();
+	ConstValue getLastSeqNumber();
 
 	///Creates query for specified view
 	/**
