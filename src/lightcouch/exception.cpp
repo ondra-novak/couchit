@@ -58,6 +58,19 @@ const char *UpdateException::msgText = "Update exception - some items was not wr
 const char *CanceledException::msgText = "Operation has been canceled";
 
 
+bool UpdateException::ErrorItem::isConflict() const {
+	return errorType == "conflict";
+}
+
+
+const UpdateException::ErrorItem& UpdateException::getError(natural index) const {
+	return errors[index];
+}
+
+natural UpdateException::getErrorCnt() const {
+	return errors.length();
+}
+
 
 }
 

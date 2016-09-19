@@ -59,12 +59,15 @@ public:
 		ConstStrA reason;
 		JSON::ConstValue document;
 		JSON::ConstValue errorDetails;
+		bool isConflict() const;
 	};
 
 
 	LIGHTSPEED_EXCEPTIONFINAL;
 	UpdateException(const ProgramLocation &loc, const StringCore<ErrorItem> &errors);
 	ConstStringT<ErrorItem> getErrors() const;
+	const ErrorItem &getError(natural index) const;
+	natural getErrorCnt() const;
 
 	static const char *msgText;
 
