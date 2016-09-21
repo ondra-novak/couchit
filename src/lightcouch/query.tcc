@@ -137,7 +137,7 @@ inline Result LightCouch::Result::join(QueryBase& q, ConstStrA name, natural fla
 		if (rows.empty()) {
 			q.selectKey(fk);
 		}
-		Container newrow = row->copy(json.factory,1,row->isMTAccessEnabled());
+		Container newrow = row->copy(json.factory,1);
 
 	}
 

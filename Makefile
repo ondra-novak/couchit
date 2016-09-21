@@ -14,6 +14,7 @@ ifeq "$(MAKECMDGOALS)" "debugtests"
 else
 	LIBNAME:=lightcouch
 	BUILDTYPE=lib
+	SOURCES:=src
 	SOURCES=src/lightcouch
 endif
 endif
