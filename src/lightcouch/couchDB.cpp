@@ -506,37 +506,10 @@ StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,C
 	}
 }
 
-void CouchDB::downloadAttachment(Document& document, ConstStrA attachmentName, const DownloadFn &downloadFn) {
-	Synchronized<FastLock> _(lock);
+void CouchDB::downloadAttachment(const Document& document, ConstStrA attachmentName, const DownloadFn &downloadFn, ConstStrA etag) {
 	ConstStrA documentId = document.getID();
 	ConstStrA revId = document.getRev();
-	UrlLine urlline;
-	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
-	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
-	urlfmt("%1/%2/%3/%4") << baseUrl << database << &docIdEnc << &attNameEnc;
-	if (!revId.empty()) {
-		FilterRead<ConstStrA::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
-		urlfmt("?rev=%1") << &revIdEnc;
-	}
-	http.open(HttpClient::mGET, urlline.getArray());
-	SeqFileInput in = http.send();
-	if (http.getStatus() != 200) {
-
-		JSON::Value errorVal;
-		try{
-			errorVal = factory->fromStream(in);
-		} catch (...) {
-
-		}
-		http.close();
-		throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
-	} else {
-		HttpClient::HeaderValue ctx = http.getHeader(HttpClient::fldContentType);
-		HttpClient::HeaderValue len = http.getHeader(HttpClient::fldContentLength);
-		natural llen = naturalNull;
-		if (len.defined) parseUnsignedNumber(len.getFwIter(), llen, 10);
-		downloadFn(DownloadFile(in,ctx,llen));
-	}
+	downloadAttachment(documentId,revId,attachmentName,downloadFn,etag);
 }
 
 Value CouchDB::genUIDValue() {
@@ -558,18 +531,12 @@ StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,
 
 }
 
-AttachmentData CouchDB::downloadAttachment(Document& document,
+AttachmentData CouchDB::downloadAttachment(const Document& document,
 		ConstStrA attachmentName) {
 
-	StringB data;
-	StringA contentType;
-	downloadAttachment(document, attachmentName, [&](const DownloadFile &dw) {
-		if (dw.contentLength == naturalNull) throw ErrorMessageException(THISLOCATION,"No content-length");
-		StringB::WriteIterator wr= data.createBufferIter(dw.contentLength);
-		wr.copy(dw,dw.contentLength);
-		contentType = dw.contentType;
-	});
-	return AttachmentData(data,contentType);
+	ConstStrA documentId = document.getID();
+	ConstStrA revId = document.getRev();
+	return downloadAttachment(documentId,revId,attachmentName);
 
 }
 
@@ -950,5 +917,61 @@ ChangesSink CouchDB::createChangesSink() {
 	return ChangesSink(*this);
 }
 
-} /* namespace assetex */
+Value CouchDB::emptyDocument(ConstStrA id) {
+	return json("_id",id);
+}
 
+void CouchDB::downloadAttachment(const ConstStrA& documentId, const ConstStrA& revId,
+		const ConstStrA& attachmentName, const DownloadFn& downloadFn,
+		ConstStrA etag) {
+
+	Synchronized<FastLock> _(lock);
+	UrlLine urlline;
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
+	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
+	urlfmt("%1/%2/%3/%4") << baseUrl << database << &docIdEnc << &attNameEnc;
+	if (!revId.empty()) {
+		FilterRead<ConstStrA::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
+		urlfmt("?rev=%1") << &revIdEnc;
+	}
+	http.open(HttpClient::mGET, urlline.getArray());
+	if (!etag.empty()) http.setHeader(http.fldIfNoneMatch,etag);
+	SeqFileInput in = http.send();
+	natural status = http.getStatus();
+	if (status != 200 && status != 304) {
+
+		JSON::Value errorVal;
+		try{
+			errorVal = factory->fromStream(in);
+		} catch (...) {
+
+		}
+		http.close();
+		throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
+	} else {
+		HttpClient::HeaderValue ctx = http.getHeader(HttpClient::fldContentType);
+		HttpClient::HeaderValue len = http.getHeader(HttpClient::fldContentLength);
+		HttpClient::HeaderValue etag = http.getHeader(HttpClient::fldETag);
+		natural llen = naturalNull;
+		if (len.defined) parseUnsignedNumber(len.getFwIter(), llen, 10);
+		downloadFn(DownloadFile(in,ctx,etag,llen,status == 304));
+	}
+
+}
+
+AttachmentData CouchDB::downloadAttachment(const ConstStrA& docId,
+		const ConstStrA& revId, const ConstStrA& attachmentName) {
+	StringB data;
+	StringA contentType;
+	downloadAttachment(docId, revId,attachmentName, [&](const DownloadFile &dw) {
+		if (dw.contentLength == naturalNull) throw ErrorMessageException(THISLOCATION,"No content-length");
+		StringB::WriteIterator wr= data.createBufferIter(dw.contentLength);
+		wr.copy(dw,dw.contentLength);
+		contentType = dw.contentType;
+	});
+	return AttachmentData(data,contentType);
+
+}
+
+
+} /* namespace assetex */

@@ -323,6 +323,18 @@ public:
 	 */
 	Value newDocument(ConstStrA prefix);
 
+	///Creates empty document with specified ID
+	/**
+	 * @param id id of document
+	 * @return empty document as Value, you can assign result to an Document instance
+	 *
+	 * @note You can use empty document to create new document with predefined ID.
+	 *
+	 */
+	Value emptyDocument(ConstStrA id);
+
+
+
 	///Retrieves pointer to validator
 	/**
 	 * @return function returns null, when validator is not defined. Otherwise function
@@ -403,12 +415,24 @@ public:
 	ConstValue showDoc(ConstStrA showHandlerPath, ConstStrA documentId, JSON::ConstValue arguments, natural flags = 0);
 
 
+	///Contains information about downloaded file
 	class DownloadFile: public SeqFileInput {
 	public:
-		DownloadFile(const SeqFileInput &stream, ConstStrA contentType, natural contentLength):SeqFileInput(stream)
-				,contentType(contentType),contentLength(contentLength) {}
+		///constructor is called inside of download function
+		DownloadFile(const SeqFileInput &stream, ConstStrA contentType, ConstStrA etag, natural contentLength, bool notModified):SeqFileInput(stream)
+				,contentType(contentType),etag(etag),contentLength(contentLength),notModified(notModified) {}
+
+		///contains content type of the attachment
 		const ConstStrA contentType;
-		natural contentLength;
+		///contains ETag. You can put this to the response
+		const ConstStrA etag;
+		///contains length of the attachment
+		const natural contentLength;
+		///specifies, that content has not been modified.
+		/** If this flag is set, no data has been downloaded. You can return 304 to the
+		 * client with empty response.
+		 */
+		const bool notModified;
 	};
 
 	typedef Message<void, SeqFileOutput> UploadFn;
@@ -441,8 +465,11 @@ public:
 	 * @param document document. The document don't need to be complete, only _id and _rev must be there.
 	 * @param attachmentName name of attachment to retrieve
 	 * @param downloadFn function, which accepts DownloadFile where you can
+	 * @param etag if not empty, function puts string as "if-none-match" header.
+	 *
+	 *
 	 */
-	void downloadAttachment(Document &document, ConstStrA attachmentName, const DownloadFn &downloadFn);
+	void downloadAttachment(const Document &document, ConstStrA attachmentName, const DownloadFn &downloadFn, ConstStrA etag=ConstStrA());
 
 	///Downloads attachment
 	/**
@@ -452,7 +479,15 @@ public:
 	 * @param attachmentName name of attachment to retrieve
 	 * @return content of attachment
 	 */
-	AttachmentData downloadAttachment(Document &document, ConstStrA attachmentName);
+	AttachmentData downloadAttachment(const Document &document, ConstStrA attachmentName);
+
+	void downloadAttachment(const ConstStrA &docId, const ConstStrA &revId,
+						const ConstStrA &attachmentName,
+						const DownloadFn &downloadFn, ConstStrA etag=ConstStrA());
+
+	AttachmentData downloadAttachment(const ConstStrA &docId, const ConstStrA &revId,
+						const ConstStrA &attachmentName);
+
 
 	///For function updateDesignDocument
 	enum DesignDocUpdateRule {
@@ -560,9 +595,6 @@ protected:
 	template<typename C>
 	void reqPathToFullPath(ConstStrA reqPath, C &output);
 
-	template<typename C>
-	void urlEncodeToStream(ConstStrA str, C &output);
-
 
 	JSON::ConstValue jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags);
 
@@ -580,5 +612,6 @@ public:
 
 
 } /* namespace assetex */
+
 
 #endif /* ASSETEX_SRC_COUCHDB_H_BREDY_5205456032 */
