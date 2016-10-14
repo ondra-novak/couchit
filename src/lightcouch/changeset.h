@@ -9,7 +9,6 @@
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
 #include <lightspeed/base/containers/constStr.h>
 #include <lightspeed/base/exceptions/exception.h>
-#include <lightspeed/utils/json/json.h>
 #include "couchDB.h"
 
 
@@ -51,7 +50,7 @@ public:
 	 * any filters that triggers on content will not triggered. This is best for erasing conflicts because they are
 	 * no longer valid.
 	 */
-	Changeset &erase(ConstValue docId, ConstValue revId);
+	Changeset &erase(Value docId, Value revId);
 
 
 	///Commits all changes in the database
@@ -139,7 +138,7 @@ public:
 	 * @param suffix suffix append to the ID
 	 * @return newly created document. It is already in edit mode, so you can set new atributes
 	 */
-	Document newDocument(ConstStrA suffix);
+	Document newDocument(const StringRef &suffix);
 
 
 
@@ -147,16 +146,14 @@ public:
 	const CouchDB &getDatabase() const {return db;}
 
 
-	const JSON::Builder json;
 protected:
 
-	JSON::Value docs;
-	JSON::Container wholeRequest;
+	Array docs;
 	CouchDB &db;
 
 	void init();
 
-	void eraseConflicts(ConstValue docId, ConstValue conflictList);
+	void eraseConflicts(const Value &docId, const Value &conflictList);
 
 };
 

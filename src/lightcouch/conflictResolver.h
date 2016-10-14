@@ -8,9 +8,7 @@
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CONFLICTRESOLVER_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CONFLICTRESOLVER_H_
 
-#include "lightspeed/utils/json/json.h"
-#include "lightspeed/base/containers/constStr.h"
-#include "object.h"
+#include "json.h"
 
 namespace LightCouch {
 
@@ -57,7 +55,7 @@ public:
 	 * @note Result document must pass validation rules. If document is rejected, changes from revision will discarded
 	 *
 	 */
-	virtual Value merge3w(const ConstValue &doc, const ConstValue &conflict, const ConstValue &base);
+	virtual Value merge3w(const Value &doc, const Value &conflict, const Value &base);
 
 	///Perform 2way merge. You have to overwrite function because default implementation will reject the conflict
 	/**
@@ -66,7 +64,7 @@ public:
 	 * @param conflict conflicted document
 	 * @return
 	 */
-	virtual Value merge2w(const ConstValue &doc, const ConstValue &conflict);
+	virtual Value merge2w(const Value &doc, const Value &conflict);
 
 protected:
 
@@ -84,7 +82,7 @@ protected:
 	 * @note you can modify document if you need. On each call, document contains updated version
 	 * as the function processes for each key in document
 	 */
-	virtual Value mergeValue(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+	virtual Value mergeValue(Document &doc, const Path &path, const Value &oldValue, const Value &newValue);
 
 
 	///Compares oldValue and newValue and returns null or a difference
@@ -105,7 +103,7 @@ protected:
 	 * thiese fields are reserved for couchDB. Function cannot make diff for arrays, however, you can handle
 	 * them by yourself
 	 */
-	virtual ConstValue diffValue(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+	virtual Value diffValue(Document &doc, const Path &path, const Value &oldValue, const Value &newValue);
 
 	///Called when conflict is detected at signle attribute
 	/** During 3-way merge, each side generates a diff. Both diffs are compared and merged. If there
@@ -118,21 +116,21 @@ protected:
 	 * @param rightValue right value of conflict
 	 * @return won value. However, function can merge values somehow and return merged version
 	 */
-	virtual ConstValue resolveConflict(Document &doc, const Path &path, const ConstValue &leftValue, const ConstValue &rightValue);
+	virtual Value resolveConflict(Document &doc, const Path &path, const Value &leftValue, const Value &rightValue);
 
 	CouchDB &db;
 	const bool attachments;
 
 
-	Value mergeObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue, const ConstValue &baseValue);
-	Container mergeDiffs(Document &doc, const Path &path, const ConstValue &leftValue, const ConstValue &rightValue);
+	Value mergeObject(Document &doc, const Path &path, const Value &oldValue, const Value &newValue, const Value &baseValue);
+	Value mergeDiffs(Document &doc, const Path &path, const Value &leftValue, const Value &rightValue);
 
-	ConstValue makeDiffObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
-	Value patchObject(Document &doc, const Path &path, const ConstValue &oldValue, const ConstValue &newValue);
+	Value makeDiffObject(Document &doc, const Path &path, const Value &oldValue, const Value &newValue);
+	Value patchObject(Document &doc, const Path &path, const Value &oldValue, const Value &newValue);
 
-	ConstValue deletedItem;
+	Value deletedItem;
 
-	bool isObjectDiff(const ConstValue &v);
+	bool isObjectDiff(const Value &v);
 
 
 

@@ -12,11 +12,9 @@
 #include "lightspeed/base/containers/autoArray.h"
 #include "lightspeed/base/memory/smallAlloc.h"
 #include "lightspeed/base/containers/string.h"
-#include <lightspeed/utils/json/json.h>
 
 #include "view.h"
 
-#include "object.h"
 
 
 namespace LightCouch {
@@ -70,7 +68,7 @@ public:
 
 
 
-	QueryBase(const Json &json, natural viewFlags);
+	QueryBase(natural viewFlags);
 	QueryBase(const QueryBase &other);
 	virtual ~QueryBase();
 
@@ -95,11 +93,11 @@ public:
 	 * @note function removes prepared range, because select and range
 	 * is mutually exclusive
 	 */
-	QueryBase &selectKey(ConstValue key);
+	QueryBase &selectKey(Value key);
 	///define range search
-	QueryBase &fromKey(ConstValue key);
+	QueryBase &fromKey(Value key);
 	///define range search
-	QueryBase &toKey(ConstValue key);
+	QueryBase &toKey(Value key);
 
 	template<typename T>
 	QueryBase &select(const T &key);
@@ -152,12 +150,12 @@ public:
 		isArray
 	};
 
-	QueryBase &operator ()(ConstStrA key);
+	QueryBase &operator ()(const StringRef & key);
 	QueryBase &operator ()(natural key);
 	QueryBase &operator ()(integer key);
 	QueryBase &operator ()(int key);
 	QueryBase &operator ()(double key);
-	QueryBase &operator ()(ConstValue key);
+	QueryBase &operator ()(Value key);
 	QueryBase &operator ()(bool key);
 	QueryBase &operator ()(const char *key);
 	QueryBase &operator ()(MetaValue metakey);
@@ -187,7 +185,7 @@ public:
 	 * @param limit count of results
 	 * @return
 	 */
-	QueryBase &limit(ConstStrA docId, natural limit);
+	QueryBase &limit(const StringRef & docId, natural limit);
 
 	///Update view after query executes
 	QueryBase &updateAfter();
@@ -210,7 +208,7 @@ public:
 	QueryBase &reverseOrder();
 
 	template<typename T>
-	QueryBase &arg(ConstStrA key, T value);
+	QueryBase &arg(const StringRef & key, T value);
 
 	///Execute query and return the result
 	/**
@@ -224,14 +222,13 @@ public:
 
 
 
-	const Json json;
 
 protected:
 
 
-	mutable AutoArray<JSON::ConstValue,SmallAlloc<9> > curKeySet;
-	mutable JSON::ConstValue startkey, endkey;
-	mutable JSON::Container keys;
+	mutable AutoArray<Value,SmallAlloc<9> > curKeySet;
+	mutable Value startkey, endkey;
+	mutable Value keys;
 	enum Mode {
 		mdKeys,
 		mdStart,
@@ -260,19 +257,18 @@ protected:
 	typedef TextOut<UrlLine &, SmallAlloc<256> > UrlFormatter;
 
 
-	JSON::Value args;
+	Object args;
 
 	natural viewFlags;
 
-	JSON::ConstValue buildKey(ConstStringT<JSON::ConstValue> values) const;
-	JSON::Container buildRangeKey(ConstStringT<JSON::ConstValue> values) const;
+	Value buildKey(ConstStringT<Value> values) const;
+	Value buildRangeKey(ConstStringT<Value> values) const;
 
 
 
 	void finishCurrent() const;;
-	JSON::Value initArgs();
-	static void appendCustomArg(UrlFormatter &fmt, ConstStrA key, ConstStrA value) ;
-	void appendCustomArg(UrlFormatter &fmt, ConstStrA key, const JSON::INode * value ) const;
+	static void appendCustomArg(UrlFormatter &fmt, const StringRef & key, const StringRef & value) ;
+	void appendCustomArg(UrlFormatter &fmt, const StringRef & key, const Value value ) const;
 
 };
 
@@ -298,8 +294,8 @@ inline QueryBase& LightCouch::QueryBase::to(const T& key) {
 }
 
 template<typename T>
-inline QueryBase& LightCouch::QueryBase::arg(ConstStrA key, T value) {
-	initArgs()->add(key, factory(value));
+inline QueryBase& LightCouch::QueryBase::arg(const StringRef & key, T value) {
+	args.set(key, value);
 	return *this;
 }
 
@@ -322,20 +318,20 @@ protected:
 
 
 
-class Row: public ConstValue {
+class Row: public Value {
 public:
 	///contains key
-	const ConstValue key;
+	const Value key;
 	///contains value
-	const ConstValue value;
+	const Value value;
 	///contains document - will be nil, if documents are not requested in the query
-	const ConstValue doc;
+	const Value doc;
 	///contains source document ID
-	const ConstValue id;
+	const Value id;
 	///contains error information for this row
-	const ConstValue error;
+	const Value error;
 
-	Row(const ConstValue &jrow);
+	Row(const Value &jrow);
 
 	///Returns 'true' if row exists (it is not error)
 	bool exists() const {return error != null;}
@@ -354,12 +350,12 @@ enum MergeType {
 };
 
 
-class Result: public ConstValue, public IteratorBase<ConstValue, Result> {
+class Result: public Value, public IteratorBase<Value, Result> {
 public:
-	Result(const Json &json, ConstValue jsonResult);
+	Result(Value jsonResult);
 
-	const ConstValue &getNext();
-	const ConstValue &peek() const;
+	const Value &getNext();
+	const Value &peek() const;
 	bool hasItems() const;
 
 	natural getTotal() const;
@@ -419,7 +415,7 @@ public:
 	 *
 	 * Bind function has following prototype
 	 * @code
-	 * ConstValue bindFn(const ConstValue &row)
+	 * Value bindFn(const Value &row)
 	 * @endcode
 	 *
 	 * The BindFn is called for every row in the current result. It should return foreign key which is
@@ -431,7 +427,7 @@ public:
 	 *
 	 */
 	template<typename BindFn>
-	Result join(QueryBase &q, ConstStrA name, natural flags, BindFn bindFn);
+	Result join(QueryBase &q, const StringRef & name, natural flags, BindFn bindFn);
 
 	///Sorts result
 	/** Function orders rows by compare function
@@ -442,7 +438,7 @@ public:
 	 *
 	 * The compareRowsFunction has following prototype
 	 * @code
-	 * int compareRowsFunction(const ConstValue &left, const ConstValue &right);
+	 * int compareRowsFunction(const Value &left, const Value &right);
 	 * @endcode
 	 *
 	 * Function should return
@@ -460,13 +456,13 @@ public:
 	///Aggregate groups of rows
 	/**
 	 * @param compareRowsFunction function which compares rows. It accepts 2xRow and returns -1,0, or 1
-	 * @param reduceFn function which reduces rows. It accepts ConstStringT<ConstValue> and returns ConstValue
+	 * @param reduceFn function which reduces rows. It accepts ConstStringT<Value> and returns Value
 	 * @param descending set true to reverse ordering
 	 * @return new result
 	 *
 	 * The compareRowsFunction has following prototype
 	 * @code
-	 * int compareRowsFunction(const ConstValue &left, const ConstValue &right);
+	 * int compareRowsFunction(const Value &left, const Value &right);
 	 * @endcode
 	 *
 	 * Function should return
@@ -479,7 +475,7 @@ public:
 	 *
 	 * The reduceFn has following prototype
 	 * @code
-	 * ConstValue reduceFn(const ConstStringT<ConstValue> &rows)
+	 * Value reduceFn(const ConstStringT<Value> &rows)
 	 * @endcode
 	 *
 	 * Function should return reduced row. Function should follow format of the row to allow the row
@@ -499,7 +495,7 @@ public:
 	 *
 	 * The mergeFn has following prototype
 	 * @code
-	 * ConstValue mergeFn(const ConstValue &left,const ConstValue &right);
+	 * Value mergeFn(const Value &left,const Value &right);
 	 * @endcode
 	 *
 	 * mergeFn can return
@@ -522,11 +518,10 @@ public:
 
 protected:
 
-	Json json;
 	natural rdpos;
 	natural total;
 	natural offset;
-	mutable ConstValue out;
+	mutable Value out;
 };
 
 

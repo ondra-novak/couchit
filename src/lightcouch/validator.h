@@ -10,7 +10,6 @@
 #include "lightspeed/base/memory/sharedPtr.h"
 #include "lightspeed/base/containers/autoArray.h"
 #include "lightspeed/base/containers/string.h"
-#include "lightspeed/utils/json/json.h"
 #include "object.h"
 
 namespace LightCouch {

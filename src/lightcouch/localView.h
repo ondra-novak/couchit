@@ -36,7 +36,6 @@ namespace LightCouch {
 class LocalView {
 public:
 	LocalView();
-	LocalView(const Json &json);
 	virtual ~LocalView();
 
 
@@ -53,7 +52,7 @@ public:
 	 *
 	 * @note The document must have "_id" at least.
 	 */
-	void updateDoc(const ConstValue &doc);
+	void updateDoc(const Value &doc);
 
 	///Function loads content of the view from the couchdb's view
 	/**
@@ -83,7 +82,7 @@ public:
 	 * Function will not add document if already exists with the same key. However, document can
 	 * be inserted with a different key.
 	 */
-	void addDoc(const ConstValue &doc, const ConstValue &key, const ConstValue &value);
+	void addDoc(const Value &doc, const Value &key, const Value &value);
 
 	///Asks for a document
 	/**
@@ -92,18 +91,18 @@ public:
 	 *
 	 * @note the document must be included in the view.
 	 */
-	ConstValue getDocument(const ConstStrA docId) const;
+	Value getDocument(const ConstStrA docId) const;
 
 
 	///Postprocess function
 	/**
 	 * @param Json json object
-	 * @param ConstValue arguments from query
-	 * @param ConstValue result from query
+	 * @param Value arguments from query
+	 * @param Value result from query
 	 * @return Modified result
 	 *
 	 */
-	typedef std::function<ConstValue(Json , ConstValue , ConstValue )> PostProcessFn;
+	typedef std::function<Value(Value , Value )> PostProcessFn;
 
 	///Query object which can ask LocalView
 	/** You can create Query using createQuery() function.
@@ -112,7 +111,7 @@ public:
 	 */
 	class Query: public QueryBase {
 	public:
-		Query(const LocalView &lview, const Json &json, natural viewFlags, PostProcessFn ppfn);
+		Query(const LocalView &lview,  natural viewFlags, PostProcessFn ppfn);
 
 		virtual Result exec() const override;
 
@@ -148,11 +147,11 @@ public:
 	///Item of update stream
 	struct UpdateStreamItem {
 		///document to update in views
-		ConstValue document;
+		Value document;
 		///contains initialized future for next item
 		Future<UpdateStreamItem> nextItem;
 
-		UpdateStreamItem (const ConstValue &document, const Future<UpdateStreamItem> &nextItem)
+		UpdateStreamItem (const Value &document, const Future<UpdateStreamItem> &nextItem)
 			:document(document),nextItem(nextItem) {}
 	};
 
@@ -177,7 +176,7 @@ public:
 		/** Note that function closes current stream, if any is active */
 		UpdateStream createStream();
 		///send update to every view
-		void updateDoc(const ConstValue &doc);
+		void updateDoc(const Value &doc);
 
 	protected:
 		Promise<UpdateStreamItem> nextItem;
@@ -189,28 +188,26 @@ public:
 
 	UpdateStream getUpdateStream() const;
 
-	const Json json;
-
 
 protected:
 
 
 	struct KeyAndDocId: public Comparable<KeyAndDocId> {
-		ConstValue key;
+		Value key;
 		ConstStrA docId;
 
 		KeyAndDocId() {}
-		KeyAndDocId(ConstValue key,ConstStrA docId):key(key),docId(docId) {}
+		KeyAndDocId(Value key,ConstStrA docId):key(key),docId(docId) {}
 
 		CompareResult compare(const KeyAndDocId &other) const;
 
 	};
 
 	struct ValueAndDoc {
-		ConstValue value;
-		ConstValue doc;
+		Value value;
+		Value doc;
 
-		ValueAndDoc(ConstValue value,ConstValue doc):value(value),doc(doc) {}
+		ValueAndDoc(Value value,Value doc):value(value),doc(doc) {}
 	};
 
 	class UpdateReceiver: public UpdateStream::IObserver {
@@ -233,7 +230,7 @@ protected:
 	 * introduce new key. Note that emitting the same key twice for the same document is not allowed (unsupported),
 	 * however, two documents are allowd to emit the same key and create duplicated keys.
 	 */
-	virtual void map(const ConstValue &doc) ;
+	virtual void map(const Value &doc) ;
 
 	///Perform reduce operation
 	/**
@@ -249,7 +246,7 @@ protected:
 	 * @note currently function is not optimized and will not store reduced subresults. Everytime the reduce
 	 * is required, the function is called again and again
 	 */
-	virtual ConstValue reduce(const ConstStringT<KeyAndDocId>  &keys, const ConstStringT<ConstValue> &values, bool rereduce) const;
+	virtual Value reduce(const ConstStringT<KeyAndDocId>  &keys, const ConstStringT<Value> &values, bool rereduce) const;
 
 
 
@@ -259,7 +256,7 @@ protected:
 	 * @param key key of current document
 	 * @param value value of current document
 	 */
-	virtual void emit(const ConstValue &key, const ConstValue &value);
+	virtual void emit(const Value &key, const Value &value);
 	///Emit key
 	/** The function can be called during map() function
 	 *
@@ -267,7 +264,7 @@ protected:
 	 *
 	 * @note value is set to JSON's null
 	 */
-	virtual void emit(const ConstValue &key);
+	virtual void emit(const Value &key);
 	///Store current document to the view
 	/** The function can be called during map() function
 	 *
@@ -288,7 +285,7 @@ protected:
 
 	///Contains for each document set of keys
 	/** It is used to easy find keys to erase during update */
-	typedef MultiMap<ConstStrA, ConstValue> DocToKey;
+	typedef MultiMap<ConstStrA, Value> DocToKey;
 	///Contains keys mapped to documents
 	/** Key contains the key itself and documentId to easyly handle duplicated keys */
 	typedef Map<KeyAndDocId, ValueAndDoc> KeyToValue;
@@ -304,7 +301,7 @@ protected:
 	KeyToValue keyToValueMap;
 
 	///Current document being currently processed
-	ConstValue curDoc;
+	Value curDoc;
 
 
 	UpdateStream updateStream;
@@ -312,18 +309,18 @@ protected:
 
 
 	void eraseDocLk(ConstStrA docId);
-	void addDocLk(const ConstValue &doc, const ConstValue &key, const ConstValue &value);
-	void updateDocLk(const ConstValue &doc);
+	void addDocLk(const Value &doc, const Value &key, const Value &value);
+	void updateDocLk(const Value &doc);
 
 
-	ConstValue searchKeys(const ConstValue &keys, natural groupLevel) const;
-	ConstValue searchOneKey(const ConstValue &key) const;
-	ConstValue searchRange(const ConstValue &startKey, const ConstValue &endKey,
+	Value searchKeys(const Value &keys, natural groupLevel) const;
+	Value searchOneKey(const Value &key) const;
+	Value searchRange(const Value &startKey, const Value &endKey,
 			natural groupLevel, bool descending, natural offset, natural limit, ConstStrA offsetDoc,
 			bool excludeEnd) const;
 
 
-	ConstValue runReduce(const ConstValue &rows) const;
+	Value runReduce(const Value &rows) const;
 
 private:
 	void cancelStream();

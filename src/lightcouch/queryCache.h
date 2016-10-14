@@ -11,11 +11,10 @@
 #include <lightspeed/base/types.h>
 #include "lightspeed/base/actions/promise.h"
 #include "lightspeed/base/containers/constStr.h"
-#include <lightspeed/utils/json/json.h>
 #include "lightspeed/base/containers/stringKey.h"
 #include "lightspeed/base/containers/map.h"
 
-#include "object.h"
+#include "json.h"
 namespace LightCouch {
 
 using namespace LightSpeed;
@@ -36,7 +35,7 @@ public:
 	struct CachedItem {
 		const StringA etag;
 		atomicValue seqNum;
-		const ConstValue value;
+		const Value value;
 
 		CachedItem() {}
 		///Create cached item
@@ -46,7 +45,7 @@ public:
 		 * @param seqNum seq. number known when value is stored
 		 * @param value value to store
 		 */
-		CachedItem(StringA etag, natural seqNum, ConstValue value)
+		CachedItem(StringA etag, natural seqNum, const Value &value)
 			:etag(etag),seqNum(seqNum), value(value) {}
 		bool isDefined() const {return value != null;}
 	};

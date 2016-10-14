@@ -10,8 +10,7 @@
 #include <functional>
 #include <lightspeed/base/types.h>
 #include <lightspeed/base/containers/string.h>
-#include <lightspeed/utils/json.h>
-#include "object.h"
+#include "json.h"
 
 namespace LightCouch {
 
@@ -90,7 +89,7 @@ public:
 	 * Function have to update result and return it as return value. It have allowed to
 	 * perform other
 	 */
-	typedef std::function<ConstValue(CouchDB *, ConstValue, ConstValue)> Postprocessing;
+	typedef std::function<Value(CouchDB *, Value, Value)> Postprocessing;
 
 	///Declare the view
 	/** Declare single view or list by the path only */

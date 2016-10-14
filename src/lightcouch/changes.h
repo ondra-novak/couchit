@@ -10,9 +10,8 @@
 
 #include <lightspeed/base/containers/constStr.h>
 #include <lightspeed/base/containers/optional.h>
-#include <lightspeed/utils/json/json.h>
 
-#include "object.h"
+
 #include "view.h"
 
 
@@ -25,31 +24,31 @@ class CouchDB;
 class Filter;
 
 ///Contains information about changed document
-class ChangedDoc: public ConstValue {
+class ChangedDoc: public Value {
 
 public:
 	///sequence number
-	const ConstValue seqId;
+	const Value seqId;
 	///document id
-	const ConstStrA id;
+	const StringRef id;
 	///list of revisions changed
-	const ConstValue revisions;
+	const Value revisions;
 	///true, if document has been deleted
 	const bool deleted;
 	///document, if requested, or null if not available
-	const ConstValue doc;
+	const Value doc;
 	///Constructor.
 	/**
 	 * @param allData json record containing information about changed document. You can use
 	 * result of Changes::getNext() or Changes::peek()
 	 */
-	ChangedDoc(const ConstValue &allData);
+	ChangedDoc(const Value &allData);
 };
 
 
 
 ///Collection that contains all changed documents (or references) received from ChangesSink
-class Changes: public IteratorBase<ConstValue, Changes> {
+class Changes: public IteratorBase<Value, Changes> {
 public:
 	///Initialize the collection
 	/**
@@ -60,7 +59,7 @@ public:
 	 * Changes coll(sink.exec());
 	 * @endcode
 	 */
-	Changes(ConstValue jsonResult);
+	Changes(Value jsonResult);
 
 	///Receive next change
 	/**
@@ -69,14 +68,14 @@ public:
 	 *
 	 * Function also moves iteration to next change
 	 */
-	const ConstValue &getNext();
+	const Value &getNext();
 	///Peek next change
 	/** @return next change in collection. It is returned as JSON object. You can convert it
 	 * to the ChangedDoc object to easy access to all its fields
 	 *
 	 * Function doesn't move to the next change
 	 */
-	const ConstValue &peek() const;
+	const Value &peek() const;
 	///Determines whether any change follows
 	/**
 	 * @retval true still a change is available
@@ -88,16 +87,16 @@ public:
 	void rewind();
 
 	///Retrieve whole result as array of rows;
-	ConstValue getAllChanges() const {return rows;}
+	Value getAllChanges() const {return rows;}
 
-	natural length() const {return rows.length();}
+	natural length() const {return rows.size();}
 
-	natural getRemain() const {return rowIter.getRemain();}
+	natural getRemain() const {return rows.size() - pos;}
 
 protected:
 
-	ConstValue rows;
-	JSON::ConstIterator rowIter;
+	Value rows;
+	natural pos;
 };
 
 
@@ -124,7 +123,7 @@ public:
 	 * @return reference to this (chaining).
 	 *
 	 */
-	ChangesSink& fromSeq(ConstValue seqNumber);
+	ChangesSink& fromSeq(const Value &seqNumber);
 
 	///Specifies timeout how long will listener wait for changes
 	/**
@@ -220,18 +219,15 @@ public:
 	void operator>> (const Fn &fn);
 
 
-	///Json builder - if you need to create a json object
-	Json json;
-
 
 protected:
 
 	CouchDB &couchdb;
-	ConstValue seqNumber;
+	Value seqNumber;
 	natural outlimit;
 	natural timeout;
 	Optional<Filter> filter;
-	JSON::Value filterArgs;
+	Object filterArgs;
 
 	atomic cancelState;
 
@@ -243,8 +239,7 @@ protected:
 template<typename T>
 inline ChangesSink& LightCouch::ChangesSink::arg(ConstStrA key, T value) {
 
-	if (filterArgs == null) filterArgs = json.object();
-	filterArgs.set(key, json(value));
+	filterArgs.set(key, value);
 	return *this;
 
 }

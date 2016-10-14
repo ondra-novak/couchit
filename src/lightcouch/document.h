@@ -8,10 +8,9 @@
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_DOCUMENT_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_DOCUMENT_H_
 #include "lightspeed/base/containers/constStr.h"
-#include <lightspeed/utils/json/json.h>
 #include "lightspeed/base/containers/autoArray.h"
 
-#include "object.h"
+#include "json.h"
 
 #include "exception.h"
 namespace LightCouch {
@@ -28,70 +27,28 @@ using namespace LightSpeed;
  *  you can anytime revert changes by calling rever() function.
  *
  */
-class Document: public ConstValue {
+class Document: public json::Object {
 public:
 
 	///create empty document
 	Document() {}
 	///create document from existing JSON document
-	Document(const ConstValue &base);
-	///create empty document and attach updates from specified json
-	Document(const Value &editableBase);
+	Document(const Value &base);
 
 
 	///Retrieves current document ID. Empty if missing
-	ConstStrA getID() const;
+	StringRef getID() const;
 	///Retrieves current document revision ID. Empty if missing
-	ConstStrA getRev() const;
+	StringRef getRev() const;
 
 	///Retrieves current document ID. Function returns null if missing
-	ConstValue getIDValue() const;
+	Value getIDValue() const;
 	///Retrieves current document revision ID. Function returns null if missing
-	ConstValue getRevValue() const;
+	Value getRevValue() const;
 
-	void deleteAttachment(ConstStrA name);
-	void inlineAttachment(const Json &json, ConstStrA name, const AttachmentDataRef &data);
-	ConstValue getAttachment(ConstStrA name) const;
-
-
-	///sets field in document
-	/** Function can be called after edit(), otherwise exception can be thrown() */
-	Document &set(ConstStrA key, const Value &value);
-	Document &unset(ConstStrA key);
-
-	///Delete changes in document
-	void revert();
-	///Create new revision and enable editing
-	/**
-	 * @param json reference to json factory available in many objects of couchdb (such a json).
-	 *  If you have Changeset object, you can use public member "json" (Changeset::json) to provide
-	 *  this argument
-	 *
-	 * @return object Json::Object - helper object that can be used to construct new values
-	 *
-	 * You can call edit() more then once. Each next call just construct Json::Object to
-	 * add new values. Only first call creates new revision.
-	 *
-	 * once new revision is created, document starts to map fields to new revision. You can
-	 * edit document without modifying original document.
-	 */
-	Json::Object edit(const Json &json);
-
-	///Convert editing object to container
-	operator const Container &() const {return editing;}
-
-	///Retrieves base revision (if exists)
-	const ConstValue& getBase() const {
-		return base;
-	}
-
-	///Retrieves current editable revision (if created)
-	const Value& getEditing() const {
-		return editing;
-	}
-
-	bool dirty() const {return editing != null;}
-
+	void deleteAttachment(const StringRef &name);
+	void inlineAttachment(const StringRef &name, const AttachmentDataRef &data);
+	Value getAttachment(const StringRef &name) const;
 
 
 
@@ -102,22 +59,8 @@ public:
 	 *  You can use this function to set new content to current document while its _id and _rev
 	 *  persists
 	 */
-	void setContent(const Value &v) {editing = v;ConstValue::operator=(v);cleanup();}
+	void setContent(const Value &v);
 
-	///Sets complete revision content from a value
-	/**
-	 * @param json reference to JSON factory
-	 * @param v content of new document which replaces old document. The value must be
-	 *  JSON object. The keys _id and _rev are replaced by values from the document.
-	 *  You can use this function to set new content to current document while its _id and _rev
-	 *  persists
-	 * @param depth specifies depth of copying. The content must be copied, because the
-	 * keys _id and _rev must be replaced. You can specify depth how deep the object will be
-	 * copied. Specify 1 to copy only first level, which is always necessary. Note that limiting
-	 * depth can break const protection.
-	 *
-	 */
-	void setContent(const Json &json, const ConstValue &v, natural depth = naturalNull);
 
 	///Sets document deleted
 	/** Document marked as deleted updated through Changeset object will be deleted. You
@@ -128,7 +71,7 @@ public:
 	 *
 	 * Deleted document has always timestamp enabled
 	 */
-	void setDeleted(const Json &json, ConstStringT<ConstStrA> fieldsToKept = ConstStringT<ConstStrA>());
+	void setDeleted(ConstStringT<ConstStrA> fieldsToKept = ConstStringT<ConstStrA>());
 
 	///Enables timestamping of changes
 	/** Document with timestamps carries field, which contains timestamp of last update. Once this is
@@ -166,15 +109,13 @@ public:
 	 *  */
 	void resolveConflicts();
 
-	void setID(const ConstValue &id);
-	void setRev(const ConstValue &rev);
+	void setID(const Value &id);
+	void setRev(const Value &rev);
 
-	ConstValue getConflictsToDelete() const;
+	Value getConflictsToDelete() const;
 
 protected:
-	ConstValue base;
-	Value editing;
-	ConstValue conflictsToDelete;
+	json::Array conflictsToDelete;
 
 	void cleanup();
 };

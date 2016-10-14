@@ -33,8 +33,8 @@ static void couchConnect(PrintTextA &print) {
 
 	CouchDB db(getTestCouch());
 
-	ConstValue v = db.requestGET("/");
-		print("%1") << v["couchdb"]->getStringUtf8();
+	Value v = db.requestGET("/");
+	print("%1") << v["couchdb"].getString();
 }
 
 
@@ -83,7 +83,7 @@ static void couchLoadData(PrintTextA &print) {
 
 	Changeset chset(db.createChangeset());
 	natural id=10000;
-	JSON::Value data = db.json.factory->fromString(strdata);
+	Value data = Value::fromString(strdata);
 	for (JSON::Iterator iter = data->getFwIter(); iter.hasItems();) {
 		const JSON::KeyValue &kv= iter.getNext();
 		Document doc;
@@ -234,7 +234,7 @@ static void couchCaching2(PrintTextA &a) {
 	CouchDB db(cfg);
 	db.use(DATABASENAME);
 	db.trackSeqNumbers();
-	ConstStrA killDocName = "Owen Dillard";
+	StringRef killDocName = "Owen Dillard";
 	Document killDoc;
 
 
@@ -291,7 +291,7 @@ static void couchReduce(PrintTextA &a) {
 }
 
 
-static ConstValue lastId;
+static Value lastId;
 
 static void couchChangeSetOneShot(PrintTextA &a) {
 
@@ -309,7 +309,7 @@ static void couchChangeSetOneShot(PrintTextA &a) {
 	a("%1") << (count > 10);
 }
 
-static void loadSomeDataThread(ConstStrA locId) {
+static void loadSomeDataThread(StringRef locId) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -325,7 +325,7 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	ConstStrA uid = db.genUID();
+	StringRef uid = db.genUID();
 
 	Thread thr;
 	thr.start(ThreadFunction::create(&loadSomeDataThread,uid));
@@ -346,7 +346,7 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	}
 }
 
-static void loadSomeDataThread3(ConstStrA locId) {
+static void loadSomeDataThread3(StringRef locId) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -365,7 +365,7 @@ static void couchChangeSetWaitForData3(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	ConstStrA uid = db.genUID();
+	StringRef uid = db.genUID();
 	int counter=0;
 
 	Thread thr;
@@ -412,7 +412,7 @@ static void couchChangesStopWait(PrintTextA &a) {
 		chsink >> [](const ChangedDoc &) {};
 		a("fail");
 	} catch (CanceledException &) {
-		ConstValue v = db.requestGET("/");
+		Value v = db.requestGET("/");
 		a("%1") << v["couchdb"]->getStringUtf8();
 	}
 
@@ -422,7 +422,7 @@ static void couchGetSeqNumber(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
-	ConstValue cnt = db.getLastSeqNumber();
+	Value cnt = db.getLastSeqNumber();
 
 	a("%1") << (cnt != null ?"ok":"failed");
 
@@ -449,7 +449,7 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 	Document doc = db.newDocument(".data");
 	db.uploadAttachment(doc,"testAttachment","text/plain",[](SeqFileOutput wr) {
 		SeqTextOutA txtwr(wr);
-		ConstStrA sentence("The quick brown fox jumps over the lazy dog");
+		StringRef sentence("The quick brown fox jumps over the lazy dog");
 		txtwr.blockWrite(sentence,true);
 	});
 
@@ -458,7 +458,7 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 
 	AttachmentData data = db.downloadAttachment(doc2,"testAttachment");
 
-	a("%1-%2") << data.contentType << ConstStrA(reinterpret_cast<const char *>(data.data()),data.length());
+	a("%1-%2") << data.contentType << StringRef(reinterpret_cast<const char *>(data.data()),data.length());
 
 
 }

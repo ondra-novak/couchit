@@ -9,7 +9,6 @@
 #define SRC_LIGHTCOUCH_COLLATION_H_1278AEOLBBD456800
 
 
-#include <lightspeed/utils/json.h>
 #include "object.h"
 
 namespace LightCouch {

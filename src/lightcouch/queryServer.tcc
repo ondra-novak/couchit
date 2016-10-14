@@ -10,7 +10,6 @@
 
 #include "queryServer.h"
 #include <lightspeed/base/streams/fileiobuff.tcc>
-#include <lightspeed/utils/json/jsonserializer.tcc>
 #include <lightspeed/base/interface.tcc>
 #include <lightspeed/base/containers/map.tcc>
 

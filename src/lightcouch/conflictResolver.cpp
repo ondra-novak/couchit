@@ -11,7 +11,6 @@
 #include "couchDB.h"
 #include "document.h"
 #include <lightspeed/base/containers/map.tcc>
-#include <lightspeed/utils/json/jsonserializer.tcc>
 #include <lightspeed/utils/urlencode.h>
 
 #include "revision.h"

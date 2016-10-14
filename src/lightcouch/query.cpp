@@ -410,7 +410,7 @@ Row::Row(const ConstValue& jrow)
 	,error(jrow->getPtr("error"))
 {}
 
-JSON::Value QueryBase::initArgs() {
+Value QueryBase::initArgs() {
 	if (args==null) args = json.object();
 	return args;
 }

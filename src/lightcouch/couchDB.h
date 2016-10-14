@@ -10,9 +10,8 @@
 
 #include <httpclient/httpClient.h>
 #include <lightspeed/base/streams/netio.h>
-#include <lightspeed/utils/json/json.h>
 
-#include "object.h"
+#include "json.h"
 
 
 #include "view.h"
@@ -62,12 +61,12 @@ public:
 	 * is updated by other way, the timestamp don't need to be updated. Timestamping
 	 * is supported by Changeset class
 	 */
-	static ConstStrA fldTimestamp;
+	static StringRef fldTimestamp;
 	///Contains ID of previous revision
 	/** Note this feature is optional and supported only by LightCouch. The class Changeset
 	 * will put there id of previous revision.
 	 */
-	static ConstStrA fldPrevRevision;
+	static StringRef fldPrevRevision;
 
 	///Download flag - disable cache while retrieving resule
 	/** Downloader will not include etag into header, so database will return complete response
@@ -123,7 +122,7 @@ public:
 	 * @param flags various flags that controls caching or behaviour
 	 * @return parsed response
 	 */
-	JSON::ConstValue requestGET(ConstStrA path, JSON::Value headers = null, natural flags = 0);
+	Value requestGET(const StringRef &path, const Value &headers = Value(), natural flags = 0);
 	///Performs POST request from the database
 	/** POST request are not cached.
 	 *
@@ -136,7 +135,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	JSON::ConstValue requestPOST(ConstStrA path, JSON::ConstValue postData, JSON::Container headers = null, natural flags = 0);
+	Value requestPOST(const StringRef& path, const Value &postData, Value *headers = nullptr, natural flags = 0);
 	///Performs PUT request from the database
 	/** PUT request are not cached.
 	 *
@@ -149,7 +148,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	JSON::ConstValue requestPUT(ConstStrA path, JSON::ConstValue postData, JSON::Container headers = null, natural flags = 0);
+	Value requestPUT(const StringRef &path, const Value &postData, Value *headers = nullptr, natural flags = 0);
 
 	///Performs DELETE request at database
 	/**
@@ -159,7 +158,7 @@ public:
 	 * @param flags flags that controls behaviour
 	 * @return
 	 */
-	JSON::ConstValue requestDELETE(ConstStrA path, JSON::Value headers = null, natural flags = 0);
+	Value requestDELETE(const StringRef &path, const Value *headers = nullptr, natural flags = 0);
 
 
 
@@ -171,7 +170,7 @@ public:
 	 * lost in time of return
 	 *
 	 */
-	ConstStrA genUID();
+	StringRef genUID();
 
 	///Generates new UID using preconfigured generator
 	/**See Config how to setup custom generator
@@ -181,7 +180,7 @@ public:
 	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
 	 * lost in time of return
 	 */
-	ConstStrA genUID(ConstStrA prefix);
+	StringRef genUID(StringRef prefix);
 
 	///Generates new UID and returns it as Value. It can be directly used to create new document.
 	/**
@@ -201,16 +200,13 @@ public:
 	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
 	 * in MT environment or use additional synchronization
 	 */
-	Value genUIDValue(ConstStrA prefix);
+	Value genUIDValue(StringRef prefix);
 
 
 	///Changes current database
-	void use(ConstStrA database);
+	void use(StringRef database);
 	///Retrieves current database name
-	ConstStrA getCurrentDB() const;
-
-	///Performs URL encode of the argument
-	static StringA urlencode(ConstStrA text);
+	StringRef getCurrentDB() const;
 
 	///creates database
 	/** Creates database. Database is specified by function use()*/
@@ -229,7 +225,7 @@ public:
 	 * changes made during synchronization
 	 * @return last sequence number
 	 */
-	ConstValue getLastSeqNumber();
+	Value getLastSeqNumber();
 
 	///Creates query for specified view
 	/**
@@ -284,7 +280,7 @@ public:
 	 * @note if sequence numbers are tracked, function disables caching, because
 	 * sequence numbers are not updated when local document is stored
 	 */
-	ConstValue retrieveLocalDocument(ConstStrA localId, natural flags = 0);
+	Value retrieveLocalDocument(const StringRef &localId, natural flags = 0);
 
 	///Retrieves document (by its id)
 	/**
@@ -296,7 +292,7 @@ public:
 	 * @note Retrieveing many documents using this method is slow. You should use Query
 	 * to retrieve multiple documents. However, some document properties are not available through the Query
 	 */
-	ConstValue retrieveDocument(ConstStrA docId, natural flags = 0);
+	Value retrieveDocument(const StringRef &docId, natural flags = 0);
 
 
 	///Retrieves other revision of the document
@@ -306,7 +302,7 @@ public:
 	 * @param flags can be only flgDisableCache or zero. The default value is recommended.
 	 * @return json with document
 	 */
-	ConstValue retrieveDocument(ConstStrA docId, ConstStrA revId, natural flags = flgDisableCache);
+	Value retrieveDocument(const StringRef &docId, const StringRef &revId, natural flags = flgDisableCache);
 
 	///Creates new document
 	/**
@@ -321,7 +317,7 @@ public:
 	 * @param prefix prefix append to UID - can be used to specify type of the document
 	 * @return Value which can be converted to Document object
 	 */
-	Value newDocument(ConstStrA prefix);
+	Value newDocument(const StringRef &prefix);
 
 	///Creates empty document with specified ID
 	/**
@@ -331,7 +327,7 @@ public:
 	 * @note You can use empty document to create new document with predefined ID.
 	 *
 	 */
-	Value emptyDocument(ConstStrA id);
+	Value emptyDocument(const StringRef &id);
 
 
 
@@ -342,11 +338,11 @@ public:
 	 */
 	Pointer<Validator> getValidator() const {return validator;}
 
-	class UpdateResult: public ConstValue {
+	class UpdateResult: public Value {
 	public:
-		UpdateResult(ConstValue v, StringA newRev):ConstValue(v),newRev(newRev) {}
+		UpdateResult(Value v, const StringRef newRev):Value(v),newRev(newRev) {}
 
-		const StringA newRev;
+		const String newRev;
 	};
 
 	///Calls update handler to update document using server-side function
@@ -380,7 +376,7 @@ public:
 	 *
 	 *  @exception RequestError if function returns any other status then 200 or 201
 	 */
-	UpdateResult updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId, JSON::ConstValue arguments);
+	UpdateResult updateDoc(StringRef updateHandlerPath, StringRef documentId, Value arguments);
 
 
 	///Calls show handler.
@@ -412,20 +408,20 @@ public:
 	 *
 	 * @exception RequestError if function returns any other status then 200 or 201
 	 */
-	ConstValue showDoc(ConstStrA showHandlerPath, ConstStrA documentId, JSON::ConstValue arguments, natural flags = 0);
+	Value showDoc(StringRef showHandlerPath, StringRef documentId, Value arguments, natural flags = 0);
 
 
 	///Contains information about downloaded file
 	class DownloadFile: public SeqFileInput {
 	public:
 		///constructor is called inside of download function
-		DownloadFile(const SeqFileInput &stream, ConstStrA contentType, ConstStrA etag, natural contentLength, bool notModified):SeqFileInput(stream)
+		DownloadFile(const SeqFileInput &stream, StringRef contentType, StringRef etag, natural contentLength, bool notModified):SeqFileInput(stream)
 				,contentType(contentType),etag(etag),contentLength(contentLength),notModified(notModified) {}
 
 		///contains content type of the attachment
-		const ConstStrA contentType;
+		const StringRef contentType;
 		///contains ETag. You can put this to the response
-		const ConstStrA etag;
+		const StringRef etag;
 		///contains length of the attachment
 		const natural contentLength;
 		///specifies, that content has not been modified.
@@ -447,7 +443,7 @@ public:
 	 * SeqFileOuput.
 	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	StringA uploadAttachment(Document &document, ConstStrA attachmentName, ConstStrA contentType, const UploadFn &uploadFn);
+	String uploadAttachment(Document &document, StringRef attachmentName, StringRef contentType, const UploadFn &uploadFn);
 
 	///Uploads attachment with specified document
 	/**
@@ -458,7 +454,7 @@ public:
 	 * @param attachmentData content of attachment
 	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	StringA uploadAttachment(Document &document, ConstStrA attachmentName, const AttachmentDataRef &attachmentData);
+	String uploadAttachment(Document &document, StringRef attachmentName, const AttachmentDataRef &attachmentData);
 
 	///Downloads attachment
 	/**
@@ -469,7 +465,7 @@ public:
 	 *
 	 *
 	 */
-	void downloadAttachment(const Document &document, ConstStrA attachmentName, const DownloadFn &downloadFn, ConstStrA etag=ConstStrA());
+	void downloadAttachment(const Document &document, StringRef attachmentName, const DownloadFn &downloadFn, StringRef etag=StringRef());
 
 	///Downloads attachment
 	/**
@@ -479,14 +475,14 @@ public:
 	 * @param attachmentName name of attachment to retrieve
 	 * @return content of attachment
 	 */
-	AttachmentData downloadAttachment(const Document &document, ConstStrA attachmentName);
+	AttachmentData downloadAttachment(const Document &document, StringRef attachmentName);
 
-	void downloadAttachment(const ConstStrA &docId, const ConstStrA &revId,
-						const ConstStrA &attachmentName,
-						const DownloadFn &downloadFn, ConstStrA etag=ConstStrA());
+	void downloadAttachment(const StringRef &docId, const StringRef &revId,
+						const StringRef &attachmentName,
+						const DownloadFn &downloadFn, StringRef etag=StringRef());
 
-	AttachmentData downloadAttachment(const ConstStrA &docId, const ConstStrA &revId,
-						const ConstStrA &attachmentName);
+	AttachmentData downloadAttachment(const StringRef &docId, const StringRef &revId,
+						const StringRef &attachmentName);
 
 
 	///For function updateDesignDocument
@@ -518,7 +514,7 @@ public:
 	 * the document (under _id key)
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	bool uploadDesignDocument(ConstValue content, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
+	bool uploadDesignDocument(const Value &content, DesignDocUpdateRule updateRule = ddurOverwrite, StringRef name = StringRef());
 
 	///Uploads design document from the file
 	/**
@@ -535,7 +531,7 @@ public:
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 *
 	 */
-	bool uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
+	bool uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule = ddurOverwrite, StringRef name = StringRef());
 
 	///Uploads design document from the resource
 	/**
@@ -553,10 +549,7 @@ public:
 	 * @retval false design document unchanged
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	bool uploadDesignDocument(const char *content, natural contentLen, DesignDocUpdateRule updateRule = ddurOverwrite, ConstStrA name = ConstStrA());
-
-	///Use json variable to build objects
-	const Json json;
+	bool uploadDesignDocument(const char *content, natural contentLen, DesignDocUpdateRule updateRule = ddurOverwrite, StringRef name = StringRef());
 
 
 
@@ -575,9 +568,8 @@ protected:
 
 	friend class ChangeFeed;
 
-	StringA baseUrl;
-	StringA database;
-	JSON::PFactory factory;
+	String baseUrl;
+	String database;
 	natural lastStatus;
 	Pointer<QueryCache> cache;
 	Pointer<Validator> validator;
@@ -585,7 +577,7 @@ protected:
 	AutoArray<char> uidBuffer;
 	IIDGen& uidGen;
 
-	StringA lastConnectError;
+	String lastConnectError;
 
 	HttpConfig httpConfig;
 	HttpClient http;
@@ -593,10 +585,10 @@ protected:
 
 
 	template<typename C>
-	void reqPathToFullPath(ConstStrA reqPath, C &output);
+	void reqPathToFullPath(StringRef reqPath, C &output);
 
 
-	JSON::ConstValue jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags);
+	Value jsonPUTPOST(HttpClient::Method method, StringRef path, Value postData, Value * headers, natural flags);
 
 
 	friend class ChangesSink;

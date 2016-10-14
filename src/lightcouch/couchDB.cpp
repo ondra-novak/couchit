@@ -13,8 +13,6 @@
 #include <lightspeed/base/text/textFormat.tcc>
 #include <lightspeed/base/text/textOut.tcc>
 #include <lightspeed/mt/atomic.h>
-#include <lightspeed/utils/json/jsonparser.h>
-#include <lightspeed/utils/json/jsonserializer.tcc>
 #include <lightspeed/utils/urlencode.h>
 #include "lightspeed/base/streams/secureRandom.h"
 #include "lightspeed/base/exceptions/errorMessageException.h"
@@ -50,8 +48,8 @@ CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
 	if (cfg.iotimeout != null) this->iotimeout = cfg.iotimeout;
 }
 
-ConstStrA CouchDB::fldTimestamp("!timestamp");
-ConstStrA CouchDB::fldPrevRevision("!prevRev");
+ConstStrA CouchDB::fldTimestamp("~timestamp");
+ConstStrA CouchDB::fldPrevRevision("~prevRev");
 
 typedef AutoArrayStream<char, SmallAlloc<1024> > UrlLine;
 

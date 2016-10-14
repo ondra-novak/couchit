@@ -8,11 +8,10 @@
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_ATTACHMENT_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_ATTACHMENT_H_
 #include "lightspeed/base/containers/string.h"
-#include "lightspeed/utils/json.h"
 
 #include "string.h"
 
-#include "object.h"
+#include "json.h"
 namespace LightCouch {
 
 using namespace LightSpeed;
@@ -36,7 +35,7 @@ public:
 	///Converts data to base64 string.
 	StringA toBase64() const;
 
-	Value toInline(const Json &json) const;
+	Value toInline() const;
 
 };
 
@@ -62,7 +61,7 @@ public:
 	 * @param attachment value contains attachment from a document. It required that
 	 * attachment is inlined, you cannot construct object from a stub.
 	 */
-	AttachmentData(const ConstValue &attachment);
+	AttachmentData(const Value &attachment);
 
 	///Creates attachment from base64 string
 	/**

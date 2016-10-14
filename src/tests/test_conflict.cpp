@@ -13,7 +13,6 @@
 
 #include "test_common.h"
 #include <lightspeed/base/text/textstream.tcc>
-#include <lightspeed/utils/json/json.h>
 #include <string.h>
 
 #include "../lightcouch/attachment.h"
