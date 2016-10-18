@@ -33,9 +33,9 @@ struct Config {
 	/** Put there database's root url (path to the server's root). Don't specify path to
 	 * particular database.
 	 */
-	StringA baseUrl;
+	String baseUrl;
 	///name of database (optional) if set, object initializes self to work with database
-	StringA databaseName;
+	String databaseName;
 	///Pointer to query cache.
 	/** This pointer can be NULL to disable caching
 	 * Otherwise, you have to keep pointer valid until the CouchDB object is destroyed

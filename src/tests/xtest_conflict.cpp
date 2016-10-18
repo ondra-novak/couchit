@@ -8,7 +8,6 @@
 
 #include "../lightcouch/changeset.h"
 #include "../lightcouch/document.h"
-#include "../lightcouch/conflictResolver.h"
 #include "lightspeed/base/framework/testapp.h"
 
 #include "test_common.h"
@@ -16,8 +15,8 @@
 #include <string.h>
 
 #include "../lightcouch/attachment.h"
+#include "../lightcouch/conflictResolver.h_"
 using LightCouch::getTestCouch;
-using LightSpeed::JSON::ConstValue;
 
 #define DATABASENAME "lightcouch_unittest_conflicts"
 
@@ -100,7 +99,7 @@ static void resolveConflicts(PrintTextA &a) {
 	public:
 		TestResolver(CouchDB &cdb,PrintTextA &a):ConflictResolver(cdb),a(a) {}
 
-		virtual ConstValue resolveConflict(Document &doc, const Path &path, const ConstValue &leftValue, const ConstValue &rightValue) {
+		virtual Value resolveConflict(Document &doc, const Path &path, const Value &leftValue, const ConstValue &rightValue) {
 			a("Conflict: %1, ") << path.getKey();
 			return ConflictResolver::resolveConflict(doc,path,leftValue,rightValue);
 		}

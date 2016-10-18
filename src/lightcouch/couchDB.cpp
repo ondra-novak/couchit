@@ -8,6 +8,7 @@
 
 #include "changeset.h"
 #include "couchDB.h"
+#include <immujson/json.h>
 #include <lightspeed/base/containers/convertString.h>
 #include <lightspeed/base/containers/stack.tcc>
 #include <lightspeed/base/text/textFormat.tcc>
@@ -28,38 +29,34 @@
 
 #include "lightspeed/base/exceptions/netExceptions.h"
 
-#include "conflictResolver.h"
+#include "conflictResolver.h_"
 #include "defaultUIDGen.h"
 #include "queryCache.h"
 
 #include "document.h"
-using LightSpeed::INetworkServices;
-using LightSpeed::JSON::serialize;
-using LightSpeed::lockInc;
-using LightSpeed::Stack;
+
+using LightSpeed::lockCompareExchange;
 namespace LightCouch {
+
+
 
 CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
 	this->keepAlive = true;
 	this->useHTTP10 = false;
-	this->userAgent = ConstStrA("LightCouch/1.0 (+https://github.com/ondra-novak/lightcouch)");
+	this->userAgent = StringRef("LightCouch/1.0 (+https://github.com/ondra-novak/lightcouch)");
 	this->httpsProvider = cfg.httpsProvider;
 	this->proxyProvider = cfg.proxyProvider;
 	if (cfg.iotimeout != null) this->iotimeout = cfg.iotimeout;
 }
 
-ConstStrA CouchDB::fldTimestamp("~timestamp");
-ConstStrA CouchDB::fldPrevRevision("~prevRev");
+StringRef CouchDB::fldTimestamp("~timestamp");
+StringRef CouchDB::fldPrevRevision("~prevRev");
 
 typedef AutoArrayStream<char, SmallAlloc<1024> > UrlLine;
 
-static JSON::PFactory createFactory(JSON::PFactory jfact) {
-	if (jfact != null) return jfact;
-	else return JSON::create();
-}
 
 CouchDB::CouchDB(const Config& cfg)
-	:json(createFactory(cfg.factory)),baseUrl(cfg.baseUrl),factory(json.factory)
+	:baseUrl(cfg.baseUrl)
 	,cache(cfg.cache),seqNumSlot(0)
 	,uidGen(cfg.uidgen == null?DefaultUIDGen::getInstance():*cfg.uidgen)
 	,httpConfig(cfg),http(httpConfig)
@@ -69,24 +66,24 @@ CouchDB::CouchDB(const Config& cfg)
 
 
 template<typename C>
-void CouchDB::reqPathToFullPath(ConstStrA reqPath, C &output) {
+void CouchDB::reqPathToFullPath(StringRef reqPath, C &output) {
 	output.append(baseUrl);
-	if (reqPath.head(1) == ConstStrA('/')) {
-		output.append(reqPath.offset(1));
+	if (reqPath.substr(0,1) == "/") {
+		output.append(reqPath.substr(0,1));
 	} else {
 		if (database.empty()) throw ErrorMessageException(THISLOCATION,"No database selected");
 
-//			output.append(ConstStrA('/'));
+//			output.append(StringRef('/'));
 		output.append(database);
-		output.append(ConstStrA('/'));
+		output.append(StringRef('/'));
 		output.append(reqPath);
 	}
 }
 
 
 
-JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natural flags) {
-	if (headers != null && headers->getType() != JSON::ndObject) {
+Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) {
+	if (headers != nullptr && headers->type() != json::object) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
 
@@ -94,7 +91,7 @@ JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natura
 	reqPathToFullPath(path,requestUrl);
 
 	bool usecache = (flags & flgDisableCache) == 0;
-	if (path.head(1) == ConstStrA('/')) usecache = false;
+	if (path.substr(0,1) == StringRef("/")) usecache = false;
 	if (!cache) usecache = false;
 
 	//there will be stored cached item
@@ -118,10 +115,11 @@ JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natura
 		if (cachedItem != nil) {
 			http.setHeader(HttpClient::fldIfNoneMatch, cachedItem->etag);
 		}
-		if (headers!= null) headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
-			this->http.setHeader(key,nd->getStringUtf8());
-			return false;
-		}));
+		if (headers!= nullptr)
+			headers->forEach([this](Value v){
+				this->http.setHeader(StringRef(v.getKey()),StringRef(v.getString()));
+				return true;
+			});
 
 		response = http.send();
 		if (http.getStatus() == 304 && cachedItem != null) {
@@ -130,7 +128,7 @@ JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natura
 		}
 		if (http.getStatus() == 301 || http.getStatus() == 302 || http.getStatus() == 303 || http.getStatus() == 307) {
 			HttpClient::HeaderValue val = http.getHeader(http.fldLocation);
-			if (!val.defined) throw RequestError(THISLOCATION,requestUrl,http.getStatus(),http.getStatusMessage(), factory->newValue("Redirect without Location"));
+			if (!val.defined) throw RequestError(THISLOCATION,requestUrl,http.getStatus(),http.getStatusMessage(), Value("Redirect without Location"));
 			http.close();
 			http.open(HttpClient::mGET, val);
 			redirectRetry = true;
@@ -138,25 +136,20 @@ JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natura
     }
 	while (redirectRetry);
 
+    auto readStreamFn = [&response](){return response.getNext();};
+
 	if (http.getStatus()/100 != 2) {
 
-		JSON::Value errorVal;
+		Value errorVal;
 		try{
-			errorVal = factory->fromStream(response);
-			//LightCouch's query server will return try_again in case that version mistmatch
-			//This allows to start fresh version of query server. However we need to repeat the request
-			//There is limit to repeat max 31x, then return error
-			if (errorVal["error"].getStringA() == "try_again" && (flags & flgTryAgainCounterMask) != flgTryAgainCounterMask) {
-				SyncReleased<FastLock> _(lock);
-				return requestGET(path, headers, flags + flgTryAgainCounterStep);
-			}
+			errorVal = Value::parse(readStreamFn);
 		} catch (...) {
 
 		}
 		http.close();
 		throw RequestError(THISLOCATION,requestUrl,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
-		JSON::Value v = factory->fromStream(response);
+		Value v = Value::parse(readStreamFn);
 		if (usecache) {
 			BredyHttpSrv::HeaderValue fld = http.getHeader(HttpClient::fldETag);
 			if (fld.defined) {
@@ -164,21 +157,21 @@ JSON::ConstValue CouchDB::requestGET(ConstStrA path, JSON::Value headers, natura
 				cache->set(path, QueryCache::CachedItem(fld,useq, v));
 			}
 		}
-		if (flags & flgStoreHeaders && headers != null) {
-			headers->clear();
-			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
-				headers->add(key, this->factory->newValue(value));
+		if (flags & flgStoreHeaders && headers != nullptr) {
+			Object obj;
+			http.enumHeaders([&](StringRef key, StringRef value) {
+				obj(key,value);
 				return false;
 			});
+			*headers = obj;
 		}
 		http.close();
 		return v;
 	}
 }
 
-
-JSON::ConstValue CouchDB::requestDELETE(ConstStrA path, JSON::Value headers, natural flags) {
-	if (headers != null && headers->getType() != JSON::ndObject) {
+Value CouchDB::requestDELETE(const StringRef &path, Value *headers, natural flags) {
+	if (headers != nullptr && headers->type() != json::object) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
 
@@ -188,38 +181,42 @@ JSON::ConstValue CouchDB::requestDELETE(ConstStrA path, JSON::Value headers, nat
 	Synchronized<FastLock> _(lock);
 	http.open(HttpClient::mDELETE, requestUrl);
 	http.setHeader(HttpClient::fldAccept,"application/json");
-	if (headers) headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
-		this->http.setHeader(key,nd->getStringUtf8());
-		return false;
-	}));
+	if (headers) headers->forEach([this](Value v){
+		this->http.setHeader(StringRef(v.getKey()),StringRef(v.getString()));
+		return true;
+	});
+
 
 	SeqFileInput response = http.send();
+    auto readStreamFn = [&response](){return response.getNext();};
 	if (http.getStatus()/100 != 2) {
 
-		JSON::Value errorVal;
+		Value errorVal;
 		try{
-			errorVal = factory->fromStream(response);
+			errorVal = Value::parse(readStreamFn);
 		} catch (...) {
 
 		}
 		http.close();
 		throw RequestError(THISLOCATION,requestUrl,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
-		JSON::Value v = factory->fromStream(response);
-		if (flags & flgStoreHeaders && headers != null) {
-			headers->clear();
-			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
-				headers->add(key, this->factory->newValue(value));
+		Value v = Value::parse(readStreamFn);
+		if (flags & flgStoreHeaders && headers != nullptr) {
+			Object obj;
+			http.enumHeaders([&](StringRef key, StringRef value) {
+				obj(key, value);
 				return false;
 			});
+			*headers = obj;
 		}
 		http.close();
 		return v;
 	}
 }
 
-JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path, JSON::ConstValue data, JSON::Container headers, natural flags) {
-	if (headers != null && headers->getType() != JSON::ndObject) {
+Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StringRef &path, Value data, Value *headers, natural flags) {
+
+	if (headers != nullptr && headers->type() != json::object) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
 
@@ -230,43 +227,40 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 	http.open(method, requestUrl);
 	http.setHeader(HttpClient::fldAccept,"application/json");
 	http.setHeader(HttpClient::fldContentType,"application/json");
-	if (headers != null) headers->enumEntries(JSON::IEntryEnum::lambda([this](const JSON::INode *nd, ConstStrA key, natural ){
-		this->http.setHeader(key,nd->getStringUtf8());
-		return false;
-	}));
+	if (headers != nullptr)
+		headers->forEach([this](Value v){
+		this->http.setHeader(StringRef(v.getKey()),StringRef(v.getString()));
+		return true;
+	});
 
 	SeqFileOutput out = http.beginBody(HttpClient::psoDefault);
-	if (data != null) {
-		SeqTextOutA textout(out);
-		JSON::serialize(data,textout,true);
+	if (data.type() != json::undefined) {
+		data.serialize([&out](char c) {out.write(c);});
 	}
 	SeqFileInput response = http.send();
+
+    auto readStreamFn = [&response](){return response.getNext();};
+
+
 	if (http.getStatus()/100 != 2) {
 
-		JSON::Value errorVal;
+		Value errorVal;
 		try{
-			errorVal = factory->fromStream(response);
-			//LightCouch's query server will return try_again in case that version mistmatch
-			//This allows to start fresh version of query server. However we need to repeat the request
-			//There is limit to repeat max 31x, then return error
-			if (errorVal["error"].getStringA() == "try_again" && (flags & flgTryAgainCounterMask) != flgTryAgainCounterMask) {
-				SyncReleased<FastLock> _(lock);
-				return jsonPUTPOST(method,path, data,headers, flags + flgTryAgainCounterStep);
-			}
+			errorVal = Value::parse(readStreamFn);
 		} catch (...) {
 
 		}
 		http.close();
 		throw RequestError(THISLOCATION,requestUrl,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
-		JSON::Value v = factory->fromStream(response);
-		if (flags & flgStoreHeaders && headers != null) {
-			headers.clear();
-			auto hb = json.object(headers);
-			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
-				hb(key, value);
+		Value v = Value::parse(readStreamFn);
+		if (flags & flgStoreHeaders && headers != nullptr) {
+			Object obj;
+			http.enumHeaders([&](StringRef key, StringRef value) {
+				obj(key, value);
 				return false;
 			});
+			*headers = obj;
 		}
 		http.close();
 		return v;
@@ -274,34 +268,31 @@ JSON::ConstValue CouchDB::jsonPUTPOST(HttpClient::Method method, ConstStrA path,
 }
 
 
-JSON::ConstValue CouchDB::requestPUT(ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags) {
+Value CouchDB::requestPUT(const StringRef &path, const Value &postData, Value *headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPUT,path,postData,headers,flags);
 }
-JSON::ConstValue CouchDB::requestPOST(ConstStrA path, JSON::ConstValue postData, JSON::Container headers, natural flags) {
+Value CouchDB::requestPOST(const StringRef &path, const Value &postData, Value *headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPOST,path,postData,headers,flags);
 }
 
 
 
 
-void CouchDB::use(ConstStrA database) {
+void CouchDB::use(String database) {
 	this->database = database;
 }
 
-ConstStrA CouchDB::getCurrentDB() const {
+String CouchDB::getCurrentDB() const {
 	return database;
 }
 
-StringA CouchDB::urlencode(ConstStrA text) {
-	return convertString(UrlEncoder(), text);
-}
 
 void CouchDB::createDatabase() {
-	requestPUT(ConstStrA(),null);
+	requestPUT(StringRef(),Value());
 }
 
 void CouchDB::deleteDatabase() {
-	requestDELETE(ConstStrA(),null);
+	requestDELETE(StringRef(),nullptr);
 }
 
 CouchDB::~CouchDB() {
@@ -321,11 +312,11 @@ Changeset CouchDB::createChangeset() {
 
 
 
-ConstValue CouchDB::getLastSeqNumber() {
+Value CouchDB::getLastSeqNumber() {
 	ChangesSink chsink = createChangesSink();
 	Changes chgs = chsink.setFilterFlags(Filter::reverseOrder).limit(1).exec();
 	if (chgs.hasItems()) return ChangedDoc(chgs.getNext()).seqId;
-	else return null;
+	else return nullptr;
 }
 
 atomicValue& CouchDB::trackSeqNumbers() {
@@ -344,7 +335,7 @@ Query CouchDB::createQuery(natural viewFlags) {
 	return createQuery(v);
 }
 
-JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId, natural flags) {
+Value CouchDB::retrieveLocalDocument(StringRef localId, natural flags) {
 	TextFormatBuff<char, StaticAlloc<256> > fmt;
 	StringA encdoc = urlencode(localId);
 	fmt("_local/%1") << encdoc;
@@ -352,26 +343,26 @@ JSON::ConstValue CouchDB::retrieveLocalDocument(ConstStrA localId, natural flags
 
 }
 
-ConstStrA CouchDB::genUID() {
-	return uidGen(uidBuffer,ConstStrA());
+StringRef CouchDB::genUID() {
+	return uidGen(uidBuffer,StringRef());
 }
 
-ConstStrA CouchDB::genUID(ConstStrA prefix) {
+StringRef CouchDB::genUID(StringRef prefix) {
 	return uidGen(uidBuffer,prefix);
 }
 
-ConstValue CouchDB::retrieveDocument(ConstStrA docId, ConstStrA revId, natural flags) {
+ConstValue CouchDB::retrieveDocument(StringRef docId, StringRef revId, natural flags) {
 	UrlLine urlLine;
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlLine);
-	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(docId.getFwIter()), revIdEnc(revId.getFwIter());
+	FilterRead<StringRef::Iterator, UrlEncoder> docIdEnc(docId.getFwIter()), revIdEnc(revId.getFwIter());
 	urlfmt("%1?rev=%2") << &docIdEnc << &revIdEnc;
 	return requestGET(urlLine.getArray(),null, flags & (flgDisableCache|flgRefreshCache));
 }
 
-ConstValue CouchDB::retrieveDocument(ConstStrA docId, natural flags) {
+ConstValue CouchDB::retrieveDocument(StringRef docId, natural flags) {
 	UrlLine urlLine;
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlLine);
-	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(docId.getFwIter());
+	FilterRead<StringRef::Iterator, UrlEncoder> docIdEnc(docId.getFwIter());
 
 	urlfmt("%1") << &docIdEnc;
 
@@ -404,31 +395,31 @@ ConstValue CouchDB::retrieveDocument(ConstStrA docId, natural flags) {
 
 }
 
-CouchDB::UpdateResult CouchDB::updateDoc(ConstStrA updateHandlerPath, ConstStrA documentId,
-		JSON::ConstValue arguments) {
+CouchDB::UpdateResult CouchDB::updateDoc(StringRef updateHandlerPath, StringRef documentId,
+		Value arguments) {
 
 	UrlLine urlline;
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
-	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter());
+	FilterRead<StringRef::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter());
 	urlfmt("%1/%2") << updateHandlerPath << &docIdEnc;
 	if (arguments != null) {
 		char c = '?';
 		for (JSON::ConstIterator iter = arguments->getFwIter(); iter.hasItems();) {
 			const JSON::ConstKeyValue &kv = iter.getNext();
-			FilterRead<ConstStrA::Iterator, UrlEncoder> keyEnc(kv.getStringKey().getFwIter());
-			ConstStrA valStr;
+			FilterRead<StringRef::Iterator, UrlEncoder> keyEnc(kv.getStringKey().getFwIter());
+			StringRef valStr;
 			if (kv->isString()) {
 				valStr = kv.getStringA();
 			} else {
 				valStr = json.factory->toString(*kv);
 			}
-			FilterRead<ConstStrA::Iterator, UrlEncoder> valEnc(valStr.getFwIter());
+			FilterRead<StringRef::Iterator, UrlEncoder> valEnc(valStr.getFwIter());
 			urlfmt("%1%%2=%3") << c << &keyEnc << &valEnc;
 			c = '&';
 		}
 	}
 	JSON::Container h = json.object();
-	JSON::ConstValue v = requestPUT(urlline.getArray(), null, h, flgStoreHeaders);
+	Value v = requestPUT(urlline.getArray(), null, h, flgStoreHeaders);
 
 	StringA newRev;
 	const JSON::INode *n = h->getPtr("X-Couch-Update-NewRev");
@@ -440,46 +431,46 @@ CouchDB::UpdateResult CouchDB::updateDoc(ConstStrA updateHandlerPath, ConstStrA 
 
 }
 
-ConstValue CouchDB::showDoc(ConstStrA showHandlerPath, ConstStrA documentId,
-		JSON::ConstValue arguments, natural flags) {
+ConstValue CouchDB::showDoc(StringRef showHandlerPath, StringRef documentId,
+		Value arguments, natural flags) {
 
 	UrlLine urlline;
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
-	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter());
+	FilterRead<StringRef::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter());
 	urlfmt("%1/%2") << showHandlerPath << &docIdEnc;
 	if (arguments != null) {
 		char c = '?';
 		for (JSON::ConstIterator iter = arguments->getFwIter(); iter.hasItems();) {
 			const JSON::ConstKeyValue &kv = iter.getNext();
-			FilterRead<ConstStrA::Iterator, UrlEncoder> keyEnc(kv.getStringKey().getFwIter());
-			ConstStrA valStr;
+			FilterRead<StringRef::Iterator, UrlEncoder> keyEnc(kv.getStringKey().getFwIter());
+			StringRef valStr;
 			if (kv->isString()) {
 				valStr = kv.getStringA();
 			} else {
 				valStr = json.factory->toString(*kv);
 			}
-			FilterRead<ConstStrA::Iterator, UrlEncoder> valEnc(valStr.getFwIter());
+			FilterRead<StringRef::Iterator, UrlEncoder> valEnc(valStr.getFwIter());
 			urlfmt("%1%%2=%3") << c << &keyEnc << &valEnc;
 			c = '&';
 		}
 	}
-	JSON::ConstValue v = requestGET(urlline.getArray(),null,flags);
+	Value v = requestGET(urlline.getArray(),null,flags);
 
 	return v;
 
 }
 
 
-StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,ConstStrA contentType, const UploadFn& updateFn) {
+StringA CouchDB::uploadAttachment(Document& document, StringRef attachmentName,StringRef contentType, const UploadFn& updateFn) {
 	Synchronized<FastLock> _(lock);
-	ConstStrA documentId = document.getID();
-	ConstStrA revId = document.getRev();
+	StringRef documentId = document.getID();
+	StringRef revId = document.getRev();
 	UrlLine urlline;
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
-	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
+	FilterRead<StringRef::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
 	urlfmt("%1/%2/%3/%4") << baseUrl << database << &docIdEnc << &attNameEnc;
 	if (!revId.empty()) {
-		FilterRead<ConstStrA::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
+		FilterRead<StringRef::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
 		urlfmt("?rev=%1") << &revIdEnc;
 	}
 	http.open(HttpClient::mPUT, urlline.getArray());
@@ -489,7 +480,7 @@ StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,C
 	SeqFileInput in = http.send();
 	if (http.getStatus() != 201) {
 
-		JSON::Value errorVal;
+		Value errorVal;
 		try{
 			errorVal = factory->fromStream(in);
 		} catch (...) {
@@ -498,15 +489,15 @@ StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,C
 		http.close();
 		throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
-		JSON::Value v = factory->fromStream(in);
+		Value v = factory->fromStream(in);
 		http.close();
 		return v["rev"].getStringA();
 	}
 }
 
-void CouchDB::downloadAttachment(const Document& document, ConstStrA attachmentName, const DownloadFn &downloadFn, ConstStrA etag) {
-	ConstStrA documentId = document.getID();
-	ConstStrA revId = document.getRev();
+void CouchDB::downloadAttachment(const Document& document, StringRef attachmentName, const DownloadFn &downloadFn, StringRef etag) {
+	StringRef documentId = document.getID();
+	StringRef revId = document.getRev();
 	downloadAttachment(documentId,revId,attachmentName,downloadFn,etag);
 }
 
@@ -515,12 +506,12 @@ Value CouchDB::genUIDValue() {
 	return json(genUID());
 }
 
-Value CouchDB::genUIDValue(ConstStrA prefix) {
+Value CouchDB::genUIDValue(StringRef prefix) {
 	Synchronized<FastLock> _(lock);
 	return json(genUID(prefix));
 }
 
-StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,
+StringA CouchDB::uploadAttachment(Document& document, StringRef attachmentName,
 		const AttachmentDataRef &data) {
 
 	return uploadAttachment(document,attachmentName,data.contentType,UploadFn([&](SeqFileOutput out) {
@@ -530,10 +521,10 @@ StringA CouchDB::uploadAttachment(Document& document, ConstStrA attachmentName,
 }
 
 AttachmentData CouchDB::downloadAttachment(const Document& document,
-		ConstStrA attachmentName) {
+		StringRef attachmentName) {
 
-	ConstStrA documentId = document.getID();
-	ConstStrA revId = document.getRev();
+	StringRef documentId = document.getID();
+	StringRef revId = document.getRev();
 	return downloadAttachment(documentId,revId,attachmentName);
 
 }
@@ -544,7 +535,7 @@ Value CouchDB::newDocument() {
 	return json("_id",genUID());
 }
 
-Value CouchDB::newDocument(ConstStrA prefix) {
+Value CouchDB::newDocument(StringRef prefix) {
 	Synchronized<FastLock> _(lock);
 	return json("_id",genUID(prefix));
 }
@@ -576,7 +567,7 @@ public:
 			} else if (x == 'u') {
 				Super::parseCheck(functionkw+2);
 				functionBuff.clear();
-				functionBuff.append(ConstStrA(functionkw));
+				functionBuff.append(StringRef(functionkw));
 
 				AutoArray<char>::WriteIter wr = functionBuff.getWriteIterator();
 
@@ -591,7 +582,7 @@ public:
 								(c == ')' && levelStack.top() != '(') ||
 								(c == '}' && levelStack.top() != '{') ||
 								(c == ']' && levelStack.top() != '['))
-							throw JSON::ParseError_t(THISLOCATION,ConstStrA(functionBuff));
+							throw JSON::ParseError_t(THISLOCATION,StringRef(functionBuff));
 						levelStack.pop();
 						if (levelStack.empty() && c == '}') break;
 					} else if (c == '"') {
@@ -602,7 +593,7 @@ public:
 						wr.write(c);
 					}
 				}
-				return Super::factory->newValue(ConstStrA(functionBuff));
+				return Super::factory->newValue(StringRef(functionBuff));
 			} else {
 				throw JSON::ParseError_t(THISLOCATION,"expected 'false' or 'function' ");
 			}
@@ -612,11 +603,11 @@ public:
 	}
 };
 
-static const ConstStrA _designSlash("_design/");
+static const StringRef _designSlash("_design/");
 
 
 
-bool CouchDB::uploadDesignDocument(ConstValue content, DesignDocUpdateRule updateRule, ConstStrA name) {
+bool CouchDB::uploadDesignDocument(ConstValue content, DesignDocUpdateRule updateRule, StringRef name) {
 
 
 	class DDResolver: public ConflictResolver {
@@ -710,12 +701,12 @@ bool CouchDB::uploadDesignDocument(ConstValue content, DesignDocUpdateRule updat
 }
 
 template<typename T>
-JSON::Value parseDesignDocument(IIterator<char, T> &stream, JSON::PFactory factory) {
+Value parseDesignDocument(IIterator<char, T> &stream, JSON::PFactory factory) {
 	DesignDocumentParse<T> parser(stream, factory);
 	return parser.parse();
 }
 
-bool CouchDB::uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule, ConstStrA name) {
+bool CouchDB::uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule, StringRef name) {
 
 	SeqFileInBuff<> infile(pathname,0);
 	SeqTextInA intextfile(infile);
@@ -724,10 +715,10 @@ bool CouchDB::uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updat
 }
 
 bool  CouchDB::uploadDesignDocument(const char* content,
-		natural contentLen, DesignDocUpdateRule updateRule, ConstStrA name) {
+		natural contentLen, DesignDocUpdateRule updateRule, StringRef name) {
 
-	ConstStrA ctt(content, contentLen);
-	ConstStrA::Iterator iter = ctt.getFwIter();
+	StringRef ctt(content, contentLen);
+	StringRef::Iterator iter = ctt.getFwIter();
 	return uploadDesignDocument(parseDesignDocument(iter,json.factory), updateRule, name);
 
 }
@@ -740,7 +731,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	natural qpos = reqline.length();
 
 	if (sink.seqNumber != null) {
-		ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> seqNumb(sink.seqNumber.getStringA().getFwIter());
+		ConvertReadIter<UrlEncodeConvert, StringRef::Iterator> seqNumb(sink.seqNumber.getStringA().getFwIter());
 		urlfmt("&since=%1") << &seqNumb;
 	}
 	if (sink.outlimit != naturalNull) {
@@ -757,12 +748,12 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	if (sink.filter != null) {
 		const Filter &flt = sink.filter;
 		if (!flt.viewPath.empty()) {
-			ConstStrA fltpath = flt.viewPath;
-			ConstStrA ddocName;
-			ConstStrA filterName;
+			StringRef fltpath = flt.viewPath;
+			StringRef ddocName;
+			StringRef filterName;
 			bool isView = false;
-			ConstStrA::SplitIterator iter = fltpath.split('/');
-			ConstStrA x = iter.getNext();
+			StringRef::SplitIterator iter = fltpath.split('/');
+			StringRef x = iter.getNext();
 			if (x == "_design") x = iter.getNext();
 			ddocName = x;
 			x = iter.getNext();
@@ -802,9 +793,9 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		}
 	}
 	if (sink.filterArgs != null) {
-		sink.filterArgs->forEach([&](ConstValue v, ConstStrA key, natural) {
+		sink.filterArgs->forEach([&](ConstValue v, StringRef key, natural) {
 			if (v->isString()) {
-				ConvertReadIter<UrlEncodeConvert,ConstStrA::Iterator> cnv(v.getStringA().getFwIter());
+				ConvertReadIter<UrlEncodeConvert,StringRef::Iterator> cnv(v.getStringA().getFwIter());
 				urlfmt("&%1=%2") << key << &cnv;
 			} else {
 				urlfmt("&%1=") << key;
@@ -854,7 +845,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	ConstValue v;
 	if (http.getStatus()/100 != 2) {
 
-		JSON::Value errorVal;
+		Value errorVal;
 		try{
 			errorVal = factory->fromStream(in);
 		} catch (...) {
@@ -915,21 +906,21 @@ ChangesSink CouchDB::createChangesSink() {
 	return ChangesSink(*this);
 }
 
-Value CouchDB::emptyDocument(ConstStrA id) {
+Value CouchDB::emptyDocument(StringRef id) {
 	return json("_id",id);
 }
 
-void CouchDB::downloadAttachment(const ConstStrA& documentId, const ConstStrA& revId,
-		const ConstStrA& attachmentName, const DownloadFn& downloadFn,
-		ConstStrA etag) {
+void CouchDB::downloadAttachment(const StringRef& documentId, const StringRef& revId,
+		const StringRef& attachmentName, const DownloadFn& downloadFn,
+		StringRef etag) {
 
 	Synchronized<FastLock> _(lock);
 	UrlLine urlline;
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
-	FilterRead<ConstStrA::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
+	FilterRead<StringRef::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
 	urlfmt("%1/%2/%3/%4") << baseUrl << database << &docIdEnc << &attNameEnc;
 	if (!revId.empty()) {
-		FilterRead<ConstStrA::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
+		FilterRead<StringRef::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
 		urlfmt("?rev=%1") << &revIdEnc;
 	}
 	http.open(HttpClient::mGET, urlline.getArray());
@@ -938,7 +929,7 @@ void CouchDB::downloadAttachment(const ConstStrA& documentId, const ConstStrA& r
 	natural status = http.getStatus();
 	if (status != 200 && status != 304) {
 
-		JSON::Value errorVal;
+		Value errorVal;
 		try{
 			errorVal = factory->fromStream(in);
 		} catch (...) {
@@ -957,8 +948,8 @@ void CouchDB::downloadAttachment(const ConstStrA& documentId, const ConstStrA& r
 
 }
 
-AttachmentData CouchDB::downloadAttachment(const ConstStrA& docId,
-		const ConstStrA& revId, const ConstStrA& attachmentName) {
+AttachmentData CouchDB::downloadAttachment(const StringRef& docId,
+		const StringRef& revId, const StringRef& attachmentName) {
 	StringB data;
 	StringA contentType;
 	downloadAttachment(docId, revId,attachmentName, [&](const DownloadFile &dw) {

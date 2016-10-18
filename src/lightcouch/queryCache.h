@@ -66,7 +66,7 @@ public:
 	 * @param databaseName name of database
 	 * @return reference to created record. You can use the reference to store and retrieve sequence numbers.
 	 */
-	atomicValue &trackSeqNumbers(ConstStrA databaseName);
+	atomicValue &trackSeqNumbers(StringRef databaseName);
 
 
 	~QueryCache();

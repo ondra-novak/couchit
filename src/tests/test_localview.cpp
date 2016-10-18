@@ -26,8 +26,8 @@ static const char *strdata="[[\"Kermit Byrd\",76,184],[\"Odette Hahn\",44,181],"
 
 class LocalViewByName: public LocalView {
 public:
-	virtual void map(const ConstValue &doc) override {
-		emit(doc["name"],json << doc["age"] << doc["height"]);
+	virtual void map(const Value &doc) override {
+		emit(doc["name"],{doc["age"] ,doc["height"]} );
 	}
 
 };
@@ -35,30 +35,30 @@ public:
 
 class LocalViewAgeByGroup: public LocalView {
 public:
-	virtual void map(const ConstValue &doc) override {
-		emit(json << doc["age"].getUInt()/10 * 10 << doc["age"],doc["name"]);
+	virtual void map(const Value &doc) override {
+		emit({doc["age"].getUInt()/10 * 10 ,doc["age"]},doc["name"]);
 	}
 
 };
 
 class LocalViewByAge: public LocalView {
 public:
-	virtual void map(const ConstValue &doc) override {
+	virtual void map(const Value &doc) override {
 		emit(doc["age"],doc["name"]);
 	}
 };
 
 class LocalView_age_group_height: public LocalView {
 public:
-	virtual void map(const ConstValue &doc) override {
-		emit(json << doc["age"].getUInt()/10 * 10 << doc["age"],doc["height"]);
+	virtual void map(const Value &doc) override {
+		emit({doc["age"].getUInt()/10 * 10 ,doc["age"]},doc["height"]);
 	}
-	virtual ConstValue reduce(const ConstStringT<KeyAndDocId>  &, const ConstStringT<ConstValue> &values, bool rereduce) const override {
+	virtual Value reduce(const ConstStringT<KeyAndDocId>  &, const ConstStringT<Value> &values, bool rereduce) const override {
 		if (rereduce) throwUnsupportedFeature(THISLOCATION,this,"rereduce not implemented");
 		natural sum = 0;
 		natural count = values.length();
 		for(natural i = 0; i<count;i++) sum+=values[i].getUInt();
-		return json("sum",sum)("count",count);
+		return Object("sum",sum)("count",count);
 	}
 };
 
@@ -70,18 +70,16 @@ static void loadData(LocalView &view) {
 
 	AutoArray<Document, SmallAlloc<50> > savedDocs;
 
-	JSON::Value data = view.json.factory->fromString(strdata);
-	for (JSON::Iterator iter = data->getFwIter(); iter.hasItems();) {
-		const JSON::KeyValue &kv= iter.getNext();
+	Value data = Value::fromString(strdata);
+	for (auto &&kv: data) {
 		Document doc;
-		doc.edit(view.json)
-				("name",kv[0])
-				("age",kv[1])
-				("height",kv[2])
-				("_id",gen(buffer,""));
-
+		doc("name",kv[0])
+			("age",kv[1])
+			("height",kv[2])
+			("_id",StringRef(gen(buffer,"")));
 		view.updateDoc(doc);
 	}
+
 }
 
 static void localView_ByName(PrintTextA &print) {
@@ -96,9 +94,9 @@ static void localView_ByName(PrintTextA &print) {
 					 .exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		print("%1,%2,%3 ") << row.key[0]->getStringUtf8()
-				<<row.value[0]->getUInt()
-				<<row.value[1]->getUInt();
+		print("%1,%2,%3 ") << row.key[0].getString()
+				<<row.value[0].getUInt()
+				<<row.value[1].getUInt();
 	}
 }
 
@@ -111,9 +109,9 @@ static void localView_wildcard(PrintTextA &print) {
 	Result res = q("K")(Query::wildcard).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		print("%1,%2,%3 ") << row.key[0]->getStringUtf8()
-				<<row.value[0]->getUInt()
-				<<row.value[1]->getUInt();
+		print("%1,%2,%3 ") << row.key[0].getString()
+				<<row.value[0].getUInt()
+				<<row.value[1].getUInt();
 	}
 
 }
@@ -127,7 +125,7 @@ static void localView_FindGroup(PrintTextA &a) {
 	Result res = q(40)(Query::any).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value->getStringUtf8();
+		a("%1 ") << row.value.getString();
 	}
 }
 
@@ -140,7 +138,7 @@ static void localView_FindRange(PrintTextA &a) {
 	Result res = q.from(20).to(40).reverseOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value->getStringUtf8();
+		a("%1 ") << row.value.getString();
 	}
 }
 
@@ -154,8 +152,8 @@ static void localView_couchReduce(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0]->getUInt()
-				<<(row.value["sum"]->getUInt()/row.value["count"]->getUInt());
+		a("%1:%2 ") << row.key[0].getUInt()
+				<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
 	}
 }
 

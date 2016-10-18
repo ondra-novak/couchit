@@ -71,7 +71,7 @@ public:
 	 *
 	 * Deleted document has always timestamp enabled
 	 */
-	void setDeleted(ConstStringT<ConstStrA> fieldsToKept = ConstStringT<ConstStrA>());
+	void setDeleted(StringRefT<StringRef> fieldsToKept = StringRefT<StringRef>());
 
 	///Enables timestamping of changes
 	/** Document with timestamps carries field, which contains timestamp of last update. Once this is

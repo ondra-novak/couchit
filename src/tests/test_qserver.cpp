@@ -37,7 +37,7 @@ static void prepareQueryServer(QueryServer &qserver) {
 
 	class ByName: public AbstractViewMapOnly<1> {
 		virtual void map(const Document &doc, IEmitFn &emit) override {
-			emit( (json << doc["name"]), (json << doc["age"],doc["height"]));
+			emit( {doc["name"]}, {doc["age"],doc["height"]});
 		}
 	};
 	qserver.regView("testview/by_name", new ByName);
@@ -52,45 +52,45 @@ static void prepareQueryServer(QueryServer &qserver) {
 
 	class ByAgeGroup: public AbstractViewMapOnly<1> {
 		virtual void map(const Document &doc, IEmitFn &emit) override {
-			emit( (json, doc["age"].getUInt()/10*10, doc["age"]), doc["name"]);
+			emit({doc["age"].getUInt()/10*10, doc["age"]}, doc["name"]);
 		}
 	};
 	qserver.regView("testview/by_age_group", new ByAgeGroup);
 
 	class ByGroupHeight: public AbstractView<2> {
 		virtual void map(const Document &doc, IEmitFn &emit) override {
-			emit( (json,doc["age"].getUInt()/10*10,doc["age"]), doc["height"]);
+			emit({doc["age"].getUInt()/10*10,doc["age"]}, doc["height"]);
 		}
-		virtual ConstValue reduce(const Rows &rows) override {
+		virtual Value reduce(const Rows &rows) override {
 			natural sum = 0;
 			for (natural i = 0; i < rows.length(); i++) {
 				sum+=rows[i].value.getUInt();
 			}
-			return json("sum",sum)("count",rows.length());
+			return Object("sum",sum)("count",rows.length());
 		}
-		virtual ConstValue rereduce(const ReducedRows &rows) override {
+		virtual Value rereduce(const ReducedRows &rows) override {
 			natural count = 0;
 			natural sum = 0;
 			for (natural i = 0; i < rows.length(); i++) {
 				sum+=rows[i].value["sum"].getUInt();
 				count+=rows[i].value["count"].getUInt();
 			}
-			return json("sum",sum)("count",rows.length());
+			return Object("sum",sum)("count",rows.length());
 		}
 	};
 	qserver.regView("testview/age_group_height", new ByGroupHeight);
 
 	class ByGroupHeight2: public AbstractViewBuildin<2, AbstractViewBase::rmStats> {
 		virtual void map(const Document &doc, IEmitFn &emit) override {
-			emit( (json,doc["age"].getUInt()/10*10,doc["age"]), doc["height"]);
+			emit( {doc["age"].getUInt()/10*10,doc["age"]}, doc["height"]);
 		}
 	};
 	qserver.regView("testview/age_group_height2", new ByGroupHeight2);
 
 	class TestList: public AbstractList<1> {
-		virtual void run(IListContext &list, ConstValue ) {
-			list.start(json("headers",json("Content-Type","application/json")));
-			ConstValue row;
+		virtual void run(IListContext &list, Value ) {
+			list.start(Object("headers",Object("Content-Type","application/json")));
+			Value row;
 			list.send("{\"blabla\":\"ahoj\",\"rows\":[");
 			bool second = false;
 			while ((row = list.getRow()) != null) {
@@ -106,15 +106,15 @@ static void prepareQueryServer(QueryServer &qserver) {
 
 	class FilterView_Young: public AbstractViewMapOnly<1> {
 		virtual void map(const Document &doc, IEmitFn &emit) override {
-			if (doc.getID().head(8) == ConstStrA("_design/")) return;
+			if (doc.getID().substr(0,8) == "_design/") return;
 			if (doc["age"].getUInt() < 40) emit();
 		}
 	};
 	qserver.regView("testview/young", new FilterView_Young);
 	class Filter_AgeRange: public AbstractFilter<1> {
-		virtual bool run(const Document &doc, ConstValue request) {
-			if (doc.getID().head(8) == ConstStrA("_design/")) return false;
-			ConstValue q = request["query"];
+		virtual bool run(const Document &doc, Value request) {
+			if (doc.getID().substr(0,8) == "_design/") return false;
+			Value q = request["query"];
 			natural agemin = q["agemin"].getUInt();
 			natural agemax = q["agemax"].getUInt();
 			natural age = doc["age"].getUInt();
@@ -176,25 +176,23 @@ static void couchLoadData(PrintTextA &print) {
 
 	Changeset chset(db.createChangeset());
 	natural id=10000;
-	JSON::Value data = db.json.factory->fromString(strdata);
-	for (JSON::Iterator iter = data->getFwIter(); iter.hasItems();) {
-		const JSON::KeyValue &kv= iter.getNext();
+	Value data = Value::fromString(strdata);
+	for(auto &&item : data) {
 		Document doc;
-		doc.edit(db.json)
-				("name",kv[0])
-				("age",kv[1])
-				("height",kv[2])
-				("_id",ToString<natural>(id,16));
+		doc("name",item[0])
+			("age",item[1])
+			("height",item[2])
+			("_id",StringRef(ToString<natural>(id,16)));
 		id+=14823;
 		savedDocs.add(doc);
 		chset.update(doc);
 	}
+
 	chset.commit(false);
-	Set<StringA> uuidmap;
+	Set<String> uuidmap;
 
 	for (natural i = 0; i < savedDocs.length(); i++) {
-		StringA uuid = savedDocs[i]["_id"]->getStringUtf8();
-//		print("%1\n") << uuid;
+		StringRef uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
 	print("%1") << uuidmap.size();
@@ -211,9 +209,9 @@ static void couchFindWildcard(PrintTextA &a) {
 	Result res = q("K")(Query::isArray)(Query::wildcard).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
-				<<row.value[0]->getUInt()
-				<<row.value[1]->getUInt();
+		a("%1,%2,%3 ") << row.key[0].getString()
+				<<row.value[0].getUInt()
+				<<row.value[1].getUInt();
 	}
 }
 
@@ -226,7 +224,7 @@ static void couchFindGroup(PrintTextA &a) {
 	Result res = q(40)(Query::any).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value->getStringUtf8();
+		a("%1 ") << row.value.getString();
 	}
 }
 
@@ -239,7 +237,7 @@ static void couchFindRange(PrintTextA &a) {
 	Result res = q.from(20).to(40).reverseOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value->getStringUtf8();
+		a("%1 ") << row.value.getString();
 	}
 }
 
@@ -252,7 +250,7 @@ static void couchFindRangeList(PrintTextA &a) {
 	Result res = q.from(20).to(40).reverseOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value->getStringUtf8();
+		a("%1 ") << row.value.getString();
 	}
 }
 
@@ -268,9 +266,9 @@ static void couchFindKeys(PrintTextA &a) {
 					 .exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
-				<<row.value[0]->getUInt()
-				<<row.value[1]->getUInt();
+		a("%1,%2,%3 ") << row.key[0].getString()
+				<<row.value[0].getUInt()
+				<<row.value[1].getUInt();
 	}
 }
 
@@ -284,8 +282,8 @@ static void couchReduce(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0]->getUInt()
-				<<(row.value["sum"]->getUInt()/row.value["count"]->getUInt());
+		a("%1:%2 ") << row.key[0].getUInt()
+				<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
 	}
 }
 
@@ -299,8 +297,8 @@ static void couchReduce2(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0]->getUInt()
-				<<(row.value["sum"]->getUInt()/row.value["count"]->getUInt());
+		a("%1:%2 ") << row.key[0].getUInt()
+					<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
 	}
 }
 

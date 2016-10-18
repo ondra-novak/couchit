@@ -42,7 +42,7 @@ QueryCache::~QueryCache() {
 	clear();
 }
 
-atomicValue& QueryCache::trackSeqNumbers(ConstStrA databaseName) {
+atomicValue& QueryCache::trackSeqNumbers(StringRef databaseName) {
 	Synchronized<FastLock> _(lock);
 	atomicValue *p = seqMap.find(StrKey(databaseName));
 	if (p) {

@@ -84,24 +84,22 @@ static void couchLoadData(PrintTextA &print) {
 	Changeset chset(db.createChangeset());
 	natural id=10000;
 	Value data = Value::fromString(strdata);
-	for (JSON::Iterator iter = data->getFwIter(); iter.hasItems();) {
-		const JSON::KeyValue &kv= iter.getNext();
+	for(auto &&item : data) {
 		Document doc;
-		doc.edit(db.json)
-				("name",kv[0])
-				("age",kv[1])
-				("height",kv[2])
-				("_id",ToString<natural>(id,16));
+		doc("name",item[0])
+			("age",item[1])
+			("height",item[2])
+			("_id",StringRef(ToString<natural>(id,16)));
 		id+=14823;
 		savedDocs.add(doc);
 		chset.update(doc);
 	}
+
 	chset.commit(false);
-	Set<StringA> uuidmap;
+	Set<String> uuidmap;
 
 	for (natural i = 0; i < savedDocs.length(); i++) {
-		StringA uuid = savedDocs[i]["_id"]->getStringUtf8();
-//		print("%1\n") << uuid;
+		StringRef uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
 	print("%1") << uuidmap.size();
@@ -147,9 +145,9 @@ static void couchFindWildcard(PrintTextA &a) {
 	Result res = q("K")(Query::isArray)(Query::wildcard).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
-				<<row.value[0]->getUInt()
-				<<row.value[1]->getUInt();
+		a("%1,%2,%3 ") << row.key[0].getString()
+				<<row.value[0].getUInt()
+				<<row.value[1].getUInt();
 	}
 }
 
@@ -162,7 +160,7 @@ static void couchFindGroup(PrintTextA &a) {
 	Result res = q(40)(Query::any).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value->getStringUtf8();
+		a("%1 ") << row.value.getString();
 	}
 }
 
@@ -175,7 +173,7 @@ static void couchFindRange(PrintTextA &a) {
 	Result res = q.from(20).to(40).reverseOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value->getStringUtf8();
+		a("%1 ") << row.value.getString();
 	}
 }
 
@@ -191,9 +189,9 @@ static void couchFindKeys(PrintTextA &a) {
 					 .exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
-				<<row.value[0]->getUInt()
-				<<row.value[1]->getUInt();
+		a("%1,%2,%3 ") << row.key[0].getString()
+				<<row.value[0].getUInt()
+				<<row.value[1].getUInt();
 	}
 }
 
@@ -204,6 +202,7 @@ static void couchCaching(PrintTextA &a) {
 	cfg.cache = &cache;
 	CouchDB db(cfg);
 	db.use(DATABASENAME);
+	json::PValue v;
 
 	for (natural i = 0; i < 3; i++) {
 		Query q(db.createQuery(by_name_cacheable));
@@ -213,15 +212,13 @@ static void couchCaching(PrintTextA &a) {
 						 .exec();
 		while (res.hasItems()) {
 			Row row = res.getNext();
-			a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
-					<<row.value[0]->getUInt()
-					<<row.value[1]->getUInt();
+			a("%1,%2,%3:%4 ") << row.key[0].getString()
+					<<row.value[0].getUInt()
+					<<row.value[1].getUInt()
+					<<(v == res.getHandle()?"true":"false");
 
-			Container &mutval = const_cast<Container &>(static_cast<const Container &>(row.value));
-			//modify cache, so we can detect, that caching is working
-			mutval.erase(0);
-			mutval.add(db.json(100));
 		}
+		v = res.getHandle();
 	}
 
 }
@@ -234,8 +231,9 @@ static void couchCaching2(PrintTextA &a) {
 	CouchDB db(cfg);
 	db.use(DATABASENAME);
 	db.trackSeqNumbers();
-	StringRef killDocName = "Owen Dillard";
+	String killDocName = "Owen Dillard";
 	Document killDoc;
+	json::PValue vhandle;
 
 
 	for (natural i = 0; i < 3; i++) {
@@ -243,7 +241,7 @@ static void couchCaching2(PrintTextA &a) {
 		if (i == 2) {
 			//make a change during second run
 			Changeset cset = db.createChangeset();
-			killDoc.setDeleted(db.json);
+			killDoc.setDeleted();
 			cset.update(killDoc);
 			cset.commit(db);
 			//also calls listenChanges
@@ -257,19 +255,17 @@ static void couchCaching2(PrintTextA &a) {
 						 .exec();
 		while (res.hasItems()) {
 			Row row = res.getNext();
-			a("%1,%2,%3 ") << row.key[0]->getStringUtf8()
-					<<row.value[0]->getUInt()
-					<<row.value[1]->getUInt();
+			a("%1,%2,%3,%4 ") << row.key[0].getString()
+					<<row.value[0].getUInt()
+					<<row.value[1].getUInt()
+					<<(vhandle==res.getHandle()?"true":"false");
 
-			//modify cache, so we can detect, that caching is working
-			Container &mutval = const_cast<Container &>(static_cast<const Container &>(row.value));
-			mutval.erase(0);
-			mutval.add(db.json(100));
 			//remember values of what to erase
-			if (killDocName == row.key[0]->getStringUtf8()) {
+			if (row.key[0] == killDocName) {
 				killDoc = row.doc;
 			}
 		}
+		vhandle = res.getHandle();
 	}
 
 }
@@ -285,8 +281,8 @@ static void couchReduce(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0]->getUInt()
-				<<(row.value["sum"]->getUInt()/row.value["count"]->getUInt());
+		a("%1:%2 ") << row.key[0].getUInt()
+				<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
 	}
 }
 
@@ -316,7 +312,8 @@ static void loadSomeDataThread(StringRef locId) {
 	Thread::sleep(1000);
 	Changeset chset = db.createChangeset();
 	Document doc;
-	doc.edit(chset.json)("_id",locId)("aaa",100);
+	doc("_id",locId)
+	   ("aaa",100);
 	chset.update(doc);
 	chset.commit(db);
 }
@@ -353,10 +350,10 @@ static void loadSomeDataThread3(StringRef locId) {
 	for (natural i = 0; i < 3; i++) {
 		Changeset chset = db.createChangeset();
 		Document doc;
-		doc.edit(chset.json)("_id",locId)("aaa",100);
+		doc("_id",locId.substr(i-1))
+		   ("aaa",100);
 		chset.update(doc);
 		chset.commit(db);
-		locId = locId.offset(1);
 		Thread::sleep(nil);
 	}
 }
@@ -413,7 +410,7 @@ static void couchChangesStopWait(PrintTextA &a) {
 		a("fail");
 	} catch (CanceledException &) {
 		Value v = db.requestGET("/");
-		a("%1") << v["couchdb"]->getStringUtf8();
+		a("%1") << v["couchdb"].getString();
 	}
 
 }
@@ -436,10 +433,10 @@ static void couchRetrieveDocument(PrintTextA &a) {
 	Result res = q.select("Kermit Byrd")(Query::isArray).exec();
 	Row row = res.getNext();
 
-	Document doc = db.retrieveDocument(row.id.getStringA(), CouchDB::flgSeqNumber);
+	Document doc = db.retrieveDocument(row.id.getString(), CouchDB::flgSeqNumber);
 	//this is random - cannot be tested
-	doc.edit(db.json).unset("_id").unset("_rev");
-	a("%1") << db.json.factory->toString(*doc);
+	doc.unset("_id").unset("_rev");
+	a("%1") << Value(doc).toString();
 }
 
 static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
@@ -449,7 +446,7 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 	Document doc = db.newDocument(".data");
 	db.uploadAttachment(doc,"testAttachment","text/plain",[](SeqFileOutput wr) {
 		SeqTextOutA txtwr(wr);
-		StringRef sentence("The quick brown fox jumps over the lazy dog");
+		ConstStrA sentence("The quick brown fox jumps over the lazy dog");
 		txtwr.blockWrite(sentence,true);
 	});
 
@@ -458,7 +455,8 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 
 	AttachmentData data = db.downloadAttachment(doc2,"testAttachment");
 
-	a("%1-%2") << data.contentType << StringRef(reinterpret_cast<const char *>(data.data()),data.length());
+	a("%1-%2") << data.contentType
+			<< ConstStrA(reinterpret_cast<const char *>(data.data()),data.length());
 
 
 }

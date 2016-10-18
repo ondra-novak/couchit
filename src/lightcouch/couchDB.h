@@ -122,7 +122,7 @@ public:
 	 * @param flags various flags that controls caching or behaviour
 	 * @return parsed response
 	 */
-	Value requestGET(const StringRef &path, const Value &headers = Value(), natural flags = 0);
+	Value requestGET(const StringRef &path, Value *headers = nullptr, natural flags = 0);
 	///Performs POST request from the database
 	/** POST request are not cached.
 	 *
@@ -158,7 +158,7 @@ public:
 	 * @param flags flags that controls behaviour
 	 * @return
 	 */
-	Value requestDELETE(const StringRef &path, const Value *headers = nullptr, natural flags = 0);
+	Value requestDELETE(const StringRef &path, Value *headers = nullptr, natural flags = 0);
 
 
 
@@ -204,9 +204,9 @@ public:
 
 
 	///Changes current database
-	void use(StringRef database);
+	void use(String database);
 	///Retrieves current database name
-	StringRef getCurrentDB() const;
+	String getCurrentDB() const;
 
 	///creates database
 	/** Creates database. Database is specified by function use()*/
@@ -588,7 +588,7 @@ protected:
 	void reqPathToFullPath(StringRef reqPath, C &output);
 
 
-	Value jsonPUTPOST(HttpClient::Method method, StringRef path, Value postData, Value * headers, natural flags);
+	Value jsonPUTPOST(HttpClient::Method method, const StringRef &path, Value data, Value *headers, natural flags);
 
 
 	friend class ChangesSink;

@@ -167,7 +167,7 @@ public:
 	 * @return
 	 */
 	template<typename T>
-	ChangesSink& arg(ConstStrA key, T value);
+	ChangesSink& arg(StringRef key, T value);
 	///Limit output for max count result
 	/**
 	 * @param count count of results to be in output. Specify naturalNull to remove limit
@@ -237,7 +237,7 @@ protected:
 
 
 template<typename T>
-inline ChangesSink& LightCouch::ChangesSink::arg(ConstStrA key, T value) {
+inline ChangesSink& LightCouch::ChangesSink::arg(StringRef key, T value) {
 
 	filterArgs.set(key, value);
 	return *this;

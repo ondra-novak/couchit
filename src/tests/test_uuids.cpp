@@ -23,12 +23,12 @@ using namespace BredyHttpClient;
 
 static void genFastUUIDS(PrintTextA &print) {
 
-	Set<StringA> uuidmap;
+	Set<String> uuidmap;
 	CouchDB db(getTestCouch());
 	ConsoleA out;
 
 	for (natural i = 0; i < 50; i++) {
-		StringA uuid = db.genUID("test-");
+		String uuid = Value(db.genUID("test-"));
 		out.print("%1\n") << uuid;
 		uuidmap.insert(uuid);
 		Thread::sleep(100);

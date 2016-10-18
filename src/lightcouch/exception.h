@@ -46,7 +46,7 @@ public:
 	static const char *msgNone;
 	virtual void message(ExceptionMsg &msg) const {
 		if (documentId == null) msg(msgText) << msgNone;
-		else msg(msgText) << documentId.getString();
+		else msg(msgText) << StringRef(documentId.getString());
 	}
 
 };
