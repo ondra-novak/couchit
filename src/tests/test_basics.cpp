@@ -222,7 +222,7 @@ static void couchCaching(PrintTextA &a) {
 	}
 
 }
-
+/*
 static void couchCaching2(PrintTextA &a) {
 
 	QueryCache cache;
@@ -269,7 +269,7 @@ static void couchCaching2(PrintTextA &a) {
 	}
 
 }
-
+*/
 
 static void couchReduce(PrintTextA &a) {
 

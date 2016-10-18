@@ -18,27 +18,23 @@
 
 namespace LightCouch {
 
-LocalView::LocalView():json(JSON::create()),updateReceiver(*this) {
+LocalView::LocalView() {
 
 }
 
-LocalView::LocalView(const Json &json):json(json),updateReceiver(*this) {
-
-}
 
 LocalView::~LocalView() {
-	cancelStream();
 }
 
 
-void LocalView::updateDoc(const ConstValue& doc) {
+void LocalView::updateDoc(const Value& doc) {
 	Exclusive _(lock);
 	updateDocLk(doc);
 }
-void LocalView::updateDocLk(const ConstValue& doc) {
-	ConstStrA docId = doc["_id"].getStringA();
+void LocalView::updateDocLk(const Value& doc) {
+	StringRef docId = doc["_id"].getString();
 	eraseDocLk(docId);
-	ConstValue delFlag = doc["_deleted"];
+	Value delFlag = doc["_deleted"];
 	if (delFlag == null || delFlag.getBool() == false) {
 		curDoc=doc;
 		map(doc);
@@ -46,27 +42,27 @@ void LocalView::updateDocLk(const ConstValue& doc) {
 	}
 }
 
-void LocalView::map(const ConstValue&)  {
+void LocalView::map(const Value&)  {
 	emit();
 }
 
 
-void LocalView::emit(const ConstValue& key, const ConstValue& value) {
+void LocalView::emit(const Value& key, const Value& value) {
 	addDocLk(curDoc, key, value);
 }
 
-void LocalView::emit(const ConstValue& key) {
-	addDocLk(curDoc, key, json(null));
+void LocalView::emit(const Value& key) {
+	addDocLk(curDoc, key,nullptr);
 }
 
 void LocalView::emit() {
-	addDocLk(curDoc, json(null), json(null));
+	addDocLk(curDoc,nullptr, nullptr);
 }
 
-void LocalView::eraseDocLk( ConstStrA docId) {
+void LocalView::eraseDocLk(const StringRef &docId) {
 	DocToKey::ListIter list = docToKeyMap.find(docId);
 	while (list.hasItems()) {
-		const ConstValue &k = list.getNext();
+		const Value &k = list.getNext();
 		keyToValueMap.erase(KeyAndDocId(k,docId));
 	}
 	docToKeyMap.erase(docId);
@@ -81,7 +77,7 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 	while (res.hasItems()) {
 		const Row &row = res.getNext();
 
-		ConstValue doc = row.doc;
+		Value doc = row.doc;
 
 		//runMapFn is true and there is document
 		if (runMapFn && doc != null) {
@@ -91,7 +87,7 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 			//otherwise if there is no document
 			if (doc == null) {
 				//create fake one to store docId
-				doc = db.json("_id",row.id);
+				doc = Object("_id",row.id);
 			}
 			//add this document
 			addDocLk(doc,row.key,row.value);
@@ -100,21 +96,21 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 
 }
 
-void LocalView::eraseDoc(ConstStrA docId) {
+void LocalView::eraseDoc(const StringRef &docId) {
 
 	Exclusive _(lock);
 	eraseDocLk(docId);
 
 }
 
-void LocalView::addDoc(const ConstValue& doc, const ConstValue& key,
-		const ConstValue& value) {
+void LocalView::addDoc(const Value& doc, const Value& key,
+		const Value& value) {
 
 	Exclusive _(lock);
 	addDocLk(doc, key, value);
 }
 
-ConstValue LocalView::getDocument(const ConstStrA docId) const {
+Value LocalView::getDocument(const StringRef &docId) const {
 	Shared _(lock);
 	DocToKey::ListIter iter = docToKeyMap.find(docId);
 	if (iter.hasItems()) {
@@ -125,13 +121,13 @@ ConstValue LocalView::getDocument(const ConstStrA docId) const {
 }
 
 
-ConstValue LocalView::reduce(const ConstStringT<KeyAndDocId>&,const ConstStringT<ConstValue>&, bool ) const {
-	return nil;
+Value LocalView::reduce(const ConstStringT<KeyAndDocId>&,const ConstStringT<Value>&, bool ) const {
+	return Value();
 }
 
-void LocalView::addDocLk(const ConstValue &doc, const ConstValue& key, const ConstValue& value) {
+void LocalView::addDocLk(const Value &doc, const Value& key, const Value& value) {
 
-	ConstStrA docId = doc["_id"].getStringA();
+	StringRef docId = doc["_id"].getString();
 	bool exist= false;
 	keyToValueMap.insert(KeyAndDocId(key,docId),ValueAndDoc(value,doc),&exist);
 	if (!exist) {
@@ -150,51 +146,53 @@ CompareResult LocalView::KeyAndDocId::compare(const KeyAndDocId& other) const {
 	}
 }
 
-ConstValue LocalView::searchKeys(const ConstValue &keys, natural groupLevel) const {
+Value LocalView::searchKeys(const Value &keys, natural groupLevel) const {
 
 	Shared _(lock);
 
-	Container rows = json.array();
+	Array rows;
 	bool grouped = groupLevel > 0 && groupLevel < naturalNull;
 
-	for (natural i = 0; i < keys.length(); i++) {
+	keys.forEach([&](Value k) {
 
-		ConstValue subrows = searchOneKey(keys[i]);
+		Value subrows = searchOneKey(k);
 		if (grouped) {
-			ConstValue r = runReduce(subrows);
-			if (r == null) grouped = false;
+			Value r = runReduce(subrows);
+			if (r.type() == json::undefined) grouped = false;
 			else {
-				subrows = json("key", keys[i])
-					      ("value", r);
+				subrows = Object("key", k)
+					    		("value", r);
 			}
 		}
 
-		rows.load(subrows);
-
-	}
+		subrows.forEach([&rows](Value v) {rows.add(v);return true;});
+		return true;
+	});
 
 	if (groupLevel == 0) {
-		 ConstValue r = runReduce(rows);
-		 if (r != null) {
-			 rows = json << json("key",null)
-			 	 	 	 	    ("value",r);
+		 Value r = runReduce(rows);
+		 if (r.type() == json::undefined) {
+			 rows.clear();
+			 rows.add(Object("key",nullptr)
+			 	 	 	 	    ("value",r));
 		 }
 
 	}
-	return json("rows",rows)("total_rows",keyToValueMap.length());
+	return Object("rows",rows)
+				("total_rows",keyToValueMap.length());
 
 }
 
-ConstValue LocalView::searchOneKey(const ConstValue &key) const {
+Value LocalView::searchOneKey(const Value &key) const {
 
-	KeyToValue::Iterator iter = keyToValueMap.seek(KeyAndDocId(key, ConstStrA()));
-	Container res = json.array();
+	KeyToValue::Iterator iter = keyToValueMap.seek(KeyAndDocId(key, StringRef()));
+	Array res;
 
 	while (iter.hasItems()) {
 		const KeyToValue::KeyValue &kv = iter.getNext();
 		if (compareJson(key, kv.key.key) != cmpResultEqual) break;
 
-		res.add(json("id",kv.key.docId)
+		res.add(Object("id",kv.key.docId)
 				    ("key",kv.key.key)
 					("value",kv.value.value)
 					("doc",kv.value.doc));
@@ -203,67 +201,30 @@ ConstValue LocalView::searchOneKey(const ConstValue &key) const {
 }
 
 LocalView::Query LocalView::createQuery(natural viewFlags) const {
-	return Query(*this,json,viewFlags, PostProcessFn());
+	return Query(*this,viewFlags, PostProcessFn());
 }
 
-void LocalView::cancelStream() {
-	UpdateStream str = updateStream;
-	updateStream.clear();
-	if (str != null) {
-		str.removeObserver(&updateReceiver);
-		if (str.getState() == IPromiseControl::stateResolving) {
-			str.wait();
-		}
-
-	}
-}
-
-void LocalView::setUpdateStream(const UpdateStream& stream) {
-	cancelStream();
-	if (stream != null)  {
-
-		Exclusive _(lock);
-		setUpdateStreamLk(stream);
-	}
-}
-
-LocalView::Query LocalView::createQuery(natural viewFlags, PostProcessFn fn) const {
-	return Query(*this,json,viewFlags,fn);
-}
-
-void LocalView::setUpdateStreamLk(UpdateStream stream) {
-
-	updateStream = stream;
-	stream.addObserver(&updateReceiver);
-}
-
-
-LocalView::UpdateStream LocalView::getUpdateStream() const {
-	Shared _(lock);
-	return updateStream;
-}
-
-ConstValue LocalView::runReduce(const ConstValue &rows) const {
+Value LocalView::runReduce(const Value &rows) const {
 
 	AutoArray<KeyAndDocId, SmallAlloc<256> > keylist;
-	AutoArray<ConstValue, SmallAlloc<256> > values;
-	keylist.reserve(rows.length());
-	values.reserve(rows.length());
-	for (JSON::ConstIterator iter = rows->getFwConstIter(); iter.hasItems();) {
-		const JSON::ConstValue &v = iter.getNext();
-		keylist.add(KeyAndDocId(v["key"],v["id"].getStringA()));
+	AutoArray<Value, SmallAlloc<256> > values;
+	keylist.reserve(rows.size());
+	values.reserve(rows.size());
+	rows.forEach([&](const Value &v) {
+		keylist.add(KeyAndDocId(v["key"],v["id"].getString()));
 		values.add(v["value"]);
-	}
+		return true;
+	});
 	return reduce(keylist,values,false);
 
 }
 
-static bool canGroupKeys(const ConstValue &subj, const ConstValue &sliced) {
+static bool canGroupKeys(const Value &subj, const Value &sliced) {
 	if (sliced == null) return false;
-	if (subj->isArray()) {
-		natural cnt = subj.length();
-		if (cnt >= sliced.length()) {
-			cnt = sliced.length();
+	if (subj.type() == json::array) {
+		natural cnt = subj.size();
+		if (cnt >= sliced.size()) {
+			cnt = sliced.size();
 		} else {
 			return false;
 		}
@@ -277,10 +238,10 @@ static bool canGroupKeys(const ConstValue &subj, const ConstValue &sliced) {
 	}
 }
 
-static ConstValue sliceKey(const ConstValue &key, natural groupLevel, const Json &json) {
-	if (key->isArray()) {
-		if (key.length() <= groupLevel) return key;
-		Container out = json.array();
+static Value sliceKey(const Value &key, natural groupLevel) {
+	if (key.type() == json::array) {
+		if (key.size() <= groupLevel) return key;
+		Array out;
 		for (natural i = 0; i < groupLevel; i++)
 			out.add(key[i]);
 		return out;
@@ -290,14 +251,15 @@ static ConstValue sliceKey(const ConstValue &key, natural groupLevel, const Json
 
 }
 
-ConstValue LocalView::searchRange(const ConstValue &startKey, const ConstValue &endKey,
-natural groupLevel, bool descending, natural offset, natural limit, ConstStrA offsetDoc,
+Value LocalView::searchRange(const Value &startKey, const Value &endKey,
+natural groupLevel, bool descending, natural offset, natural limit,
+const StringRef &offsetDoc,
 bool excludeEnd) const {
 
 	Shared _(lock);
 
 	KeyAndDocId startK(startKey,offsetDoc);
-	KeyAndDocId endK(endKey,excludeEnd?ConstStrA():ConstStrA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF"));
+	KeyAndDocId endK(endKey,excludeEnd?StringRef():StringRef("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF"));
 
 	KeyAndDocId *seekPos;
 	KeyAndDocId *stopPos;
@@ -332,8 +294,8 @@ bool excludeEnd) const {
 	}
 	natural whLimit = naturalNull - offset < limit? offset+limit:naturalNull;
 
-	Container rows = json.array();
-	ConstValue grows;
+	Array rows;
+	Value grows;
 
 
 	while (iter->hasItems() && (iend == null || iend.value() != iter.value()) && whLimit > 0) {
@@ -341,7 +303,7 @@ bool excludeEnd) const {
 		const KeyToValue::KeyValue &kv = iter->getNext();
 
 		if (offset == 0)
-			rows.add(json("id",kv.key.docId)
+			rows.add(Object("id",kv.key.docId)
 				    ("key",kv.key.key)
 					("value",kv.value.value)
 					("doc",kv.value.doc));
@@ -356,33 +318,32 @@ bool excludeEnd) const {
 		if (groupLevel == 0) {
 			grows = runReduce(rows);
 		} else {
-			Container res;
-			Container collect;
-			ConstValue lastKey = null;
-			res = json.array();
-			collect = json.array();
+			Array res;
+			Array collect;
+			Value lastKey = null;
 
-			rows->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &val, ConstStrA, natural){
 
-				ConstValue key = val["key"];
+			for (auto &&val : rows) {
+
+				Value key = val["key"];
 				if (!canGroupKeys(key, lastKey)) {
 
 					if (lastKey != null) {
-						ConstValue z = runReduce(collect);
-						res.add(json("key",lastKey)("value", z));
+						Value z = runReduce(collect);
+						res.add(Object("key",lastKey)("value", z));
 					}
-					lastKey = sliceKey(key, groupLevel, json);
+					lastKey = sliceKey(key, groupLevel);
 					collect.clear();
 
 				}
 				collect.add(val);
 
 				return false;
-			}));
+			}
 
 			if (!collect.empty()) {
-				ConstValue z = runReduce(collect);
-				res.add(json("key",lastKey)("value", z));
+				Value z = runReduce(collect);
+				res.add(Object("key",lastKey)("value", z));
 			}
 
 			grows = res;
@@ -391,56 +352,27 @@ bool excludeEnd) const {
 		grows = rows;
 	}
 
-	return json("rows",grows)("total_rows",keyToValueMap.length());
+	return Object("rows",grows)
+			("total_rows",keyToValueMap.length());
 
 
 }
-LocalView::Query::Query(const LocalView& lview, const Json& json, natural viewFlags, PostProcessFn ppfn)
-	:QueryBase(json,viewFlags),lview(lview),ppfn(ppfn) {
+LocalView::Query::Query(const LocalView& lview, natural viewFlags,
+		PostProcessFn ppfn)
+	:QueryBase(viewFlags),lview(lview),ppfn(ppfn) {
 
 }
 
 Result LocalView::Query::exec() const {
 	finishCurrent();
-	ConstValue result;
+	Value result;
 	if (keys == null || keys.empty()) {
 		result = lview.searchRange(startkey,endkey, groupLevel, descent, offset, maxlimit,offset_doc,(viewFlags & View::exludeEnd) != 0);
 	} else {
 		result = lview.searchKeys(keys,groupLevel);
 	}
-	if (ppfn) result = ppfn(json, args, result);
-	return Result(json,result);
-}
-
-
-LocalView::UpdateReceiver::UpdateReceiver(LocalView& view):view(view) {
-
-}
-
-void LocalView::UpdateReceiver::resolve(
-		const UpdateStreamItem& result) throw () {
-	try {
-		Exclusive _(view.lock);
-		view.updateDocLk(result.document);
-		view.setUpdateStreamLk(result.nextItem);
-	} catch (...) {
-
-	}
-}
-
-void LocalView::UpdateReceiver::resolve(const PException&) throw () {
-	//ignore exceptions
-}
-
-LocalView::UpdateStream LocalView::DocumentSource::createStream() {
-	UpdateStream res;
-	nextItem = res.getPromise();
-	return res;
-}
-
-void LocalView::DocumentSource::updateDoc(const ConstValue &doc) {
-	Promise<UpdateStreamItem> toResolve = nextItem;
-	toResolve.resolve(Constructor2<UpdateStreamItem,ConstValue,UpdateStream>(doc, createStream()));
+	if (ppfn) result = ppfn( args, result);
+	return Result(result);
 }
 
 

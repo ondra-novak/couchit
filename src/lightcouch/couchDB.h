@@ -8,6 +8,7 @@
 #ifndef ASSETEX_SRC_COUCHDB_H_BREDY_5205456032
 #define ASSETEX_SRC_COUCHDB_H_BREDY_5205456032
 
+#include <functional>
 #include <httpclient/httpClient.h>
 #include <lightspeed/base/streams/netio.h>
 
@@ -253,20 +254,7 @@ public:
 	ChangesSink createChangesSink();
 
 
-	///Enables tracking of sequence numbers for caching
-	/**
-	 * Function directly call QueryCache::trackSeqNumbers with correct database. It enables
-	 * tracking sequence numbers for caching. You have to update number everytime database is changed. This
-	 * can be achieved by installing dispatcher through listenChanges(). When listenChanges is active,
-	 * sequence number is updated automatically (but be careful with filters, you need to install at least
-	 * one dispatcher without filtering)
-	 *
-	 * @return reference to variable which should be updated with every change in the database. It will be initialized
-	 * using function getLastSeqNumber()
-	 *
-	 * @exception - Function throws exception if there is no current database or when caching is not enabled
-	 */
-	atomicValue &trackSeqNumbers();
+
 
 
 	///Retrieves local document (by its id)
@@ -340,7 +328,7 @@ public:
 
 	class UpdateResult: public Value {
 	public:
-		UpdateResult(Value v, const StringRef newRev):Value(v),newRev(newRev) {}
+		UpdateResult(Value v, const String &newRev):Value(v),newRev(newRev) {}
 
 		const String newRev;
 	};
@@ -408,31 +396,58 @@ public:
 	 *
 	 * @exception RequestError if function returns any other status then 200 or 201
 	 */
-	Value showDoc(StringRef showHandlerPath, StringRef documentId, Value arguments, natural flags = 0);
+	Value showDoc(const StringRef &showHandlerPath, const StringRef &documentId, const Value &arguments, natural flags = 0);
 
 
-	///Contains information about downloaded file
-	class DownloadFile: public SeqFileInput {
+	///Contains downloaded file
+	class Download {
 	public:
-		///constructor is called inside of download function
-		DownloadFile(const SeqFileInput &stream, StringRef contentType, StringRef etag, natural contentLength, bool notModified):SeqFileInput(stream)
-				,contentType(contentType),etag(etag),contentLength(contentLength),notModified(notModified) {}
 
-		///contains content type of the attachment
-		const StringRef contentType;
-		///contains ETag. You can put this to the response
-		const StringRef etag;
-		///contains length of the attachment
-		const natural contentLength;
-		///specifies, that content has not been modified.
-		/** If this flag is set, no data has been downloaded. You can return 304 to the
-		 * client with empty response.
+
+		class Source: public RefCntObj {
+		public:
+			virtual ~Source() {}
+			virtual std::size_t operator()(unsigned char *buffer, std::size_t size) = 0;
+		};
+
+
+
+		///ETag of the attachment
+		const String etag;
+		///Content type of the attachment
+		const String contentType;
+		///Content length of the attachment
+		const std::size_t contentLength;
+		///if true, then document has not been modified
+		/** In this case, source is empty and contentLength is zero */
+		bool notModified;
+
+		///Contains data of the attachment
+		/** You have to read data as fast as possible, otherwise the instance of the CouchDB is blocked.
+		 * Slow reading can also trigger timeout error on the server side.
 		 */
-		const bool notModified;
+		Source &source;
+
+		Download(Source *src,
+				const String etag,
+				const String contentType,
+				const std::size_t contentLength,
+				bool notModified);
+
+		private:
+
+		RefCntPtr<Source> srcptr;
+
 	};
 
-	typedef Message<void, SeqFileOutput> UploadFn;
-	typedef Message<void, DownloadFile> DownloadFn;
+	///Function called to collect data for upload
+	/**
+	 * @param first_arg pointer to buffer allocated for data. Function must but data there.
+	 * @param second_arg size of the buffer
+	 * @return count of written bytes to the buffer. Function should write at least one byte. To
+	 * write EOF, the function must return 0
+	 */
+	typedef std::function<std::size_t(unsigned char *, std::size_t)> UploadFn;
 
 	///Uploads attachment with specified document
 	/**
@@ -443,7 +458,7 @@ public:
 	 * SeqFileOuput.
 	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	String uploadAttachment(Document &document, StringRef attachmentName, StringRef contentType, const UploadFn &uploadFn);
+	String uploadAttachment(const Value &document, const StringRef &attachmentName, const StringRef &contentType, const UploadFn &uploadFn);
 
 	///Uploads attachment with specified document
 	/**
@@ -454,35 +469,17 @@ public:
 	 * @param attachmentData content of attachment
 	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	String uploadAttachment(Document &document, StringRef attachmentName, const AttachmentDataRef &attachmentData);
+	String uploadAttachment(const Value &document, const StringRef &attachmentName, const AttachmentDataRef &attachmentData);
 
 	///Downloads attachment
 	/**
 	 * @param document document. The document don't need to be complete, only _id and _rev must be there.
 	 * @param attachmentName name of attachment to retrieve
-	 * @param downloadFn function, which accepts DownloadFile where you can
 	 * @param etag if not empty, function puts string as "if-none-match" header.
 	 *
 	 *
 	 */
-	void downloadAttachment(const Document &document, StringRef attachmentName, const DownloadFn &downloadFn, StringRef etag=StringRef());
-
-	///Downloads attachment
-	/**
-	 * Function allows to download attachment to the memory. Large attachments may cost lot of memory.
-	 *
-	 * @param document  document. The document don't need to be complete, only _id and _rev must be there.
-	 * @param attachmentName name of attachment to retrieve
-	 * @return content of attachment
-	 */
-	AttachmentData downloadAttachment(const Document &document, StringRef attachmentName);
-
-	void downloadAttachment(const StringRef &docId, const StringRef &revId,
-						const StringRef &attachmentName,
-						const DownloadFn &downloadFn, StringRef etag=StringRef());
-
-	AttachmentData downloadAttachment(const StringRef &docId, const StringRef &revId,
-						const StringRef &attachmentName);
+	Download downloadAttachment(const Value &document, const StringRef &attachmentName,  StringRef etag=StringRef());
 
 
 	///For function updateDesignDocument
@@ -493,10 +490,10 @@ public:
 		ddurCheck,
 		///Always overwrite design document
 		ddurOverwrite,
-		///Merges documents leaving skipping existing parts
+	/*	///Merges documents leaving skipping existing parts
 		ddurMergeSkip,
 		///Merges documents overwritting existing parts
-		ddurMergeOverwrite,
+		ddurMergeOverwrite,*/
 	};
 
 
@@ -507,14 +504,13 @@ public:
 	 *
 	 * @param content content of design document as pure JSON
 	 * @param updateRule specifies rule how to handle existing design document
-	 * @param name name of the design document. It don't need to have "_design/" prefix, however, function
 	 * @retval true design document has been updated
 	 * @retval false design document unchanged
 	 * will accept both variants with or without. If parameter is empty, function picks name from
 	 * the document (under _id key)
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	bool uploadDesignDocument(const Value &content, DesignDocUpdateRule updateRule = ddurOverwrite, StringRef name = StringRef());
+	bool uploadDesignDocument(const Value &content, DesignDocUpdateRule updateRule = ddurOverwrite);
 
 	///Uploads design document from the file
 	/**
@@ -531,7 +527,7 @@ public:
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 *
 	 */
-	bool uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule = ddurOverwrite, StringRef name = StringRef());
+	bool uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule = ddurOverwrite);
 
 	///Uploads design document from the resource
 	/**
@@ -542,14 +538,11 @@ public:
 	 * @param content pointer to the resource
 	 * @param contentLen length of the resource
 	 * @param updateRule specifies rule how to handle existing design document
-	 * @param name name of the design document. It don't need to have "_design/" prefix, however, function
-	 * will accept both variants with or without.If parameter is empty, function picks name from
-	 * the document (under _id key)
 	 * @retval true design document has been updated
 	 * @retval false design document unchanged
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	bool uploadDesignDocument(const char *content, natural contentLen, DesignDocUpdateRule updateRule = ddurOverwrite, StringRef name = StringRef());
+	bool uploadDesignDocument(const char *content, natural contentLen, DesignDocUpdateRule updateRule = ddurOverwrite);
 
 
 
@@ -573,7 +566,6 @@ protected:
 	natural lastStatus;
 	Pointer<QueryCache> cache;
 	Pointer<Validator> validator;
-	atomicValue *seqNumSlot;
 	AutoArray<char> uidBuffer;
 	IIDGen& uidGen;
 

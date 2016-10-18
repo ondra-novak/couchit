@@ -42,16 +42,6 @@ QueryCache::~QueryCache() {
 	clear();
 }
 
-atomicValue& QueryCache::trackSeqNumbers(StringRef databaseName) {
-	Synchronized<FastLock> _(lock);
-	atomicValue *p = seqMap.find(StrKey(databaseName));
-	if (p) {
-		return *p;
-	} else {
-		seqMap.insert(StrKey((StringA(databaseName))),0);
-		return *seqMap.find(StrKey(databaseName));
-	}
-}
 
 
 } /* namespace LightCouch */

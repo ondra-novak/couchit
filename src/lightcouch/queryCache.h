@@ -34,7 +34,6 @@ public:
 
 	struct CachedItem {
 		const StringA etag;
-		atomicValue seqNum;
 		const Value value;
 
 		CachedItem() {}
@@ -45,8 +44,8 @@ public:
 		 * @param seqNum seq. number known when value is stored
 		 * @param value value to store
 		 */
-		CachedItem(StringA etag, natural seqNum, const Value &value)
-			:etag(etag),seqNum(seqNum), value(value) {}
+		CachedItem(StringA etag,const Value &value)
+			:etag(etag),value(value) {}
 		bool isDefined() const {return value != null;}
 	};
 
@@ -60,13 +59,6 @@ public:
 	void clear();
 
 
-	///Starts tracking sequence numbers
-	/** Creates a record for sequence numbers for specified database.
-	 *
-	 * @param databaseName name of database
-	 * @return reference to created record. You can use the reference to store and retrieve sequence numbers.
-	 */
-	atomicValue &trackSeqNumbers(StringRef databaseName);
 
 
 	~QueryCache();
@@ -78,10 +70,8 @@ protected:
 
 
 	typedef Map<StrKey, CachedItem  > ItemMap;
-	typedef Map<StrKey, atomicValue> SeqMap;
 
 	ItemMap itemMap;
-	SeqMap seqMap;
 
 	FastLock lock;
 };

@@ -97,6 +97,8 @@ protected:
 
 	Value rows;
 	natural pos;
+	natural sz;
+	mutable Value vout;
 };
 
 

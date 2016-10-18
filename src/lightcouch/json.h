@@ -11,6 +11,7 @@
 #include <immujson/edit.h>
 #include <immujson/path.h>
 #include <immujson/string.h>
+#include <lightspeed/base/containers/flatArray.h>
 #include <lightspeed/base/text/textOut.h>
 
 namespace LightCouch {
@@ -19,6 +20,7 @@ using json::Value;
 using json::Path;
 using json::Object;
 using json::Array;
+
 
 template<typename T>
 class StringRefT: public json::StringView<T> {
@@ -29,9 +31,16 @@ public:
 	StringRefT(const T *str, std::size_t length):json::StringView<T>(str,length) {}
 	StringRefT(const std::basic_string<T> &string):json::StringView<T>(string) {}
 	StringRefT(const std::vector<T> &string) :json::StringView<T>(string) {}
-	StringRefT(const LightSpeed::ConstStringT<T> &str):json::StringView<T>(str.data(), str.length()) {}
-
+	template<typename Impl>
+	StringRefT(const LightSpeed::FlatArray<T, Impl> &str):json::StringView<T>(str.data(), str.length()) {}
+	template<typename Impl>
+	StringRefT(const LightSpeed::FlatArray<const T, Impl> &str):json::StringView<T>(str.data(), str.length()) {}
 	operator LightSpeed::ConstStringT<T>() const {return LightSpeed::ConstStringT<T>(this->data, this->length);}
+
+	typedef typename LightSpeed::ConstStringT<T>::Iterator Iterator;
+
+	Iterator getFwIter() const {return LightSpeed::ConstStringT<T>(*this).getFwIter();}
+
 };
 
 template<>
@@ -44,9 +53,16 @@ public:
 	StringRefT(const char *str, std::size_t length):json::StringView<char>(str,length) {}
 	StringRefT(const std::basic_string<char> &string):json::StringView<char>(string) {}
 	StringRefT(const std::vector<char> &string) :json::StringView<char>(string) {}
-	StringRefT(const LightSpeed::ConstStringT<char> &str):json::StringView<char>(str.data(), str.length()) {}
-
+	template<typename Impl>
+	StringRefT(const LightSpeed::FlatArray<char,Impl> &str):json::StringView<char>(str.data(), str.length()) {}
+	template<typename Impl>
+	StringRefT(const LightSpeed::FlatArray<const char,Impl> &str):json::StringView<char>(str.data(), str.length()) {}
 	operator LightSpeed::ConstStringT<char>() const {return LightSpeed::ConstStringT<char>(this->data, this->length);}
+
+	typedef LightSpeed::ConstStringT<char>::Iterator Iterator;
+
+	Iterator getFwIter() const {return LightSpeed::ConstStringT<char>(*this).getFwIter();}
+
 };
 
 typedef StringRefT<char> StringRef;

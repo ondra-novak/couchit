@@ -7,23 +7,26 @@
 
 #ifndef SRC_LIGHTCOUCH_COLLATION_H_1278AEOLBBD456800
 #define SRC_LIGHTCOUCH_COLLATION_H_1278AEOLBBD456800
+#include <lightspeed/base/containers/constStr.h>
+#include "lightspeed/base/compare.h"
+#include "json.h"
 
 
-#include "object.h"
+
 
 namespace LightCouch {
 
 using namespace LightSpeed;
 
 CompareResult compareStringsUnicode(ConstStrA str1, ConstStrA str2);
-CompareResult compareJson(const ConstValue &left, const ConstValue &right);
+CompareResult compareJson(const Value &left, const Value &right);
 
 struct JsonIsLess {
-	bool operator()(const ConstValue &v1, const ConstValue &v2) const;
+	bool operator()(const Value &v1, const Value &v2) const;
 };
 
 struct JsonIsGreater {
-	bool operator()(const ConstValue &v1, const ConstValue &v2) const;
+	bool operator()(const Value &v1, const Value &v2) const;
 };
 
 }

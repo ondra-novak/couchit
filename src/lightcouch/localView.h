@@ -71,7 +71,7 @@ public:
 	/**
 	 * @param docId documentId to erase
 	 */
-	void eraseDoc(ConstStrA docId);
+	void eraseDoc(const StringRef &docId);
 	///Directly adds the document
 	/**
 	 *
@@ -91,7 +91,7 @@ public:
 	 *
 	 * @note the document must be included in the view.
 	 */
-	Value getDocument(const ConstStrA docId) const;
+	Value getDocument(const StringRef &docId) const;
 
 
 	///Postprocess function
@@ -144,60 +144,15 @@ public:
 	Query createQuery(natural viewFlags, PostProcessFn fn) const;
 
 
-	///Item of update stream
-	struct UpdateStreamItem {
-		///document to update in views
-		Value document;
-		///contains initialized future for next item
-		Future<UpdateStreamItem> nextItem;
-
-		UpdateStreamItem (const Value &document, const Future<UpdateStreamItem> &nextItem)
-			:document(document),nextItem(nextItem) {}
-	};
-
-
-	///Update stream - you can update various views from single source
-	/** Just create an UpdateStream and call getPromise() on it. UpdateStream
-	 * is future of future, where each future is carrying future to next item.
-	 */
-	typedef Future<UpdateStreamItem> UpdateStream;
-
-	///Creates souce of document for update
-	/** Just create instance of this object, then create a stream using the createStream() and
-	 * distribute stream through various views. Everytime tou call updateDoc(), these views will
-	 * be updated.
-	 *
-	 * The stream can be stopped by destroying the object or by recreating the stream
-	 */
-	class DocumentSource {
-	public:
-
-		///Creates an update stream
-		/** Note that function closes current stream, if any is active */
-		UpdateStream createStream();
-		///send update to every view
-		void updateDoc(const Value &doc);
-
-	protected:
-		Promise<UpdateStreamItem> nextItem;
-
-	};
-
-
-	void setUpdateStream(const UpdateStream &stream);
-
-	UpdateStream getUpdateStream() const;
-
-
 protected:
 
 
 	struct KeyAndDocId: public Comparable<KeyAndDocId> {
 		Value key;
-		ConstStrA docId;
+		StringRef docId;
 
 		KeyAndDocId() {}
-		KeyAndDocId(Value key,ConstStrA docId):key(key),docId(docId) {}
+		KeyAndDocId(const Value &key,const StringRef &docId):key(key),docId(docId) {}
 
 		CompareResult compare(const KeyAndDocId &other) const;
 
@@ -207,19 +162,9 @@ protected:
 		Value value;
 		Value doc;
 
-		ValueAndDoc(Value value,Value doc):value(value),doc(doc) {}
+		ValueAndDoc(const Value &value,const Value &doc):value(value),doc(doc) {}
 	};
 
-	class UpdateReceiver: public UpdateStream::IObserver {
-	public:
-
-		LocalView &view;
-
-		UpdateReceiver(LocalView &view);
-
-		virtual void resolve(const UpdateStreamItem &result) throw();
-		virtual void resolve(const PException &e) throw();
-	};
 
 	///Perform map operation
 	/**
@@ -304,11 +249,9 @@ protected:
 	Value curDoc;
 
 
-	UpdateStream updateStream;
-	UpdateReceiver updateReceiver;
 
 
-	void eraseDocLk(ConstStrA docId);
+	void eraseDocLk(const StringRef &docId);
 	void addDocLk(const Value &doc, const Value &key, const Value &value);
 	void updateDocLk(const Value &doc);
 
@@ -316,15 +259,13 @@ protected:
 	Value searchKeys(const Value &keys, natural groupLevel) const;
 	Value searchOneKey(const Value &key) const;
 	Value searchRange(const Value &startKey, const Value &endKey,
-			natural groupLevel, bool descending, natural offset, natural limit, ConstStrA offsetDoc,
+			natural groupLevel, bool descending, natural offset, natural limit,
+			const StringRef & offsetDoc,
 			bool excludeEnd) const;
 
 
 	Value runReduce(const Value &rows) const;
 
-private:
-	void cancelStream();
-	void setUpdateStreamLk(UpdateStream stream);
 };
 
 

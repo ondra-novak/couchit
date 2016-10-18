@@ -34,57 +34,52 @@ namespace LightCouch {
 }
 
 
-CompareResult compareJson(const ConstValue &left, const ConstValue &right) {
-	if (left->getType() != right->getType()) {
-		if (left->isNull()) return cmpResultLess;
-		if (left->isObject()) return cmpResultGreater;
-		if (left->isBool()) return right->isNull()?cmpResultGreater:cmpResultLess;
-		if (left->isNumber()) return right->isNull() || right->isBool()?cmpResultGreater:cmpResultLess;
-		if (left->isString()) return right->isArray() || right->isObject()?cmpResultLess:cmpResultGreater;
-		if (left->isArray()) return right->isObject()?cmpResultLess:cmpResultGreater;
+CompareResult compareJson(const Value &left, const Value &right) {
+	if (left.type() != right.type()) {
+		if (left.type()==json::null) return cmpResultLess;
+		if (left.type()==json::object) return cmpResultGreater;
+		if (left.type()==json::boolean) return right.type()==json::null?cmpResultGreater:cmpResultLess;
+		if (left.type()==json::number) return right.type()==json::null || right.type()==json::boolean?cmpResultGreater:cmpResultLess;
+		if (left.type()==json::string) return right.type()==json::array || right.type()==json::object?cmpResultLess:cmpResultGreater;
+		if (left.type()==json::array) return right.type()==json::object?cmpResultLess:cmpResultGreater;
 		return cmpResultEqual;
 	} else {
-		switch (left->getType()) {
-		case JSON::ndNull:return cmpResultEqual;
-		case JSON::ndBool: return left->getBool() == right->getBool()?cmpResultEqual:(left->getBool() == false?cmpResultLess:cmpResultGreater);
-		case JSON::ndFloat:
-		case JSON::ndInt: {
-			double l = left->getFloat();
-			double r = right->getFloat();
+		switch (left.type()) {
+		case json::null:return cmpResultEqual;
+		case json::boolean: return left.getBool() == right.getBool()?cmpResultEqual:(left.getBool() == false?cmpResultLess:cmpResultGreater);
+		case json::number: {
+			double l = left.getNumber();
+			double r = right.getNumber();
 			if (l<r) return cmpResultLess;
 			else if (l>r) return cmpResultGreater;
 			else return cmpResultEqual;
 		}
-		case JSON::ndString: return compareStringsUnicode(left->getStringUtf8(),right->getStringUtf8());
-		case JSON::ndArray: {
-				JSON::ConstIterator li = left->getFwConstIter();
-				JSON::ConstIterator ri = right->getFwConstIter();
-				while (li.hasItems() && ri.hasItems()) {
-					CompareResult r = compareJson(li.getNext(),ri.getNext());
+		case json::string: return compareStringsUnicode(StringRef(left.getString()),StringRef(right.getString()));
+		case json::array: {
+				auto li = left.begin(),le= left.end();
+				auto ri = right.begin(), re =right.end();
+				while (li!=le && li!=le) {
+					CompareResult r = compareJson(*li,*ri);
 					if (r != cmpResultEqual) return r;
+					++li;++ri;
 				}
-				if (li.hasItems()) return cmpResultGreater;
-				if (ri.hasItems()) return cmpResultLess;
+				if (li!=le) return cmpResultGreater;
+				if (ri!=re) return cmpResultLess;
 				return cmpResultEqual;
 			}
-		case JSON::ndObject: {
-				JSON::ConstIterator li = left->getFwConstIter();
-				JSON::ConstIterator ri = right->getFwConstIter();
-				while (li.hasItems() && ri.hasItems()) {
-					const JSON::ConstKeyValue &kvl = li.getNext();
-					const JSON::ConstKeyValue &kvr = ri.getNext();
-
-					CompareResult r = kvl.getStringKey().compare(kvr.getStringKey());
-					if (r == cmpResultEqual) {
-						r = compareJson(kvl,kvr);
-						if (r == cmpResultEqual)
-							continue;
-					}
-					return r;
-				}
-				if (li.hasItems()) return cmpResultGreater;
-				if (ri.hasItems()) return cmpResultLess;
-				return cmpResultEqual;
+		case json::object: {
+			auto li = left.begin(),le= left.end();
+			auto ri = right.begin(), re =right.end();
+			while (li!=le && li!=le) {
+				CompareResult r = compareStringsUnicode(StringRef((*li).getKey()),StringRef((*ri).getKey()));
+				if (r != cmpResultEqual) return r;
+				r = compareJson(*li,*ri);
+				if (r != cmpResultEqual) return r;
+				++li;++ri;
+			}
+			if (li!=le) return cmpResultGreater;
+			if (ri!=re) return cmpResultLess;
+			return cmpResultEqual;
 			}
 		default:
 			return cmpResultEqual;
@@ -92,11 +87,11 @@ CompareResult compareJson(const ConstValue &left, const ConstValue &right) {
 	}
 }
 
-bool JsonIsLess::operator ()(const ConstValue& v1,const ConstValue& v2) const {
+bool JsonIsLess::operator ()(const Value& v1,const Value& v2) const {
 	return compareJson(v1,v2) == cmpResultLess;
 }
 
-bool JsonIsGreater::operator ()(const ConstValue& v1,const ConstValue& v2) const {
+bool JsonIsGreater::operator ()(const Value& v1,const Value& v2) const {
 	return compareJson(v1,v2) == cmpResultGreater;
 }
 

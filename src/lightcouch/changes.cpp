@@ -11,52 +11,51 @@
 namespace LightCouch {
 
 
-static bool safeBool(const JSON::INode *ptr) {
-	if (ptr == 0) return false;
-	return ptr->getBool();
-}
 
 
 
-ChangedDoc::ChangedDoc(const ConstValue& allData)
-:ConstValue(allData)
+ChangedDoc::ChangedDoc(const Value& allData)
+:Value(allData)
 ,seqId(allData["seq"])
-,id(allData["id"]->getStringUtf8())
+,id(allData["id"].getString())
 ,revisions(allData["changes"])
-,deleted(safeBool(allData->getPtr("deleted")))
-,doc(allData->getPtr("doc"))
+,deleted(allData["deleted"].getBool())
+,doc(allData["doc"])
 {
 }
 
-Changes::Changes(ConstValue jsonResult)
-:rows(jsonResult),rowIter(rows->getFwIter())
+Changes::Changes(Value jsonResult)
+:rows(jsonResult),pos(0),sz(jsonResult.size())
 {
 
 }
 
-const ConstValue& Changes::getNext() {
-	return rowIter.getNext();
+const Value& Changes::getNext() {
+	vout = rows[pos++];
+	return vout;
 }
 
-const ConstValue& Changes::peek() const {
-	return rowIter.peek();
+const Value& Changes::peek() const {
+	vout = rows[pos];
+	return vout;
+
 }
 
 bool Changes::hasItems() const {
-	return rowIter.hasItems();
+	return pos < sz;
 }
 
 void Changes::rewind() {
-	rowIter = rows->getFwIter();
+	pos = 0;
 }
 
 ChangesSink::ChangesSink(CouchDB& couchdb)
-	:json(couchdb.json),couchdb(couchdb), seqNumber(0),outlimit(naturalNull),timeout(0)
+	:couchdb(couchdb), outlimit(naturalNull),timeout(0)
 	,cancelState(0)
 {
 }
 
-ChangesSink& ChangesSink::fromSeq(ConstValue seqNumber) {
+ChangesSink& ChangesSink::fromSeq(const Value &seqNumber) {
 	this->seqNumber = seqNumber;
 	return *this;
 }
@@ -68,13 +67,13 @@ ChangesSink& ChangesSink::setTimeout(natural timeout) {
 
 ChangesSink& ChangesSink::setFilter(const Filter& filter) {
 	this->filter = filter;
-	filterArgs = null;
+	filterArgs.revert();
 	return *this;
 }
 
 ChangesSink& ChangesSink::unsetFilter() {
 	this->filter = null;
-	filterArgs = null;
+	filterArgs.revert();
 	return *this;
 }
 

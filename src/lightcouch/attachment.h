@@ -18,7 +18,7 @@ using namespace LightSpeed;
 
 ///Contains attachment data as reference
 /** use this class to refer some binary data (with proper content type). Data
- * are not stored with the object, you must not destroy refered object
+ * are not stored with the object, you must not destroy referred objects
  */
 class AttachmentDataRef: public ConstBin {
 public:
@@ -28,12 +28,12 @@ public:
 	 * @param data reference to binary data
 	 * @param contenType content type
 	 */
-	AttachmentDataRef(const ConstBin data, const StringA &contentType)
+	AttachmentDataRef(const ConstBin data, const StringRef &contentType)
 		:ConstBin(data),contentType(contentType) {}
-	const StringA contentType;
+	const StringRef contentType;
 
 	///Converts data to base64 string.
-	StringA toBase64() const;
+	String toBase64() const;
 
 	Value toInline() const;
 
@@ -54,12 +54,12 @@ public:
 	 * @param data binary data
 	 * @param contentType content type
 	 */
-	AttachmentData(const StringB &data, const StringA &contentType)
-		:AttachmentDataRef(data,contentType),bindata(data) {}
+	AttachmentData(const StringB &data, const String &contentType)
+		:AttachmentDataRef(data,contentType),bindata(data),ctx(contentType) {}
 	///Constructor from JSON value
 	/**
 	 * @param attachment value contains attachment from a document. It required that
-	 * attachment is inlined, you cannot construct object from a stub.
+	 * attachment is in-lined, you cannot construct object from a stub.
 	 */
 	AttachmentData(const Value &attachment);
 
@@ -69,10 +69,11 @@ public:
 	 * @param contentType contenr type
 	 * @return attachment object
 	 */
-	static AttachmentData fromBase64(ConstStrA base64, ConstStrA contentType);
+	static AttachmentData fromBase64(const StringRef &base64, const StringRef &contentType);
 
 private:
 	StringB bindata;
+	String ctx;
 };
 
 }
