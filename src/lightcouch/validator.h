@@ -10,7 +10,8 @@
 #include "lightspeed/base/memory/sharedPtr.h"
 #include "lightspeed/base/containers/autoArray.h"
 #include "lightspeed/base/containers/string.h"
-#include "object.h"
+#include "json.h"
+
 
 namespace LightCouch {
 
@@ -28,7 +29,7 @@ public:
 	public:
 
 		virtual ~IValidationFn() {}
-		virtual bool operator()(const ConstValue &doc) = 0;
+		virtual bool operator()(const Value &doc) = 0;
 		virtual const StringA &getName() const = 0;
 	};
 
@@ -84,7 +85,7 @@ public:
 	 * @param document document to validate
 	 * @return result of validation
 	 */
-	Result validateDoc(const ConstValue &document) const;
+	Result validateDoc(const Value &document) const;
 
 	typedef SharedPtr<IValidationFn> PValidationFn;
 	typedef AutoArray<PValidationFn> FnList;
@@ -115,7 +116,7 @@ inline Validator::IValidationFn* Validator::add(const Fn &fn,const StringA &name
 	class FnInst: public IValidationFn {
 	public:
 		FnInst(const Fn &fn,const StringA &name):fn(fn),name(name) {}
-		virtual bool operator()(const ConstValue &doc) {return fn(doc);}
+		virtual bool operator()(const Value &doc) {return fn(doc);}
 		virtual const StringA &getName() const {return name;}
 
 	protected:

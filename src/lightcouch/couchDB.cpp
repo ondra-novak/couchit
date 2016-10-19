@@ -68,16 +68,16 @@ CouchDB::CouchDB(const Config& cfg)
 
 template<typename C>
 void CouchDB::reqPathToFullPath(StringRef reqPath, C &output) {
-	output.append(baseUrl);
+	output.append(ConstStrA(StringRef(baseUrl)));
 	if (reqPath.substr(0,1) == "/") {
-		output.append(reqPath.substr(0,1));
+		output.append(ConstStrA(StringRef(reqPath.substr(0,1))));
 	} else {
 		if (database.empty()) throw ErrorMessageException(THISLOCATION,"No database selected");
 
 //			output.append(StringRef('/'));
-		output.append(database);
-		output.append(StringRef("/"));
-		output.append(reqPath);
+		output.append(ConstStrA(StringRef(database)));
+		output.append(ConstStrA("/"));
+		output.append(ConstStrA(reqPath));
 	}
 }
 
@@ -325,7 +325,7 @@ Query CouchDB::createQuery(natural viewFlags) {
 Value CouchDB::retrieveLocalDocument(const StringRef &localId, natural flags) {
 	UrlLine urlLine;
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlLine);
-	ConvertReadIter<StringRef::Iterator, UrlEncodeConvert> docIdEnc(localId.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, StringRef::Iterator> docIdEnc(localId.getFwIter());
 	urlfmt("_local/%1") << &docIdEnc;
 	return requestGET(urlLine.getArray(),nullptr, flags & (flgDisableCache|flgRefreshCache));
 }
@@ -399,6 +399,7 @@ CouchDB::UpdateResult CouchDB::updateDoc(StringRef updateHandlerPath, StringRef 
 																   valEnc(val.getFwIter());
 			urlfmt("%1%%2=%3") << c << &keyEnc << &valEnc;
 			c = '&';
+			return true;
 		});
 	}
 	Value h;
@@ -424,6 +425,7 @@ Value CouchDB::showDoc(const StringRef &showHandlerPath, const StringRef &docume
 																   valEnc(val.getFwIter());
 			urlfmt("%1%%2=%3") << c << &keyEnc << &valEnc;
 			c = '&';
+			return true;
 		});
 	}
 	Value v = requestGET(urlline.getArray(),nullptr,flags);
@@ -433,8 +435,8 @@ Value CouchDB::showDoc(const StringRef &showHandlerPath, const StringRef &docume
 }
 
 
-String CouchDB::uploadAttachment(const Value &document, const StringRef &attachmentName, const StringRef &contentType, const UploadFn &uploadFn) {
-	Synchronized<FastLock> _(lock);
+Upload CouchDB::uploadAttachment(const Value &document, const StringRef &attachmentName, const StringRef &contentType) {
+
 	StringRef documentId = document["_id"].getString();
 	StringRef revId = document["_rev"].getString();
 	UrlLine urlline;
@@ -442,34 +444,89 @@ String CouchDB::uploadAttachment(const Value &document, const StringRef &attachm
 	ConvertReadIter<UrlEncodeConvert,StringRef::Iterator> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter()),revIdEnc(revId.getFwIter());;
 	urlfmt("%1/%2/%3/%4?rev=%5") << baseUrl << database << &docIdEnc << &attNameEnc << &revIdEnc;
 
-	http.open(HttpClient::mPUT, urlline.getArray());
-	http.setHeader(HttpClient::fldContentType, contentType);
-	SeqFileOutput out = http.beginBody(HttpClient::psoDefault);
-	unsigned char buffer[4096];
-	std::size_t sbuff;
-	do {
-		sbuff = uploadFn(buffer,sbuff);
-		if (sbuff) out.blockWrite(buffer,sbuff,true);
-	} while (sbuff != 0);
+	//the lock is unlocked in the UploadClass
+	lock.lock();
 
-	SeqFileInput in = http.send();
-	auto responseData = [&in](){return in.getNext();};
-	if (http.getStatus() != 201) {
-
-
-		Value errorVal;
-		try{
-			errorVal = Value::parse(responseData);
-		} catch (...) {
-
+	class UploadClass: public Upload::Target {
+	public:
+		UploadClass(FastLock &lock, HttpClient &http, const UrlLine &urlline)
+			:lock(lock)
+			,http(http)
+			,out(http.beginBody(HttpClient::psoDefault))
+			,urlline(urlline)
+			,finished(false) {
 		}
-		http.close();
-		throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
-	} else {
-		Value v = Value::parse(responseData);
-		http.close();
-		return v["rev"];
+
+		~UploadClass() noexcept(false) {
+			//if not finished, finish now
+			if (!finished) finish();
+		}
+
+		virtual void operator()(const void *buffer, std::size_t size) {
+			out.blockWrite(buffer,size,true);
+		}
+
+		String finish() {
+			try {
+				if (finished) return response;
+				finished = true;
+
+				SeqFileInput in = http.send();
+				auto responseData = [&in](){return in.getNext();};
+				if (http.getStatus() != 201) {
+
+
+					Value errorVal;
+					try{
+						errorVal = Value::parse(responseData);
+					} catch (...) {
+
+					}
+					http.close();
+					throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
+				} else {
+					Value v = Value::parse(responseData);
+					http.close();
+					response = v["rev"];
+					lock.unlock();
+				}
+			} catch (...) {
+				lock.unlock();
+				throw;
+			}
+		}
+
+	protected:
+		FastLock &lock;
+		HttpClient &http;
+		SeqFileOutput out;
+		Value response;
+		UrlLine urlline;
+		bool finished;
+	};
+
+
+	try {
+		//open request
+		http.open(HttpClient::mPUT, urlline.getArray());
+		//send header
+		http.setHeader(HttpClient::fldContentType, contentType);
+		//create upload object
+		return Upload(new UploadClass(lock,http,urlline));
+	} catch (...) {
+		//anywhere can exception happen, then unlock here and throw exception
+		lock.unlock();
+		throw;
 	}
+
+
+}
+
+String CouchDB::uploadAttachment(const Value &document, const StringRef &attachmentName, const AttachmentDataRef &attachmentData) {
+
+	Upload upld = uploadAttachment(document,attachmentName,attachmentData.contentType);
+	upld.write(attachmentData.data(), attachmentData.length());
+	return upld.finish();
 }
 
 
@@ -483,25 +540,15 @@ Value CouchDB::genUIDValue(StringRef prefix) {
 	return StringRef(genUID(prefix));
 }
 
-String CouchDB::uploadAttachment(const Value &document, const StringRef &attachmentName, const AttachmentDataRef &attachmentData) {
 
-	ConstBin::Iterator iter = attachmentData.getFwIter();
-	return uploadAttachment(document,attachmentName,attachmentData.contentType,
-			[&](unsigned char *buffer, std::size_t length) -> std::size_t {
-		ArrayRef<unsigned char> ref(buffer,length);
-		return iter.blockRead(ref.ref(),true);
-	});
-
+Document CouchDB::newDocument() {
+	Synchronized<FastLock> _(lock);
+	return Document(genUID(),StringRef());
 }
 
-Value CouchDB::newDocument() {
+Document CouchDB::newDocument(const StringRef &prefix) {
 	Synchronized<FastLock> _(lock);
-	return Object("_id",genUID());
-}
-
-Value CouchDB::newDocument(const StringRef &prefix) {
-	Synchronized<FastLock> _(lock);
-	return Object("_id",genUID(prefix));
+	return Document(genUID(),StringRef());
 }
 
 template<typename Fn>
@@ -529,7 +576,7 @@ public:
 				Super::checkString(functionkw+1);
 
 				functionBuff.clear();
-				functionBuff.append(StringRef(functionkw));
+				functionBuff.append(ConstStrA(functionkw));
 
 				AutoArray<char>::WriteIter wr = functionBuff.getWriteIterator();
 
@@ -544,7 +591,7 @@ public:
 								(c == ')' && levelStack.top() != '(') ||
 								(c == '}' && levelStack.top() != '{') ||
 								(c == ']' && levelStack.top() != '['))
-							throw json::ParseError(StringRef(functionBuff));
+							throw json::ParseError(std::string(functionBuff.data(),functionBuff.length()));
 						levelStack.pop();
 						if (levelStack.empty() && c == '}') break;
 					} else if (c == '"') {
@@ -553,6 +600,8 @@ public:
 					}
 				}
 				return Value(StringRef(functionBuff));
+			} else {
+				throw json::ParseError("Unexpected token");
 			}
 		} else {
 			return Super::parse();
@@ -675,7 +724,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	natural qpos = reqline.length();
 
 	if (sink.seqNumber != null) {
-		ConvertReadIter<UrlEncodeConvert, StringRef::Iterator> seqNumb(sink.seqNumber.getStringA().getFwIter());
+		ConvertReadIter<UrlEncodeConvert, StringRef::Iterator> seqNumb(StringRef(sink.seqNumber.getString()).getFwIter());
 		urlfmt("&since=%1") << &seqNumb;
 	}
 	if (sink.outlimit != naturalNull) {
@@ -692,12 +741,12 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	if (sink.filter != null) {
 		const Filter &flt = sink.filter;
 		if (!flt.viewPath.empty()) {
-			StringRef fltpath = flt.viewPath;
-			StringRef ddocName;
-			StringRef filterName;
+			ConstStrA fltpath = flt.viewPath;
+			ConstStrA ddocName;
+			ConstStrA filterName;
 			bool isView = false;
-			StringRef::SplitIterator iter = fltpath.split('/');
-			StringRef x = iter.getNext();
+			ConstStrA::SplitIterator iter = fltpath.split('/');
+			ConstStrA x = iter.getNext();
 			if (x == "_design") x = iter.getNext();
 			ddocName = x;
 			x = iter.getNext();
@@ -736,17 +785,13 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 			urlfmt("&%1=%2") << flt.args[i].key << &cnv;
 		}
 	}
-	if (sink.filterArgs != null) {
-		sink.filterArgs->forEach([&](ConstValue v, StringRef key, natural) {
-			if (v->isString()) {
-				ConvertReadIter<UrlEncodeConvert,StringRef::Iterator> cnv(v.getStringA().getFwIter());
-				urlfmt("&%1=%2") << key << &cnv;
-			} else {
-				urlfmt("&%1=") << key;
-				JSON::serialize(v, reqline, true);
-			}
-			return false;
-		});
+	for (auto &&v : sink.filterArgs) {
+			std::string val = v.toString();
+			StringRef key = v.getKey();
+			ConvertReadIter<UrlEncodeConvert,StringRef::Iterator>
+				cval(StringRef(val).getFwIter()),
+				ckey(key.getFwIter());
+			urlfmt("&%1=%2") << &ckey << &cval;
 	}
 
 	if (lockCompareExchange(sink.cancelState,1,0)) {
@@ -786,12 +831,14 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	http.setHeader(HttpClient::fldAccept,"application/json");
 	SeqFileInput in = http.send();
 
-	ConstValue v;
+	auto response = [&](){return in.getNext();};
+
+	Value v;
 	if (http.getStatus()/100 != 2) {
 
 		Value errorVal;
 		try{
-			errorVal = factory->fromStream(in);
+			errorVal = Value::parse(response);
 		} catch (...) {
 
 		}
@@ -806,24 +853,8 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 			conn->setWaitHandler(&whandle);
 
 		try {
-			v = factory->fromStream(in);
-		} catch (JSON::ParseError_t &e) {
-			//terminate http connection
-			http.closeConnection();
-			//canceled exception can be stored in reason of ParseError_t exception
-			const Exception *r = e.getReason();
-			//process all reasons
-			while (r) {
-				//test the reason
-				const CanceledException *ce = dynamic_cast<const CanceledException *>(r);
-				//throw reason only
-				if (ce) throw *ce;
-				//continue reading reasons
-				r = r->getReason();
-			}
 
-			//in case not found, throw what you have
-			throw;
+			v = Value::parse(response);
 
 		} catch (...) {
 			//any exception
@@ -839,9 +870,8 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	}
 
 
-	ConstValue results=v["results"];
+	Value results=v["results"];
 	sink.seqNumber = v["last_seq"];
-	if (seqNumSlot) *seqNumSlot = sink.seqNumber;
 
 	return results;
 }
@@ -850,60 +880,90 @@ ChangesSink CouchDB::createChangesSink() {
 	return ChangesSink(*this);
 }
 
-Value CouchDB::emptyDocument(StringRef id) {
-	return json("_id",id);
+class EmptyDownload: public Download::Source {
+public:
+	virtual natural operator()(void *, std::size_t ) {return 0;}
+};
+
+class StreamDownload: public Download::Source {
+public:
+	StreamDownload(const PInputStream &stream, FastLock &lock, HttpClient &http):stream(stream),lock(lock),http(http) {}
+	virtual natural operator()(void *buffer, std::size_t size) {
+		return stream->read(buffer,size);
+	}
+	~StreamDownload() {
+		http.close();
+		lock.unlock();
+	}
+
+protected:
+	PInputStream stream;
+	FastLock &lock;
+	HttpClient &http;
+};
+
+
+static Download downloadAttachmentCont(HttpClient &http, const UrlLine &urlline, const StringRef &etag, FastLock &lock) {
+
+	lock.lock();
+	try {
+		http.open(HttpClient::mGET, urlline.getArray());
+		if (!etag.empty()) http.setHeader(http.fldIfNoneMatch,etag);
+		SeqFileInput in = http.send();
+
+		auto readStreamFn = [&in](){return in.getNext();};
+
+		natural status = http.getStatus();
+		if (status != 200 && status != 304) {
+
+			Value errorVal;
+			try{
+				errorVal = Value::parse(readStreamFn);
+			} catch (...) {
+
+			}
+			http.close();
+			throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
+		} else {
+			HttpClient::HeaderValue ctx = http.getHeader(HttpClient::fldContentType);
+			HttpClient::HeaderValue len = http.getHeader(HttpClient::fldContentLength);
+			HttpClient::HeaderValue etag = http.getHeader(HttpClient::fldETag);
+			natural llen = naturalNull;
+			if (len.defined) parseUnsignedNumber(len.getFwIter(), llen, 10);
+			if (status == 304) return Download(new EmptyDownload,StringRef(ctx),StringRef(etag),llen,true);
+			else return Download(new StreamDownload(in.getStream(),lock,http),StringRef(ctx),StringRef(etag),llen,false);
+		}
+	} catch (...) {
+		lock.unlock();
+		throw;
+	}
+
+
 }
 
-void CouchDB::downloadAttachment(const StringRef& documentId, const StringRef& revId,
-		const StringRef& attachmentName, const DownloadFn& downloadFn,
-		StringRef etag) {
+Download CouchDB::downloadAttachment(const Value &document, const StringRef &attachmentName,  const StringRef &etag) {
 
-	Synchronized<FastLock> _(lock);
+	UrlLine urlline;
+	StringRef documentId = document["_id"].getString();
+	StringRef revId = document["_rev"].getString();
+	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
+	ConvertReadIter<UrlEncodeConvert,StringRef::Iterator> docIdEnc(documentId.getFwIter())
+					,attNameEnc(attachmentName.getFwIter())
+					,revIdEnc(revId.getFwIter());
+	urlfmt("%1/%2/%3/%4?rev=%5") << baseUrl << database << &docIdEnc << &attNameEnc << &revIdEnc;
+
+	return downloadAttachmentCont(http,urlline,etag,lock);
+
+}
+
+Download CouchDB::downloadLatestAttachment(const StringRef &docId, const StringRef &attachmentName,  const StringRef &etag) {
 	UrlLine urlline;
 	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
-	FilterRead<StringRef::Iterator, UrlEncoder> docIdEnc(documentId.getFwIter()),attNameEnc(attachmentName.getFwIter());
+	ConvertReadIter<UrlEncodeConvert,StringRef::Iterator> docIdEnc(docId.getFwIter())
+					,attNameEnc(attachmentName.getFwIter());
 	urlfmt("%1/%2/%3/%4") << baseUrl << database << &docIdEnc << &attNameEnc;
-	if (!revId.empty()) {
-		FilterRead<StringRef::Iterator, UrlEncoder> revIdEnc(revId.getFwIter());
-		urlfmt("?rev=%1") << &revIdEnc;
-	}
-	http.open(HttpClient::mGET, urlline.getArray());
-	if (!etag.empty()) http.setHeader(http.fldIfNoneMatch,etag);
-	SeqFileInput in = http.send();
-	natural status = http.getStatus();
-	if (status != 200 && status != 304) {
 
-		Value errorVal;
-		try{
-			errorVal = factory->fromStream(in);
-		} catch (...) {
-
-		}
-		http.close();
-		throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
-	} else {
-		HttpClient::HeaderValue ctx = http.getHeader(HttpClient::fldContentType);
-		HttpClient::HeaderValue len = http.getHeader(HttpClient::fldContentLength);
-		HttpClient::HeaderValue etag = http.getHeader(HttpClient::fldETag);
-		natural llen = naturalNull;
-		if (len.defined) parseUnsignedNumber(len.getFwIter(), llen, 10);
-		downloadFn(DownloadFile(in,ctx,etag,llen,status == 304));
-	}
-
-}
-
-AttachmentData CouchDB::downloadAttachment(const StringRef& docId,
-		const StringRef& revId, const StringRef& attachmentName) {
-	StringB data;
-	StringA contentType;
-	downloadAttachment(docId, revId,attachmentName, [&](const DownloadFile &dw) {
-		if (dw.contentLength == naturalNull) throw ErrorMessageException(THISLOCATION,"No content-length");
-		StringB::WriteIterator wr= data.createBufferIter(dw.contentLength);
-		wr.copy(dw,dw.contentLength);
-		contentType = dw.contentType;
-	});
-	return AttachmentData(data,contentType);
-
+	return downloadAttachmentCont(http,urlline,etag,lock);
 }
 
 

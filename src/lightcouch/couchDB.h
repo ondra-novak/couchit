@@ -297,7 +297,7 @@ public:
 	 * Function creates new object and puts _id in it. Generates new id
 	 * @return Value which can be converted to Document object
 	 */
-	Value newDocument();
+	Document newDocument();
 
 	///Creates new document
 	/**
@@ -305,19 +305,7 @@ public:
 	 * @param prefix prefix append to UID - can be used to specify type of the document
 	 * @return Value which can be converted to Document object
 	 */
-	Value newDocument(const StringRef &prefix);
-
-	///Creates empty document with specified ID
-	/**
-	 * @param id id of document
-	 * @return empty document as Value, you can assign result to an Document instance
-	 *
-	 * @note You can use empty document to create new document with predefined ID.
-	 *
-	 */
-	Value emptyDocument(const StringRef &id);
-
-
+	Document newDocument(const StringRef &prefix);
 
 	///Retrieves pointer to validator
 	/**
@@ -399,66 +387,16 @@ public:
 	Value showDoc(const StringRef &showHandlerPath, const StringRef &documentId, const Value &arguments, natural flags = 0);
 
 
-	///Contains downloaded file
-	class Download {
-	public:
-
-
-		class Source: public RefCntObj {
-		public:
-			virtual ~Source() {}
-			virtual std::size_t operator()(unsigned char *buffer, std::size_t size) = 0;
-		};
-
-
-
-		///ETag of the attachment
-		const String etag;
-		///Content type of the attachment
-		const String contentType;
-		///Content length of the attachment
-		const std::size_t contentLength;
-		///if true, then document has not been modified
-		/** In this case, source is empty and contentLength is zero */
-		bool notModified;
-
-		///Contains data of the attachment
-		/** You have to read data as fast as possible, otherwise the instance of the CouchDB is blocked.
-		 * Slow reading can also trigger timeout error on the server side.
-		 */
-		Source &source;
-
-		Download(Source *src,
-				const String etag,
-				const String contentType,
-				const std::size_t contentLength,
-				bool notModified);
-
-		private:
-
-		RefCntPtr<Source> srcptr;
-
-	};
-
-	///Function called to collect data for upload
-	/**
-	 * @param first_arg pointer to buffer allocated for data. Function must but data there.
-	 * @param second_arg size of the buffer
-	 * @return count of written bytes to the buffer. Function should write at least one byte. To
-	 * write EOF, the function must return 0
-	 */
-	typedef std::function<std::size_t(unsigned char *, std::size_t)> UploadFn;
-
 	///Uploads attachment with specified document
 	/**
 	 * @param document document object. The document don't need to be complete, only _id and _rev must be there.
 	 * @param attachmentName name of attachment
 	 * @param contentType content type of the attachment
-	 * @param fn function which will be called to supply attachment body. Function accepts one argument
-	 * SeqFileOuput.
-	 * @return Funtcion returns new revision of the document, if successful.
+	 * @return Returns Upload object which can be used to stream new data into the database
+	 * @note The returned object should not be stored for long way, because it blocks whole Couchdb instance
+	 * until the upload is finished
 	 */
-	String uploadAttachment(const Value &document, const StringRef &attachmentName, const StringRef &contentType, const UploadFn &uploadFn);
+	Upload uploadAttachment(const Value &document, const StringRef &attachmentName, const StringRef &contentType);
 
 	///Uploads attachment with specified document
 	/**
@@ -476,10 +414,18 @@ public:
 	 * @param document document. The document don't need to be complete, only _id and _rev must be there.
 	 * @param attachmentName name of attachment to retrieve
 	 * @param etag if not empty, function puts string as "if-none-match" header.
-	 *
-	 *
 	 */
-	Download downloadAttachment(const Value &document, const StringRef &attachmentName,  StringRef etag=StringRef());
+	Download downloadAttachment(const Value &document, const StringRef &attachmentName,  const StringRef &etag=StringRef());
+
+	///Downloads latest attachments
+	/** Allows to easily download the latest attachment by given docId an dattachmentName
+	 *
+	 * @param docId document Id
+	 * @param attachmentName attachment name
+	 * @param etag (optional) etag, if not empty, then it is put to the header and result can be notModified
+	 * @return download object
+	 */
+	Download downloadLatestAttachment(const StringRef &docId, const StringRef &attachmentName,  const StringRef &etag=StringRef());
 
 
 	///For function updateDesignDocument

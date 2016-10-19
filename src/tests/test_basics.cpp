@@ -23,6 +23,7 @@
 #include "lightspeed/base/countof.h"
 
 #include "lightspeed/mt/thread.h"
+#include "../lightcouch/json.h"
 namespace LightCouch {
 using namespace LightSpeed;
 using namespace BredyHttpClient;
@@ -444,11 +445,10 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Document doc = db.newDocument(".data");
-	db.uploadAttachment(doc,"testAttachment","text/plain",[](SeqFileOutput wr) {
-		SeqTextOutA txtwr(wr);
-		ConstStrA sentence("The quick brown fox jumps over the lazy dog");
-		txtwr.blockWrite(sentence,true);
-	});
+	Upload upl = db.uploadAttachment(doc,"testAttachment","text/plain");
+	ConstStrA sentence("The quick brown fox jumps over the lazy dog");
+	upl.write(sentence.data(),sentence.length());
+	upl.finish();
 
 	Document doc2 = db.retrieveDocument(doc.getID());
 

@@ -488,7 +488,7 @@ protected:
 	RegUpdateFn updates;
 	RegFilterFn filters;
 	StringA qserverName;
-	String qserverPath;
+	StringW qserverPath;
 	Object ddcache;
 
 	AutoArray<AbstractViewBase::Row> rowBuffer;

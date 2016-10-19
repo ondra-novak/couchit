@@ -91,5 +91,11 @@ Value Document::getAttachment(const StringRef &name) const {
 	return (*this)["_attachments"][name];
 }
 
+Document::Document(const StringRef& id, const StringRef& rev) {
+	set("_id",id);
+	if (!rev.empty()) set("_rev",rev);
+}
+
 
 } /* namespace LightCouch */
+

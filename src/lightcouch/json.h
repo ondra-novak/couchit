@@ -38,9 +38,11 @@ public:
 	operator LightSpeed::ConstStringT<T>() const {return LightSpeed::ConstStringT<T>(this->data, this->length);}
 
 	typedef typename LightSpeed::ConstStringT<T>::Iterator Iterator;
+	typedef typename LightSpeed::ConstStringT<T>::SplitIterator SplitIterator;
 
 	Iterator getFwIter() const {return LightSpeed::ConstStringT<T>(*this).getFwIter();}
 
+	explicit operator std::basic_string<T>() const;
 };
 
 template<>
@@ -60,19 +62,18 @@ public:
 	operator LightSpeed::ConstStringT<char>() const {return LightSpeed::ConstStringT<char>(this->data, this->length);}
 
 	typedef LightSpeed::ConstStringT<char>::Iterator Iterator;
+	typedef typename LightSpeed::ConstStringT<char>::SplitIterator SplitIterator;
 
 	Iterator getFwIter() const {return LightSpeed::ConstStringT<char>(*this).getFwIter();}
+	SplitIterator split(char c) const {return LightSpeed::ConstStringT<char>(*this).split(c);}
 
+	explicit operator std::basic_string<char>() const;
 };
 
 typedef StringRefT<char> StringRef;
 typedef StringRefT<unsigned char> BinaryRef;
 typedef json::String String;
 
-template<typename T>
-inline LightSpeed::_intr::TextOutSink<T> &operator <<(LightSpeed::_intr::TextOutSink<T> &sink, const StringRef &a) {
-	return sink << LightSpeed::ConstStrA(a);
-}
 
 }
 

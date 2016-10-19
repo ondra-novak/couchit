@@ -34,6 +34,12 @@ public:
 	Document() {}
 	///create document from existing JSON document
 	Document(const Value &base);
+	///Initialize document with id and revision
+	/**
+	 * @param id id of document
+	 * @param rev revision. It can be empty for new document
+	 */
+	Document(const StringRef &id, const StringRef &rev);
 
 
 	///Retrieves current document ID. Empty if missing

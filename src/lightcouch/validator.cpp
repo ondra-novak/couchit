@@ -30,7 +30,7 @@ bool Validator::remove(IValidationFn* fn, bool destroy) {
 	return false;
 }
 
-Validator::Result Validator::validateDoc(const ConstValue& document) const {
+Validator::Result Validator::validateDoc(const Value& document) const {
 	for (natural i = 0, cnt = fnList.length(); i < cnt; i++) {
 		try {
 			if (!fnList[i]->operator ()(document)) {
