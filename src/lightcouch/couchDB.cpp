@@ -393,8 +393,8 @@ CouchDB::UpdateResult CouchDB::updateDoc(StringRef updateHandlerPath, StringRef 
 		char c = '?';
 		arguments.forEach([&](const Value &v) {
 			StringRef key = v.getKey();
-			std::string vstr = v.toString();
-			StringRef val(vstr);
+			String vstr = v.toString();
+			ConstStrA val(vstr);
 			ConvertReadIter<UrlEncodeConvert, StringRef::Iterator> keyEnc(key.getFwIter()),
 																   valEnc(val.getFwIter());
 			urlfmt("%1%%2=%3") << c << &keyEnc << &valEnc;
@@ -419,8 +419,8 @@ Value CouchDB::showDoc(const StringRef &showHandlerPath, const StringRef &docume
 		char c = '?';
 		arguments.forEach([&](const Value &v) {
 			StringRef key = v.getKey();
-			std::string vstr = v.toString();
-			StringRef val(vstr);
+			String vstr = v.toString();
+			ConstStrA val(vstr);
 			ConvertReadIter<UrlEncodeConvert, StringRef::Iterator> keyEnc(key.getFwIter()),
 																   valEnc(val.getFwIter());
 			urlfmt("%1%%2=%3") << c << &keyEnc << &valEnc;
@@ -489,6 +489,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StringRef &attachm
 					http.close();
 					response = v["rev"];
 					lock.unlock();
+					return response;
 				}
 			} catch (...) {
 				lock.unlock();
@@ -548,7 +549,7 @@ Document CouchDB::newDocument() {
 
 Document CouchDB::newDocument(const StringRef &prefix) {
 	Synchronized<FastLock> _(lock);
-	return Document(genUID(),StringRef());
+	return Document(genUID(),StringRef(prefix));
 }
 
 template<typename Fn>
@@ -562,7 +563,7 @@ public:
 		:Super(source) {}
 
 
-	virtual Value parse() {
+	virtual json::Value parse() {
 		const char *functionkw = "function";
 		const char *falsekw = "false";
 		char x = Super::rd.next();
@@ -595,11 +596,11 @@ public:
 						levelStack.pop();
 						if (levelStack.empty() && c == '}') break;
 					} else if (c == '"') {
-						Value v = Super::parseString();
+						json::Value v = Super::parseString();
 						v.serialize([&](char c) {wr.write(c);});
 					}
 				}
-				return Value(StringRef(functionBuff));
+				return json::Value(StringRef(functionBuff));
 			} else {
 				throw json::ParseError("Unexpected token");
 			}
@@ -786,7 +787,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		}
 	}
 	for (auto &&v : sink.filterArgs) {
-			std::string val = v.toString();
+			String val = v.toString();
 			StringRef key = v.getKey();
 			ConvertReadIter<UrlEncodeConvert,StringRef::Iterator>
 				cval(StringRef(val).getFwIter()),

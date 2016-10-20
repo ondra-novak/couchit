@@ -525,7 +525,7 @@ private:
 	template<typename T>
 	Value compileDesignSection(T &reg, const Value &section, ConstStrA sectionName);
 
-	Value createDesignDocument(Value container, ConstStrA fnName, ConstStrA &suffix);
+	Value createDesignDocument(Object &container, ConstStrA fnName, ConstStrA &suffix);
 };
 
 

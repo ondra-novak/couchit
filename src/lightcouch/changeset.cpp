@@ -16,80 +16,106 @@
 //#include "validator.h"
 namespace LightCouch {
 
-Changeset::Changeset(CouchDB &db):json(db.json), db(db) {
+Changeset::Changeset(CouchDB &db):db(db) {
 
-	init();
 
 }
 
-
-Changeset& Changeset::update(Document &document) {
+Changeset& Changeset::update(const Document &document) {
 	if (!document.dirty()) return *this;
+	Value id = document.getIDValue();
+	if (!id.defined())
+		throw DocumentHasNoID(THISLOCATION, document);
+	docMap[id] = DocInfo(document);
+
+/*
+	DocInfo editedDoc(document);
+	Value doc = document;
+	if (!doc["_id"].defined())
+	DocInfo nfo;
+	nfo.doc = doc;
+	nf
+	docMap.insert(doc["_id"],)
 	if (document["_id"] == null) {
 		document.set("_id",db.genUIDValue());
 	}
-	docs.add(document.getEditing());
-	eraseConflicts(document["_id"], document.getConflictsToDelete());
+	docs.add(document);
+	eraseConflicts(document["_id"], document.getConflictsToDelete());*/
 	return *this;
 }
 
 
 
 Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
-	if (docs->empty()) return *this;
-
-	Value now = json(TimeStamp::now().asUnix());
-	for (JSON::Iterator iter = docs->getFwIter(); iter.hasItems();) {
-		JSON::KeyValue doc = iter.getNext();
-		if (doc[CouchDB::fldTimestamp] != null) {
-			doc.set(CouchDB::fldTimestamp, now);
-		}
-		if (doc[CouchDB::fldPrevRevision] != null) {
-			Value rev = doc["_rev"];
-			if (rev != null) doc.set(CouchDB::fldPrevRevision,rev);
-		}
-	}
+	if (docMap.empty()) return *this;
 
 	///if validator is not present, do not run empty cycle.
 
+	Value now;
+
+	Array docsToCommit;
+
 	const Validator *v;
 	if ((v = db.getValidator())!=0) {
-		docs->enumEntries(JSON::IEntryEnum::lambda([v](const JSON::INode *nd, ConstStrA, natural){
-			Validator::Result r = v->validateDoc(nd);
+		for(auto &&item: docMap) {
+			Validator::Result r = v->validateDoc(item.second.doc);;
 			if (!r) throw ValidationFailedException(THISLOCATION,r);
-			return false;
-		}));
+
+			bool hasTm = item.second.doc[CouchDB::fldTimestamp].defined();
+			bool hasPrevRev =  item.second.doc[CouchDB::fldPrevRevision].defined();
+			if (hasTm && !now.defined()) {
+				now = Value(TimeStamp::now().asUnix());
+			}
+			if (hasTm || hasPrevRev) {
+				Object adj(item.second.doc);
+				if (hasTm) adj.set(CouchDB::fldTimestamp, now);
+				if (hasPrevRev) adj.set(CouchDB::fldPrevRevision, item.second.doc["_rev"]);
+				item.second.doc = adj;
+			}
+
+			docsToCommit.add(item.second.doc);
+			for (auto &&c: item.second.conflicts) {
+				docsToCommit.add(c);
+			}
+		}
 	}
+
+	Object wholeRequest;
+	wholeRequest.set("docs", docsToCommit);
 	if (all_or_nothing)
-		json.object(wholeRequest)("all_or_nothing",true);
-	JSON::ConstValue out = db.requestPOST("_bulk_docs", wholeRequest);
+		wholeRequest.set("all_or_nothing",true);
+
+	Value out = db.requestPOST("_bulk_docs", wholeRequest);
 
 
 	AutoArray<UpdateException::ErrorItem> errors;
 
-	natural index = 0;
-	for (JSON::ConstIterator iter = out->getFwIter(); iter.hasItems();) {
-		const JSON::ConstKeyValue &kv = iter.getNext();
-
-		JSON::ConstValue rev = kv["rev"];
-		if (rev != null) json.object(docs[index])("_rev",rev);
-
-		JSON::ConstValue err = kv["error"];
-		if (err != null) {
+	for (auto &&item : out) {
+		Value rev = item["rev"];
+		Value err = item["error"];
+		String id = item["id"];
+		DocMap::iterator itr = docMap.find(id);
+		if (itr == docMap.end()) {
 			UpdateException::ErrorItem e;
-			e.errorDetails = kv;
-			e.document = docs[index];
-			e.errorType = err->getStringUtf8();
-			e.reason = kv["reason"]->getStringUtf8();
+			e.errorDetails = item;
+			e.errorType = "internal_error";
+			e.reason = "Couchdb returned an unknown document";
 			errors.add(e);
+		} else {
+			if (err.defined()) {
+				UpdateException::ErrorItem e;
+
+				e.errorDetails = item;
+				e.document = itr->second.doc;
+				e.errorType = err;
+				e.reason = item["reason"];
+				errors.add(e);
+			}
+			if (rev.defined()) {
+				itr->second.newRevId = rev;
+			}
 		}
-
-		index++;
 	}
-
-	//prepare for next request
-	init();
-
 	if (errors.length()) throw UpdateException(THISLOCATION,errors);
 
 	return *this;
@@ -97,35 +123,12 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 
 }
 
-Changeset::Changeset(const Changeset& other):json(other.json),db(other.db) {
+Changeset::Changeset(const Changeset& other):db(other.db) {
 }
 
-natural Changeset::mark() const {
-	return docs->length();
-}
 
-void Changeset::revert(natural mark) {
-	if (mark == 0) {
-		docs.clear();
-	} else {
-		while (docs->length() != mark) {
-			docs.erase(docs->length()-1);
-		}
-	}
-}
-
-void Changeset::revert(Value doc) {
-	for (natural i = 0, cnt = docs->length(); i < cnt; i++) {
-		if (docs[i] == doc) {
-			docs.erase(i);
-			break;
-		}
-	}
-}
-
-void Changeset::init() {
-	docs = json.array();
-	wholeRequest = json("docs",docs);
+void Changeset::revert(const String &docId) {
+	docMap.erase(docId);
 }
 
 
@@ -133,40 +136,68 @@ Changeset& Changeset::commit(bool all_or_nothing) {
 	return commit(db,all_or_nothing);
 }
 
-Changeset& Changeset::erase(ConstValue docId, ConstValue revId) {
-	docs.add(json("_id",static_cast<const Value &>(docId))
-			("_rev",static_cast<const Value &>(revId))
-			("_deleted",true)
-			("+timestamp", TimeStamp::now().getFloat()));
+Changeset& Changeset::erase(const String &docId, const String &revId) {
+
+
+	Document doc;
+	doc.setID(docId);
+	doc.setRev(revId);
+	doc.setDeleted();
+
+	update(doc);
 
 	return *this;
 }
 
-Document Changeset::newDocument() {
-	return db.newDocument();
+Value Changeset::getDoc(const String& docId) const {
+
+	auto iter = docMap.find(docId);
+	if (iter == docMap.end()) return Value();
+	Object o(iter->second.doc);
+	o.set("_rev",iter->second.newRevId);
+	return o;
+
 }
 
-Document Changeset::newDocument(ConstStrA suffix) {
-	return db.newDocument(suffix);
+String Changeset::getRev(const String& docId) const {
+	auto iter = docMap.find(docId);
+	if (iter == docMap.end()) return String();
+	return iter->second.newRevId;
+
 }
 
 Changeset& Changeset::preview(LocalView& view) {
-	docs->enumEntries(JSON::IEntryEnum::lambda([&](const JSON::INode *value, ConstStrA , natural){
-		view.updateDoc(value);
-		return false;
-	}));
+	for (auto &&item:docMap) {
+		view.updateDoc(item.second.doc);
+	}
 	return *this;
 
 
 }
 
+Changeset::DocInfo::DocInfo(const Document& editedDoc) {
+
+	this->doc = editedDoc;
+	Array conflicts;
+	for (auto &&item: editedDoc.getConflictsToDelete()) {
+		Document doc;
+		doc.setID(editedDoc.getIDValue());
+		doc.setRev(item);
+		doc.setDeleted();
+		conflicts.add(doc);
+	}
+	this->conflicts = conflicts;
+
+}
+
+/*
 void Changeset::eraseConflicts(ConstValue docId, ConstValue conflictList) {
 	if (conflictList != null)
 		conflictList->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA, natural ){
 		erase(docId, v);
 		return false;
 	}));
-}
+}*/
 
 
 } /* namespace assetex */

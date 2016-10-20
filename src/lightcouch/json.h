@@ -16,7 +16,6 @@
 
 namespace LightCouch {
 
-using json::Value;
 using json::Path;
 using json::Object;
 using json::Array;
@@ -70,9 +69,50 @@ public:
 	explicit operator std::basic_string<char>() const;
 };
 
+
 typedef StringRefT<char> StringRef;
 typedef StringRefT<unsigned char> BinaryRef;
-typedef json::String String;
+
+
+class String: public json::String {
+public:
+	template<typename T>
+	String(T &&x):json::String(x) {}
+	String() {}
+	String(const LightSpeed::ConstStrA &str):json::String(StringRef(str)) {}
+	String(const String &other):json::String(other) {}
+	operator LightSpeed::ConstStrA() const {return StringRef(*this);}
+/*
+	using json::String::operator>;
+	using json::String::operator<;
+	using json::String::operator==;
+	using json::String::operator!=;
+	using json::String::operator>=;
+	using json::String::operator<=;*/
+};
+
+class Value: public json::Value {
+public:
+	template<typename T>
+	Value(T &&x):json::Value(x) {}
+//	Value(const String &x):json::Value((Value)x) {}
+	Value() {}
+	Value(const std::initializer_list<json::Value> &data):json::Value(data) {}
+
+	Value(const Value &other):json::Value(other) {}
+
+	LightSpeed::ConstStrA getString() const {return StringRef(json::Value::getString());}
+	Value operator[](const LightSpeed::ConstStrA &name) const {return json::Value::operator[](StringRef(name));}
+	Value operator[](uintptr_t index) const {return json::Value::operator[](index);}
+	Value operator[](const Path &path) const {return json::Value::operator[](path);}
+
+	LightSpeed::ConstStrA getKey() const {return StringRef(json::Value::getKey());}
+	String toString() const {return String(json::Value::toString());}
+	String stringify() const {return String(json::Value::stringify());}
+
+};
+
+
 
 
 }
@@ -81,3 +121,4 @@ typedef json::String String;
 
 
 #endif /* LIGHTCOUCH_JSON_H_ */
+

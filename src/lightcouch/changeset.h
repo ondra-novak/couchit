@@ -26,6 +26,7 @@ public:
 
 
 
+
 	///Updates document in database
 	/** Function schedules document for update. Once document is scheduled, Document instance can
 	 * be destroyed, because document is kept inside of changeset. Changes are applied by function commit()
@@ -37,7 +38,7 @@ public:
 	 * Immediately read it.
 	 *
 	 */
-	Changeset &update(Document &document);
+	Changeset &update(const Document &document);
 
 	///Erases document defined only by documentId and revisionId. Useful to erase conflicts
 	/**
@@ -50,7 +51,7 @@ public:
 	 * any filters that triggers on content will not triggered. This is best for erasing conflicts because they are
 	 * no longer valid.
 	 */
-	Changeset &erase(Value docId, Value revId);
+	Changeset &erase(const String &docId, const String &revId);
 
 
 	///Commits all changes in the database
@@ -83,6 +84,18 @@ public:
 	Changeset &commit(bool all_or_nothing=true);
 
 
+	///Retrieves updated revision of the document after commit
+	/** If called after commit, it contains update _rev */
+	Value getDoc(const String &docId) const;
+
+	///Retrieves revision of the document
+	/** if called after commit, it returns updated rev */
+	String getRev(const String &docId) const;
+
+	///Revets changes made in document docId
+	/** Removes document from the changeset */
+	void revert(const String &docId);
+
 	///Preview all changes in a local view
 	/** Function just only sends all changes to a local view, without making the
 	 * set "committed". You can use this function to preview all changes in the view
@@ -97,63 +110,29 @@ public:
 	Changeset &preview(LocalView &view);
 
 
-	///Mark current state of changeset
-	/** you can use stored mark to revert unsaved changes later */
-	natural mark() const;
-
-	///Revert changes up to mark
-	/** Function removes all document stored beyond that mark
-	 *
-	 * @param mark mark stored by mark()
-	 *
-	 * @note function only removes documents from the change-set. It cannot
-	 * revert changes made in the documents
-	 */
-
-	void revert(natural mark);
-
-	///Revert single document
-	/**
-	 * @param doc document to remove. It must be exact reference to the document
-	 *
-	 * @note function only removes document from the change-set. It cannot
-	 * revert changes made in the document.
-	 *
-	 * @note function can be slow for large changesets because it searches document using
-	 * sequential scan. If you want to revert recent changes, use mark-revert
-	 * couple to achieve this.
-	 */
-	void revert(Value doc);
-
-	///Creates new document
-	/** Function creates empty object and puts _id in it
-	 *
-	 * @return newly created document. It is already in edit mode, so you can set new atributes
-	 */
-	Document newDocument();
-
-	///Creates new document
-	/** Function creates empty object and puts _id in it
-	 *
-	 * @param suffix suffix append to the ID
-	 * @return newly created document. It is already in edit mode, so you can set new atributes
-	 */
-	Document newDocument(const StringRef &suffix);
-
-
-
 	CouchDB &getDatabase() {return db;}
 	const CouchDB &getDatabase() const {return db;}
 
 
 protected:
 
-	Array docs;
+
+	struct DocInfo {
+		String newRevId;
+		Value doc;
+		Value conflicts;
+
+		DocInfo(const Document &editedDoc);
+		DocInfo() {}
+	};
+
+	typedef std::pair<String, Value> RevAndDoc;
+	typedef std::map<String, DocInfo> DocMap;
+
+	DocMap docMap;
+
 	CouchDB &db;
 
-	void init();
-
-	void eraseConflicts(const Value &docId, const Value &conflictList);
 
 };
 

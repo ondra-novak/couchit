@@ -19,15 +19,15 @@ RequestError::~RequestError() throw () {
 }
 
 void RequestError::message(ExceptionMsg& msg) const {
-	std::string details;
-	if (this->extraInfo != null) {
+	String details;
+	if (this->extraInfo.defined()) {
 		details = extraInfo.stringify();
 	}
 	msg("CouchDB error: url=%1, status=%2, message=%3, details=%4")
 		<< this->url
 		<< this->status
 		<< this->statusMsg
-		<< StringRef(details);
+		<< ConstStrA(details);
 }
 
 
@@ -68,6 +68,10 @@ const UpdateException::ErrorItem& UpdateException::getError(natural index) const
 
 natural UpdateException::getErrorCnt() const {
 	return errors.length();
+}
+
+void DocumentHasNoID::message(ExceptionMsg& msg) const {
+	msg("Document has no id: %1") << document.toString();
 }
 
 

@@ -30,49 +30,54 @@ template<typename Fn>
 Result LightCouch::Result::sort(Fn compareRowsFunction,	bool descending) const {
 
 
-	AutoArray<ConstValue> sortingRows;
-	sortingRows.reserve(this->length());
-	HeapSort<AutoArray<ConstValue>, SortResultCmp<Fn> > heapSort(sortingRows, SortResultCmp<Fn>(compareRowsFunction,descending));
-	for (natural i = 0, cnt = this->length(); i < cnt; i++) {
-		sortingRows.add((*this)[i]);
+	AutoArray<Value> sortingRows;
+	sortingRows.reserve(this->size());
+	HeapSort<AutoArray<Value>, SortResultCmp<Fn> > heapSort(sortingRows, SortResultCmp<Fn>(compareRowsFunction,descending));
+	for(auto &&item: *this) {
+		sortingRows.add(item);
 		heapSort.push();
 	}
-	heapSort.sortHeap();
-	JSON::ConstValue newrows = json.factory->newValue(ConstStringT<ConstValue>(sortingRows));
-	return Result(json,json("rows",newrows)("total_rows",total)("offset",offset));
+	Array out;
+	while (!sortingRows.empty()) {
+		out.add(heapSort.top());
+		heapSort.pop();
+		sortingRows.resize(heapSort.getSize());
+	}
+	return Result(Object("rows",out)("total_rows",total)("offset",offset));
 }
 
 template<typename CmpFn, typename ReduceFn>
 inline Result LightCouch::Result::group(CmpFn compareRowsFunction,
 		ReduceFn reduceFn, bool descending) const {
-	AutoArray<ConstValue> sortingRows;
-	sortingRows.reserve(this->length());
-	HeapSort<AutoArray<ConstValue>, SortResultCmp<CmpFn> > heapSort(sortingRows, SortResultCmp<CmpFn>(compareRowsFunction,descending));
-	natural cnt = this->length();
-	for (natural i = 0; i < cnt; i++) {
-		sortingRows.add((*this)[i]);
+
+	AutoArray<Value> sortingRows;
+	natural cnt = this->size();
+	sortingRows.reserve(cnt);
+	HeapSort<AutoArray<Value>, SortResultCmp<CmpFn> > heapSort(sortingRows, SortResultCmp<CmpFn>(compareRowsFunction,descending));
+	for(auto &&item: *this) {
+		sortingRows.add(item);
 		heapSort.push();
 	}
 	heapSort.sortHeap();
 	natural startPos = 0;
 	natural insertPos = 0;
+	Array out;
 	for (natural i = 1; i < cnt; i++) {
 		if (compareRowsFunction(sortingRows[startPos],sortingRows[i]) != 0) {
-			ConstStringT<ConstValue> block = sortingRows.mid(startPos, i-startPos);
-			ConstValue res = reduceFn(block);
-			if (res != null)
-				sortingRows(insertPos++) = res;
+			ConstStringT<Value> block = sortingRows.mid(startPos, i-startPos);
+			Value res = reduceFn(block);
+			if (res.defined())
+				out.add(res);
 			startPos = i;
 		}
 	}
 	if (startPos < cnt) {
-		ConstStringT<ConstValue> block = sortingRows.mid(startPos, cnt-startPos);
-		ConstValue res = reduceFn(block);
-		if (res != null)
+		ConstStringT<Value> block = sortingRows.mid(startPos, cnt-startPos);
+		Value res = reduceFn(block);
+		if (res.defined())
 			sortingRows(insertPos++) = res;
 	}
-	JSON::ConstValue newrows = json.factory->newValue(ConstStringT<ConstValue>(sortingRows.head(insertPos)));
-	return Result(json,json("rows",newrows));
+	return Result(Object("rows",out));
 }
 
 template<typename MergeFn>
@@ -80,14 +85,14 @@ inline Result LightCouch::Result::merge(const Result& other, MergeFn mergeFn) co
 
 	natural leftPos = 0;
 	natural rightPos = 0;
-	natural leftCnt = length();
-	natural rightCnt = other.length();
-	AutoArray<ConstValue> rows;
+	natural leftCnt = size();
+	natural rightCnt = other.size();
+	Array rows;
 
 	while (leftPos < leftCnt && rightPos < rightCnt) {
-		ConstValue left = (*this)[leftPos];
-		ConstValue right = (*this)[rightPos];
-		ConstValue res = mergeFn(left,right);
+		Value left = (*this)[leftPos];
+		Value right = other[rightPos];
+		Value res = mergeFn(left,right);
 		if (res == left) {
 			leftPos++;
 		} else if (res == right) {
@@ -96,112 +101,101 @@ inline Result LightCouch::Result::merge(const Result& other, MergeFn mergeFn) co
 			leftPos++;
 			rightPos++;
 		}
-		if (res != null) {
+		if (res.defined()) {
 			rows.add(res);
 		}
 	}
 	while (leftPos < leftCnt) {
-		ConstValue left = (*this)[leftPos];
-		ConstValue res = mergeFn(left,null);
+		Value left = (*this)[leftPos];
+		Value res = mergeFn(left,null);
 		leftPos++;
-		if (res != null) {
+		if (res.defined()) {
 			rows.add(res);
 		}
 	}
 	while (rightPos < rightCnt) {
-		ConstValue right = (*this)[rightPos];
-		ConstValue res = mergeFn(null,right);
+		Value right = (*this)[rightPos];
+		Value res = mergeFn(null,right);
 			rightPos++;
-		if (res != null) {
+		if (res.defined()) {
 			rows.add(res);
 		}
 	}
 
-	JSON::ConstValue newrows = json.factory->newValue(ConstStringT<ConstValue>(rows));
-	return Result(json,json("rows",newrows));
+	return Result(Object("rows",out));
 }
 
+
+struct ResultJoinHlp {
+	Value baseObject;
+	mutable AutoArray<Value, SmallAlloc<4> > joinRows;
+
+	void addResult(Value v) const {
+		joinRows.add(v);
+	}
+	ResultJoinHlp(Value baseObject);
+};
+
 template<typename BindFn>
-inline Result LightCouch::Result::join(QueryBase& q, ConstStrA name, natural flags,  BindFn bindFn)
+inline Result LightCouch::Result::join(QueryBase& q, const StringRef &name, natural flags,  BindFn bindFn)
 {
-	typedef MultiMap<ConstValue, Container, JsonIsLess> ResultMap;
+	typedef MultiMap<Value, ResultJoinHlp, JsonIsLess> ResultMap;
 	ResultMap map;
 
 	q.reset();
 
-	natural cnt = length();
+	natural cnt = size();
 	for (natural i = 0; i < cnt; i++) {
-		ConstValue row = (*this)[i];
-		ConstValue fk = bindFn(row);
+		Value row = (*this)[i];
+		Value fk = bindFn(row);
 		ResultMap::ValueList &rows = map(fk);
 		if (rows.empty()) {
 			q.selectKey(fk);
 		}
-		Container newrow = row->copy(json.factory,1);
-
+		rows.add(ResultJoinHlp(row));
 	}
 
-	AutoArray<ConstValue> output;
+	Array output;
 
 	Result fklookup = q.exec();
 
-	while (fklookup.hasItems()) {
-		ConstValue row = fklookup.getNext();
-		ConstValue key = row["key"];
-		ConstValue value = row["value"];
+	for (auto &&row : fklookup) {
+
+		Value key = row["key"];
+		Value value = row["value"];
 		ResultMap::ListIter list = map.find(key);
-		switch (flags & 0x3) {
-		case joinFirstRow: {
-			Container k = list.getNext();
-			if (k[name] != null) continue;
-			k.set("name", value);
-			while (list.hasItems()) {
-				Container(list.getNext()).set(name, value);
-			}
-		}
-		break;
-		case joinLastRow: {
-			while (list.hasItems()) {
-				Container(list.getNext()).set(name, value);
-			}
-		}
-		break;
-		case joinAllRows: {
-			Container k = list.getNext();
-			Container values;
-			ConstValue curv = k[name];
-			if (curv != null) {
-				ConstValue cont = k[name];
-				values = static_cast<Container &>(cont);
-			}
-			else {
-				values = json.array();
-				k.set(name, values);
-				while (list.hasItems()) {
-					Container(list.getNext()).set(name, value);
-				}
-			}
-			values.add(value);
-		}
-		break;
+		while (list.hasItems()) {
+			const ResultJoinHlp &hlp = list.getNext();
+			hlp.addResult(value);
 		}
 	}
 
-	if (flags & joinMissingRows) {
-		for (auto iter = map.getFwIter(); iter.hasItems();) {
-			output.add(iter.getNext().value);
-		}
-	} else {
-		for (auto iter = map.getFwIter(); iter.hasItems();) {
-			const ResultMap::KeyValue &kv = iter.getNext();
-			if (kv.value[name] != null) {
-				output.add(kv.value);
+	for (auto &&row : map.getFwIter()) {
+
+		if ((flags & joinMissingRows) && row.value.joinRows.empty()) {
+			output.add(row.value.baseObject);
+		} else if (!row.value.joinRows.empty()) {
+
+			switch (flags & 0x3) {
+			case joinFirstRow: output.add(Object(row.value.baseObject)
+					(name,row.value.joinRows[0]));
+					break;
+			case joinLastRow: output.add(Object(row.value.baseObject)
+					(name,row.value.joinRows.tail(1)[0]));
+					break;
+			case joinAllRows: output.add(Object(row.value.baseObject)
+					(name,Value(StringRefT<Value>(row.value.joinRows))));
+					break;
+			default:
+				//skip row
+				break;
 			}
+
 		}
 
 	}
-	JSON::ConstValue newrows = json.factory->newValue(ConstStringT<ConstValue>(output));
-	return Result(json,json("rows",newrows));
+
+	return Result(Object("rows",output));
 }
 
 

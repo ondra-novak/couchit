@@ -32,6 +32,19 @@ protected:
 
 };
 
+class DocumentHasNoID: public Exception {
+public:
+	LIGHTSPEED_EXCEPTIONFINAL;
+
+	DocumentHasNoID(const ProgramLocation &location, Value document):Exception(location),document(document) {}
+	Value getDocument() const {return document;}
+protected:
+	Value document;
+
+	virtual void message(ExceptionMsg &msg) const;
+
+};
+
 
 class DocumentNotEditedException: public Exception {
 public:
@@ -54,8 +67,8 @@ public:
 class UpdateException: public Exception{
 public:
 	struct ErrorItem {
-		ConstStrA errorType;
-		ConstStrA reason;
+		String errorType;
+		String reason;
 		Value document;
 		Value errorDetails;
 		bool isConflict() const;

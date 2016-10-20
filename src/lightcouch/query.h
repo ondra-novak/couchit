@@ -390,7 +390,16 @@ public:
 	 *
 	 * @note can be combined with ether joinFirstRow or joinLastRow or joinAllRows
 	 */
+
+
 	static const natural joinMissingRows= 4;
+
+
+	///Exclusive join
+	/** From original result removes all rows which exists on dependant result, regardless on how many are there.
+	 * This flags automatically turn on joinMissingRows
+	 */
+	static const natural joinExclude = 3 | joinMissingRows;
 
 
 	///Join other view with result
@@ -515,6 +524,10 @@ public:
 	 */
 	template<typename MergeFn>
 	Result merge(const Result &other, MergeFn mergeFn) const;
+
+
+	using Value::begin;
+	using Value::end;
 
 protected:
 

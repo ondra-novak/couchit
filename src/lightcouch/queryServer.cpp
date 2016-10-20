@@ -261,7 +261,7 @@ Value QueryServer::commandReReduce(const Value& req) {
 	valueBuffer.clear();
 
 	for(auto &&item : values) {
-		valueBuffer.add(item);
+		valueBuffer.add(AbstractViewBase::ReducedRow(item));
 	}
 
 	for (auto &&val: fnlist) {
@@ -354,7 +354,7 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 
 		Value compiled = createCompiledFnRef(*fnptr);
 		if (inmap) compiled = Object("map", compiled);
-		out.set(itemname, compiled);
+		out.set(StringRef(itemname), compiled);
 		return false;
 	});
 	return out;
@@ -363,31 +363,29 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 
 
 Value QueryServer::commandDDoc(const Value& req, const PInOutStream& stream) {
-	ConstStrA docid = req[1].getStringA();
+	StringRef docid = req[1].getString();
 	if (docid == "new") {
 		//cache new document
 
-		if (ddcache == null) ddcache = json.object();
-
-		docid = req[2].getStringA();
+		StringRef docid = req[2].getString();
 		Value ddoc = req[3];
 
 		Value compiledDDoc = compileDesignDocument(ddoc);
 		ddcache.set(docid, compiledDDoc);
-		return JSON::getConstant(JSON::constTrue);;
+		return true;
 	} else {
 		Value doc = ddcache[docid];
-		if (doc == null)
-			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("The document '")+docid+ConstStrA("' is not cached at the query server")));
+		if (!doc.defined())
+			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("The document '")+ConstStrA(docid)+ConstStrA("' is not cached at the query server")));
 		Value fn = doc;
 		Value path = req[2];
-		for (natural i = 0, cnt = path.length(); i < cnt; i++) {
-			fn = fn[path[i].getStringA()];
-			if (fn == null)
-				throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Path not found'")+json.factory->toString(*path)+ConstStrA("'")));
+		for (natural i = 0, cnt = path.size(); i < cnt; i++) {
+			fn = fn[path[i].getString()];
+			if (!fn.defined())
+				throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Path not found'")+ConstStrA(StringRef(path.toString()))+ConstStrA("'")));
 		}
 		Value arguments = req[3];
-		DDocCommand cmd = ddocCommands[path[0].getStringA()];
+		DDocCommand cmd = ddocCommands[StringRef(path[0].getString())];
 		Value resp;
 		switch(cmd){
 			case ddcmdShows: resp = commandShow(fn,arguments);break;
@@ -401,9 +399,9 @@ Value QueryServer::commandDDoc(const Value& req, const PInOutStream& stream) {
 }
 
 Value QueryServer::commandShow(const Value& fn, const Value& args) {
-	AbstractShowBase &showFn = fn->getIfc<FnCallValue<AbstractShowBase> >().getFunction();
+	AbstractShowBase &showFn = dynamic_cast<const FnCallValue<AbstractShowBase> &>((*fn.getHandle())).getFunction();
 	Value resp = showFn.run(Document(args[0]), args[1]);
-	return json << "resp" << resp;
+	return {"resp",resp};
 }
 
 Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutStream& stream) {
@@ -412,64 +410,67 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 	public:
 		SeqFileInput requests;
 		SeqFileOutput responses;
-		Json &json;
-		ListCtx(const PInOutStream &stream, Json &json, Value viewHeader)
-			: requests(PInOutStream(stream)), responses(PInOutStream(stream)), json(json)
-			,headerObj(json.object())
+		ListCtx(const PInOutStream &stream, Value viewHeader)
+			: requests(PInOutStream(stream)), responses(PInOutStream(stream))
 			,viewHeader(viewHeader)
-			,eof(false) {
-			chunks = json.array();
+			,eof(false),headerSent(false) {
 		}
 		virtual Value getRow() {
 			if (eof) return null;
-			Container resp;
-			if (headerObj != null) {
-				resp = json << "start" << chunks << headerObj;
-				headerObj = null;
+			Value resp;
+			if (!headerSent) {
+				if (!headerObj.defined()) headerObj = json::object;
+				resp = { "start" ,chunks ,headerObj};
+				headerSent = true;
 			} else {
-				resp = json << "chunks" << chunks;
+				resp = {"chunks" ,chunks};
 			}
-			json.factory->toStream(*resp,responses);
+			resp.serialize([&](char c){responses.write(c);});
 			responses.write('\n');
 			chunks.clear();
-			JSON::Value req = json.factory->fromStream(requests);
-			if (req[0].getStringA() == "list_row") {
+			Value req = Value::parse([&](){return requests.getNext();});
+			if (req[0].getString() == "list_row") {
 				return req[1];
-			} else if (req[0].getStringA() == "list_end") {
+			} else if (req[0].getString() == "list_end") {
 				eof = true;
 				return null;
 			} else {
-				throw QueryServerError(THISLOCATION,"protocol_error",StringA(ConstStrA("Expects list_row or list_end, got:")+req[0].getStringA()));
+				throw QueryServerError(THISLOCATION,"protocol_error",StringA(ConstStrA("Expects list_row or list_end, got:")+req[0].getString()));
 			}
 		}
 
 		Value finish() {
-			return json << "end" << chunks;
+			//skip rows if we did not processed them yet
+			while (!eof) {
+				getRow();
+			}
+			return {"end",chunks};
 		}
 
-		virtual void send(ConstStrA text) {
-			chunks.add(json(text));
+		virtual void send(StringRef text) {
+			chunks.add(text);
 		}
 		virtual void send(Value jsonValue) {
-			chunks.add(json(json.factory->toString(*jsonValue)));
+			chunks.add(jsonValue.stringify());
 		}
 		virtual Value getViewHeader() const {
 			return viewHeader;
 		}
 		virtual void start(Value headerObj) {
-			if (this->headerObj != null) this->headerObj.load(headerObj);
+			this->headerObj = headerObj;
 		}
 
 	protected:
-		Container chunks;
-		Container headerObj;
+		Array chunks;
+		Value headerObj;
 		Value viewHeader;
 		bool eof;
+		bool headerSent;
 	};
 
-	AbstractListBase &listFn = fn->getIfc<FnCallValue<AbstractListBase> >().getFunction();
+	AbstractListBase &listFn = dynamic_cast<const FnCallValue<AbstractListBase> &>(*fn.getHandle()).getFunction();
 
-	ListCtx listCtx(stream,json,args[0]);
+	ListCtx listCtx(stream,args[0]);
 	listFn.run(listCtx,args[1]);
 	return listCtx.finish();
 
@@ -477,20 +478,20 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 }
 
 Value QueryServer::commandUpdate(const Value& fn, const Value& args) {
-	AbstractUpdateFnBase &updateFn = fn->getIfc<FnCallValue<AbstractUpdateFnBase> >().getFunction();
+	AbstractUpdateFnBase &updateFn = dynamic_cast<const FnCallValue<AbstractUpdateFnBase> &>(*fn.getHandle()).getFunction();
 	Document doc(args[0]);
 	Value response = updateFn.run(doc, args[1]);
 	if (doc.dirty()) {
-		return json << "up" << doc.getEditing() << response;
+		return {"up" ,doc,response};
 	} else {
-		return json << "up" << null << response;
+		return {"up" ,nullptr ,response};
 	}
 
 }
 
 Value QueryServer::commandView(const Value& fn,
 		const Value& args) {
-	AbstractViewBase &mapDocFn = fn->getIfc<FnCallValue<AbstractViewBase> >().getFunction();
+	AbstractViewBase &mapDocFn = dynamic_cast<const FnCallValue<AbstractViewBase> &>(*fn.getHandle()).getFunction();
 
 	class FakeEmit: public IEmitFn {
 	public:
@@ -508,57 +509,52 @@ Value QueryServer::commandView(const Value& fn,
 	};
 
 	Value docs= args[0];
-	Json::Array results = json.array();
-	docs->enumEntries(JSON::IEntryEnum::lambda([&](const JSON::INode *doc, ConstStrA, natural){
+	Array results;
+	docs.forEach([&](const Value &v){
 		FakeEmit emit;
-		mapDocFn.map(Document(doc), emit);
-		results << emit.result;
-		return false;
-	}));
+		mapDocFn.map(Document(v), emit);
+		results.add(emit.result);
+		return true;
+	});
 
-	return json << true << results;
+	return {true,results};
 }
 
 Value QueryServer::commandFilter(const Value& fn, const Value& args) {
-	AbstractFilterBase &filterFn = fn->getIfc<FnCallValue<AbstractFilterBase> >().getFunction();
+	AbstractFilterBase &filterFn = dynamic_cast<const FnCallValue<AbstractFilterBase> &>(*fn.getHandle()).getFunction();
 
 	Value docs= args[0];
-	Json::Array results = json.array();
-	docs->enumEntries(JSON::IEntryEnum::lambda([&](const JSON::INode *doc, ConstStrA, natural){
-		results << filterFn.run(Document(doc), args[1]);
-		return false;
-	}));
+	Array results;
+	docs.forEach([&](const Value &doc) {
+		results.add(filterFn.run(Document(doc), args[1]));
+		return true;
+	});
 
-	return json << true << results;
+	return {true,results};
 }
 
 void QueryServer::regView(StringA viewName, AbstractViewBase* impl) {
-	impl->setJson(json);
 	views.insert(StrKey(viewName),impl);
 }
 
 void QueryServer::regList(StringA listName, AbstractListBase* impl) {
-	impl->setJson(json);
 	lists.insert(StrKey(listName),impl);
 }
 
 void QueryServer::regShow(StringA showName, AbstractShowBase* impl) {
-	impl->setJson(json);
 	shows.insert(StrKey(showName),impl);
 }
 
 void QueryServer::regUpdateFn(StringA updateName, AbstractUpdateFnBase* impl) {
-	impl->setJson(json);
 	updates.insert(StrKey(updateName),impl);
 }
 
 void QueryServer::regFilter(StringA filterName, AbstractFilterBase* impl) {
-	impl->setJson(json);
 	filters.insert(StrKey(filterName),impl);
 }
 
 
-Value QueryServer::createDesignDocument(Value container, ConstStrA fnName, ConstStrA &suffix) {
+Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, ConstStrA &suffix) {
 	natural pos = fnName.find('/');
 	ConstStrA docName;
 
@@ -570,22 +566,24 @@ Value QueryServer::createDesignDocument(Value container, ConstStrA fnName, Const
 		suffix = fnName.offset(pos+1);
 	}
 
-
-	Value doc = container[docName];
-	if (doc == null) {
-		doc = json("_id",StringA(ConstStrA("_design/")+docName))
-				("language", qserverName);
-
-		container.set(docName,doc);
+	StringRef strDocName(docName);
+	Value doc = container[strDocName];
+	if (!doc.defined()) {
+		Object obj;
+		obj("_id",Value(String("_design/")+String(strDocName)))
+			("language",qserverName);
+		doc = obj;
+		container.set(strDocName,doc);
 	}
+
 	return doc;
 
 }
 
-Value createVersionedRef(Json &json, ConstStrA name, natural ver) {
+Value createVersionedRef(ConstStrA name, natural ver) {
 	TextFormatBuff<char, SmallAlloc<256 >> fmt;
 	fmt("%1@%2") << name << ver;
-	return json(ConstStrA(fmt.write()));
+	return Value(StringRef(fmt.write()));
 }
 
 Value QueryServer::generateDesignDocuments() {
