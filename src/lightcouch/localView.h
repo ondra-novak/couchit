@@ -39,7 +39,6 @@ public:
 	virtual ~LocalView();
 
 
-	class Query;
 
 
 	///Update document
@@ -94,30 +93,21 @@ public:
 	Value getDocument(const StringRef &docId) const;
 
 
-	///Postprocess function
-	/**
-	 * @param Json json object
-	 * @param Value arguments from query
-	 * @param Value result from query
-	 * @return Modified result
-	 *
-	 */
-	typedef std::function<Value(Value , Value )> PostProcessFn;
+	typedef View::Postprocessing PostProcessFn;
 
 	///Query object which can ask LocalView
 	/** You can create Query using createQuery() function.
 	 *
 	 * Query inherits QueryBase, so you can use same functions to ask local views
 	 */
-	class Query: public QueryBase {
+	class Queryable: public IQueryableObject  {
 	public:
-		Query(const LocalView &lview,  natural viewFlags, PostProcessFn ppfn);
+		Queryable(const LocalView &lview);
 
-		virtual Result exec() const override;
+		virtual Value executeQuery(const QueryRequest &r);
 
 	protected:
 		const LocalView &lview;
-		PostProcessFn ppfn;
 	};
 
 	///Creates Query object to ask LocalView
@@ -248,6 +238,7 @@ protected:
 	///Current document being currently processed
 	Value curDoc;
 
+	Queryable queryable;
 
 
 

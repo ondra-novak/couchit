@@ -61,6 +61,7 @@ CouchDB::CouchDB(const Config& cfg)
 	,cache(cfg.cache)
 	,uidGen(cfg.uidgen == null?DefaultUIDGen::getInstance():*cfg.uidgen)
 	,httpConfig(cfg),http(httpConfig)
+	,queryable(*this)
 {
 	if (!cfg.databaseName.empty()) use(cfg.databaseName);
 }
@@ -298,7 +299,7 @@ enum ListenExceptionStop {listenExceptionStop};
 
 
 Query CouchDB::createQuery(const View &view) {
-	return Query(*this, view);
+	return Query(view, queryable);
 }
 
 Changeset CouchDB::createChangeset() {
@@ -965,6 +966,14 @@ Download CouchDB::downloadLatestAttachment(const StringRef &docId, const StringR
 	urlfmt("%1/%2/%3/%4") << baseUrl << database << &docIdEnc << &attNameEnc;
 
 	return downloadAttachmentCont(http,urlline,etag,lock);
+}
+
+
+CouchDB::Queryable::Queryable(CouchDB& owner):owner(owner) {
+}
+
+Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
+	return Value();
 }
 
 

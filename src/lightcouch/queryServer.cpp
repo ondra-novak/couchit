@@ -567,13 +567,16 @@ Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, Con
 	}
 
 	StringRef strDocName(docName);
+	//pick named object
 	Value doc = container[strDocName];
 	if (!doc.defined()) {
 		Object obj;
 		obj("_id",Value(String("_design/")+String(strDocName)))
-			("language",qserverName);
+			("language",StringRef(qserverName));
 		doc = obj;
 		container.set(strDocName,doc);
+		///pick name object
+		doc = container[strDocName];
 	}
 
 	return doc;
@@ -587,62 +590,75 @@ Value createVersionedRef(ConstStrA name, natural ver) {
 }
 
 Value QueryServer::generateDesignDocuments() {
-	Value ddocs = json.object();
+	Object ddocs;
 
 
 	for(RegView::Iterator iter = views.getFwIter(); iter.hasItems();) {
 		const RegView::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
-		Json::Object ddoc = json.object(createDesignDocument(ddocs,kv.key, itemName));
-		Json::Object view = (ddoc/"views"/itemName);
-		view("map",createVersionedRef(json,kv.key,kv.value->version()));
-		switch (kv.value->reduceMode()) {
-		case AbstractViewBase::rmNone:break;
-		case AbstractViewBase::rmFunction:
-			view("reduce",kv.key);break;
-		case AbstractViewBase::rmSum:
-			view("reduce","_sum");break;
-		case AbstractViewBase::rmCount:
-			view("reduce","_count");break;
-		case AbstractViewBase::rmStats:
-			view("reduce","_stats");break;
+		Value ddoc = createDesignDocument(ddocs,kv.key, itemName);
+		Object ddocobj(ddoc);
+		{
+			auto sub1 = ddocobj.object("views");
+			auto view = sub1.object(StringRef(itemName));
+			view("map",createVersionedRef(kv.key,kv.value->version()));
+			switch (kv.value->reduceMode()) {
+			case AbstractViewBase::rmNone:break;
+			case AbstractViewBase::rmFunction:
+				view("reduce",StringRef(kv.key));break;
+			case AbstractViewBase::rmSum:
+				view("reduce","_sum");break;
+			case AbstractViewBase::rmCount:
+				view("reduce","_count");break;
+			case AbstractViewBase::rmStats:
+				view("reduce","_stats");break;
+			}
 		}
+		ddocs.set(StringRef(ddoc.getKey()), ddocobj);
 	}
 
 	for (RegListFn::Iterator iter = lists.getFwIter(); iter.hasItems();) {
 		const RegListFn::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
-		Json::Object ddoc = json.object(createDesignDocument(ddocs,kv.key,itemName));
-		(ddoc/"lists")(itemName, createVersionedRef(json,kv.key,kv.value->version()));
+		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
+		ddocs.set(StringRef(ddoc.getKey()),
+				Object(ddoc).object("lists")
+						(StringRef(itemName), createVersionedRef(kv.key,kv.value->version())));
 	}
 
 	for (RegShowFn::Iterator iter = shows.getFwIter(); iter.hasItems();) {
 		const RegShowFn::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
-		Json::Object ddoc = json.object(createDesignDocument(ddocs,kv.key,itemName));
-		(ddoc/"shows")(itemName, createVersionedRef(json,kv.key,kv.value->version()));
+		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
+		ddocs.set(StringRef(ddoc.getKey()),
+				Object(ddoc).object("shows")
+					(StringRef(itemName), createVersionedRef(kv.key,kv.value->version())));
 	}
 
 	for (RegUpdateFn::Iterator iter = updates.getFwIter(); iter.hasItems();) {
 		const RegUpdateFn::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
-		Json::Object ddoc = json.object(createDesignDocument(ddocs,kv.key,itemName));
-		(ddoc/"updates")(itemName, createVersionedRef(json,kv.key,kv.value->version()));
+		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
+		ddocs.set(StringRef(ddoc.getKey()),
+				Object(ddoc).object("updates")
+					(StringRef(itemName), createVersionedRef(kv.key,kv.value->version())));
 	}
 
 	for (RegFilterFn::Iterator iter = filters.getFwIter(); iter.hasItems();) {
 		const RegFilterFn::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
-		Json::Object ddoc = json.object(createDesignDocument(ddocs,kv.key,itemName));
-		(ddoc/"filters")(itemName, createVersionedRef(json,kv.key,kv.value->version()));
+		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
+		ddocs.set(StringRef(ddoc.getKey()),
+				Object(ddoc).object("filters")
+					(StringRef(itemName), createVersionedRef(kv.key,kv.value->version())));
 	}
 
-	Container output = json.array();
-	ddocs->forEach([&](const JSON::INode *doc, ConstStrA, natural) {
+	Value ddocv = ddocs;
+	Array output;
 
-		Json::CObject finDoc = json.object(Value(doc));
-		output.add(finDoc);
-		return false;
+	ddocv.forEach([&](const Value doc) {
+		output.add(doc);
+		return true;
 
 	});
 
@@ -655,7 +671,7 @@ void QueryServer::syncDesignDocuments(Value designDocuments, CouchDB& couch, Cou
 
 	Changeset chset = couch.createChangeset();
 
-	designDocuments->forEach([&](Value doc, ConstStrA, natural) {
+	designDocuments.forEach([&](Value doc) {
 		couch.uploadDesignDocument(doc,updateRule);
 		return false;
 	});

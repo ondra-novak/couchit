@@ -87,11 +87,12 @@ static void localView_ByName(PrintTextA &print) {
 	LocalViewByName view;
 	loadData(view);
 
-	LocalView::Query q = view.createQuery(0);
-	Result res = q.select("Kermit Byrd")
-					 .select("Owen Dillard")
-					 .select("Nicole Jordan")
-					 .exec();
+	Query q = view.createQuery(0);
+	Result res = q.keys({
+		{"Kermit Byrd"},
+		{"Owen Dillard"},
+		{"Nicole Jordan"}
+			}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		print("%1,%2,%3 ") << row.key[0].getString()
@@ -105,8 +106,8 @@ static void localView_wildcard(PrintTextA &print) {
 	LocalViewByName view;
 	loadData(view);
 
-	LocalView::Query q = view.createQuery(0);
-	Result res = q("K")(Query::wildcard).exec();
+	Query q = view.createQuery(0);
+	Result res = q.prefixString({"K"}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		print("%1,%2,%3 ") << row.key[0].getString()
@@ -121,8 +122,8 @@ static void localView_FindGroup(PrintTextA &a) {
 	LocalViewAgeByGroup view;
 	loadData(view);
 
-	LocalView::Query q = view.createQuery(0);
-	Result res = q(40)(Query::any).exec();
+	Query q = view.createQuery(0);
+	Result res = q.prefixKey(40).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1 ") << row.value.getString();
@@ -134,8 +135,8 @@ static void localView_FindRange(PrintTextA &a) {
 	LocalViewByAge view;
 	loadData(view);
 
-	LocalView::Query q = view.createQuery(0);
-	Result res = q.from(20).to(40).reverseOrder().exec();
+	Query q = view.createQuery(0);
+	Result res = q.from(20).to(40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1 ") << row.value.getString();
@@ -147,8 +148,8 @@ static void localView_couchReduce(PrintTextA &a) {
 	LocalView_age_group_height view;
 	loadData(view);
 
-	LocalView::Query q = view.createQuery(0);
-	Result res = q.group(1).exec();
+	Query q = view.createQuery(0);
+	Result res = q.groupLevel(1).exec();
 
 	while (res.hasItems()) {
 		Row row = res.getNext();

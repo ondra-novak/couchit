@@ -22,6 +22,7 @@
 #include "lightspeed/base/actions/message.h"
 
 #include "attachment.h"
+#include "iqueryable.h"
 namespace LightSpeed {
 class PoolAlloc;
 }
@@ -532,6 +533,20 @@ protected:
 	friend class ChangesSink;
 
 	Changes receiveChanges(ChangesSink &sink);
+
+	class Queryable: public IQueryableObject {
+	public:
+		Queryable(CouchDB &owner);
+
+
+		virtual Value executeQuery(const QueryRequest &r);
+
+	protected:
+		CouchDB &owner;
+
+	};
+
+	Queryable queryable;
 
 public:
 

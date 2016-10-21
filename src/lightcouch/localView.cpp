@@ -18,7 +18,7 @@
 
 namespace LightCouch {
 
-LocalView::LocalView() {
+LocalView::LocalView():queryable(*this) {
 
 }
 
@@ -70,7 +70,7 @@ void LocalView::eraseDocLk(const StringRef &docId) {
 
 void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 	LightCouch::Query q = db.createQuery(view);
-	LightCouch::Result res = q.select(Query::any).exec();
+	LightCouch::Result res = q.exec();
 
 	Exclusive _(lock);
 
@@ -200,8 +200,9 @@ Value LocalView::searchOneKey(const Value &key) const {
 	return res;
 }
 
-LocalView::Query LocalView::createQuery(natural viewFlags) const {
-	return Query(*this,viewFlags, PostProcessFn());
+Query LocalView::createQuery(natural viewFlags) const {
+	View v(StringA(),viewFlags);
+	return Query(v, queryable);
 }
 
 Value LocalView::runReduce(const Value &rows) const {
@@ -356,23 +357,6 @@ bool excludeEnd) const {
 			("total_rows",keyToValueMap.length());
 
 
-}
-LocalView::Query::Query(const LocalView& lview, natural viewFlags,
-		PostProcessFn ppfn)
-	:QueryBase(viewFlags),lview(lview),ppfn(ppfn) {
-
-}
-
-Result LocalView::Query::exec() const {
-	finishCurrent();
-	Value result;
-	if (keys == null || keys.empty()) {
-		result = lview.searchRange(startkey,endkey, groupLevel, descent, offset, maxlimit,offset_doc,(viewFlags & View::exludeEnd) != 0);
-	} else {
-		result = lview.searchKeys(keys,groupLevel);
-	}
-	if (ppfn) result = ppfn( args, result);
-	return Result(result);
 }
 
 

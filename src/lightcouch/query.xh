@@ -1,110 +1,254 @@
-#pragma once
+/*
+ * query.h
+ *
+ *  Created on: 12. 3. 2016
+ *      Author: ondra
+ */
 
-#include "iqueryable.h"
+#ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_QUERY_H_
+#define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_QUERY_H_
+#include <lightspeed/base/text/textOut.h>
+#include "lightspeed/base/containers/constStr.h"
+#include "lightspeed/base/containers/autoArray.h"
+#include "lightspeed/base/memory/smallAlloc.h"
+#include "lightspeed/base/containers/string.h"
+
+#include "view.h"
+
+
 
 namespace LightCouch {
 
+class CouchDB;
+class View;
+class Result;
 
-class Query {
+using namespace LightSpeed;
+
+
+
+/// Query
+/**
+ * Select multiple keys
+ *
+ * @code
+ * 	 Query q(...);
+ * 	 q.select("aaa")(10);
+ * 	 q.select("bbb")(13);
+ * 	 q.exec();
+ * @endcode
+ *
+ * Select range of subkeys
+ *
+ * @code
+ *   q.select("aaa").all()  //select all documents starting with key "aaa"
+ *   q.exec();
+ * @endcode
+ *
+ * Select range of keys with prefix
+ *
+ * @code
+ *
+ *   q.select("aaa").prefix(); //select all documents with key that starts with "aaa"
+ *   q.exec();
+ *
+ * @endcode
+ *
+ * Select a range
+ *
+ * @code
+ *
+ *   q.from("aaa")(10).to("aaa")(40);
+ *   q.exec();
+ * @endcode
+ */
+
+class QueryBase {
 public:
 
-	Query(const View &view, const IQueryableObject &qau);
 
 
-	template<typename ... Args>
+	QueryBase(natural viewFlags);
+	QueryBase(const QueryBase &other);
+	virtual ~QueryBase();
 
-	///Select single key
-	/**
-	 * @param v single key to select. You cannot call this function by multiple
-	 * times to achieve multiple keys search. Each call deletes previous key
-	 */
-	Query &key(const Value &v);
-	///Select in list of keys
-	/**
-	 * @param v The argument MUST be array
-	 */
-	Query &keys(const Value &v);
-	///Define range search lower bound side of the range
-	/**
-	 * @param v single key defining lower bound (from < to)
-	 */
-	Query &from(const Value &v);
-	///Define range search upper bound side of the range
-	/**
-	 * @param v single key defining upper bound (from < to)
-	 */
-	Query &to(const Value &v);
-	///Define range search lower bound side of the range
-	/**
-	 * @param v single key defining lower bound (from < to)
-	 * @param docId specifies starting document by its id in case that lowest key
-	 *  returns multiple documents. T
-	 */
-	Query &from(const Value &v, const String &docId);
-	///Define range search upper bound side of the range
-	/**
-	 * @param v single key defining upper bound (from < to)
-	 * @param docId specifies ending document by its id in case that highest key
-	 *  returns multiple documents. T
-	 */
-	Query &to(const Value &v, const String &docId);
-	///Define range search upper bound side of the range
-	/**
-	 * @param v single key defining upper bound (from < to). Upper bound
-	 * is excluded
-	 * @note function works well if ordering is not reserved. Otherwise
-	 * it will include lower bound
-	 */
-	Query &to_exclusive(const Value &v);
-	///Defines ranged search as prefix
-	/** The function returns all values starting with specified key. It
-	 * is usefull for multicollumn keys.
-	 * @param v Must be multicollumn key, so you have to put it into an array.
-	 *  You need to put there less columns then query returns as keys
-	 */
-	Query &prefixKey(const Value &v);
-	///Defines ranged search as string prefix
-	/**
-	 * @param v the argument must be single string or an array, where the
-	 * latest item is string. The function use the string as prefix and
-	 * will search for all keys, that are staring by specified prefix at given
-	 * position
-	 */
-	Query &prefixString(const Value &v);
-	///Change offset (default is 0)
-	Query &offset(natural offset);
-	///Change limit (default is unlimited)
-	Query &limit(natural limit);
-	///Append argument to postprocessing
-	Query &arg(const StringRef &argname, const Value *value);
-	///Reverse order
-	/** The view can be declared with already reversed order. In this
-	 * case the function reverses already reversed order which results to
-	 * original order
-	 */
-	Query &reversedOrder();
-	///Disables reduce
-	Query &noreduce();
-	///enable (force) reduce (returns single row)
-	Query &reduceAll();
-	///reduce per key (duplicated keys will be reduced)
-	Query &group();
-	///reduce per if duplicated keys up to count of columns (levels)
-	Query &groupLevel(natural level);
-	///Disables default ordering
-	/** Result may be unordered */
-	Query &nosort();
 
-	Value exec();
+
+	///Resets query object state. Deletes prepared query
+	/**
+	 * @note You @b have to call reset() everytime you need to build new query after exec(). This is not done automatically.
+	 *
+	 * @return chaining reference
+	 */
+	virtual QueryBase &reset();
+
+
+	///select one or more keys defined as json value
+	/** You can call this function multiple times to specify (and return)
+	 * multiple keys and values
+	 *
+	 * @param key
+	 * @return reference to object query to create chain
+	 *
+	 * @note function removes prepared range, because select and range
+	 * is mutually exclusive
+	 */
+	QueryBase &selectKey(Value key);
+	///define range search
+	QueryBase &fromKey(Value key);
+	///define range search
+	QueryBase &toKey(Value key);
+
+	QueryBase &selectSubrange(Value key, bool substring)
+
+	///Apply reduce on the result
+	/**
+	 * @param level count of columns to left. Other columns will be reduced. Setting
+	 * level to naturalNull cause disabling this function. Function overwrites
+	 * setting specified by the view definition - just locally for this query only
+	 */
+	QueryBase &group(natural level);
+
+
+	///Maximum count of results
+	QueryBase &limit(natural limit);
+
+	///Similar to MySQL defines offset and limit
+	QueryBase &limit(natural offset, natural limit);
+
+	///Defines start position using docId and limit
+	/** This function is valid for ranged query, when start doc is specified by
+	 * its key. However, if there are multiple documents with the same key, you
+	 * need to specify exact starting position by its docId. You can also specify
+	 * count of document in the result
+	 * @param docId docId must match to starting key
+	 * @param limit count of results
+	 * @return
+	 */
+	QueryBase &limit(const StringRef & docId, natural limit);
+
+	///Update view after query executes
+	QueryBase &updateAfter();
+
+	///Do not update the view now
+	QueryBase &stale();
+
+	///Enables returning results in reverse order.
+	/**
+	 * Reverses the order of the results. However, if you order is already reversed
+	 * by the view definition, it makes reverse of reversed order, so result it original order.
+	 * Calling this function more then once causes that order is always reversed thus every
+	 * second call results to the original order
+	 *
+	 * in contrast to couchdb view API definition, you must not reverse startkey and endkey
+	 * if descending is defined. This is done by default by the function exec(). That because
+	 * object often creates ranged search silently
+	 * @return
+	 */
+	QueryBase &reverseOrder();
+
+	template<typename T>
+	QueryBase &arg(const StringRef & key, T value);
+
+	///Execute query and return the result
+	/**
+	 * @return result of query. You can pass the result to the Result object.
+	 *
+	 * @note if you need to reuse the query object, you need to call reset(), otherwise old setup can influent the next query
+	 *
+	 */
+	virtual Result exec() const = 0;
+
+
 
 
 
 protected:
-	QueryRequest request;
-	const IQueryableObject &qao;
 
+
+	mutable Value startkey, endkey;
+	mutable Array keys;
+
+	enum StaleMode {
+		smUpdate,
+		smUpdateAfter,
+		smStale
+	};
+
+	StaleMode staleMode;
+	natural groupLevel;
+	natural offset;
+	natural maxlimit;
+	bool descent;
+	StringA offset_doc;
+	bool forceArray;
+
+
+
+	typedef AutoArrayStream<char> UrlLine;
+	mutable UrlLine urlline;
+	typedef TextOut<UrlLine &, SmallAlloc<256> > UrlFormatter;
+
+
+	Object args;
+
+	natural viewFlags;
+
+	Value buildKey(ConstStringT<Value> values) const;
+	Value buildRangeKey(ConstStringT<Value> values) const;
+
+
+
+	void finishCurrent() const;;
+	static void appendCustomArg(UrlFormatter &fmt, const StringRef & key, const StringRef & value) ;
+	void appendCustomArg(UrlFormatter &fmt, const StringRef & key, const Value value ) const;
 
 };
+
+template<typename T>
+inline QueryBase& LightCouch::QueryBase::select(const T& key) {
+	finishCurrent();
+	mode = mdKeys;
+	return this->operator ()(key);
+}
+
+template<typename T>
+inline QueryBase& LightCouch::QueryBase::from(const T& key) {
+	finishCurrent();
+	mode = mdStart;
+	return this->operator ()(key);
+}
+
+template<typename T>
+inline QueryBase& LightCouch::QueryBase::to(const T& key) {
+	finishCurrent();
+	mode = mdEnd;
+	return this->operator ()(key);
+}
+
+template<typename T>
+inline QueryBase& LightCouch::QueryBase::arg(const StringRef & key, T value) {
+	args.set(key, value);
+	return *this;
+}
+
+class Query: public QueryBase {
+public:
+	Query(CouchDB &db, const View &view);
+	Query(const Query &other);
+	virtual ~Query();
+
+	virtual Result exec() const override;
+
+protected:
+	CouchDB &db;
+	View viewDefinition;
+
+	CouchDB &getDatabase() {return db;}
+	const CouchDB &getDatabase() const {return db;}
+
+};
+
 
 
 class Row: public Value {
@@ -225,7 +369,7 @@ public:
 	 *
 	 */
 	template<typename BindFn>
-	Result join(Query &q, const StringRef & name, natural flags, BindFn bindFn);
+	Result join(QueryBase &q, const StringRef & name, natural flags, BindFn bindFn);
 
 	///Sorts result
 	/** Function orders rows by compare function
@@ -327,6 +471,8 @@ protected:
 };
 
 
-
-
 }
+
+
+#endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_QUERY_H_ */
+

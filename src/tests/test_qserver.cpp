@@ -206,7 +206,7 @@ static void couchFindWildcard(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
-	Result res = q("K")(Query::isArray)(Query::wildcard).exec();
+	Result res = q.prefixString({"K"}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1,%2,%3 ") << row.key[0].getString()
@@ -221,7 +221,7 @@ static void couchFindGroup(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_age_group));
-	Result res = q(40)(Query::any).exec();
+	Result res = q.prefixKey(40).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1 ") << row.value.getString();
@@ -234,7 +234,7 @@ static void couchFindRange(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_age));
-	Result res = q.from(20).to(40).reverseOrder().exec();
+	Result res = q.from(20).to(40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1 ") << row.value.getString();
@@ -247,7 +247,7 @@ static void couchFindRangeList(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_age_list));
-	Result res = q.from(20).to(40).reverseOrder().exec();
+	Result res = q.from(20).to(40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1 ") << row.value.getString();
@@ -260,10 +260,11 @@ static void couchFindKeys(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
-	Result res = q.select("Kermit Byrd")(Query::isArray)
-					 .select("Owen Dillard")
-					 .select("Nicole Jordan")
-					 .exec();
+	Result res = q.keys({
+				{"Kermit Byrd"},
+				{"Owen Dillard"},
+				{"Nicole Jordan"}
+					}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1,%2,%3 ") << row.key[0].getString()
@@ -278,7 +279,7 @@ static void couchReduce(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(age_group_height));
-	Result res = q.group(1).exec();
+	Result res = q.groupLevel(1).exec();
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
@@ -293,7 +294,7 @@ static void couchReduce2(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(age_group_height2));
-	Result res = q.group(1).exec();
+	Result res = q.groupLevel(1).exec();
 
 	while (res.hasItems()) {
 		Row row = res.getNext();

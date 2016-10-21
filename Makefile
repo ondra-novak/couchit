@@ -3,14 +3,14 @@ ifeq "$(MAKECMDGOALS)" "runtests"
 	APPNAME:=bin/tests
 	SOURCES:=src
 	BUILDTYPE=app
-	LDOTHERLIBS:=-lpthread
+	LDOTHERLIBS:=-limmujson -lpthread
 else 
 ifeq "$(MAKECMDGOALS)" "debugtests"
 	FORCE_DEBUG:=1
 	APPNAME:=bin/tests
 	SOURCES:=src
 	BUILDTYPE=app
-	LDOTHERLIBS:=-lpthread
+	LDOTHERLIBS:=-limmujson -lpthread
 else
 	LIBNAME:=lightcouch
 	BUILDTYPE=lib
