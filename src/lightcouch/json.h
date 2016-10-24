@@ -8,9 +8,7 @@
 #ifndef LIGHTCOUCH_JSON_H_
 #define LIGHTCOUCH_JSON_H_
 
-#include <immujson/edit.h>
-#include <immujson/path.h>
-#include <immujson/string.h>
+#include <immujson/json.h>
 #include <lightspeed/base/containers/flatArray.h>
 #include <lightspeed/base/text/textOut.h>
 
@@ -81,6 +79,7 @@ public:
 	String() {}
 	String(const LightSpeed::ConstStrA &str):json::String(StringRef(str)) {}
 	String(const String &other):json::String(other) {}
+	String(const std::initializer_list<json::StringView<char> > &strlist):json::String(strlist){}
 	operator LightSpeed::ConstStrA() const {return StringRef(*this);}
 /*
 	using json::String::operator>;

@@ -136,7 +136,7 @@ static void localView_FindRange(PrintTextA &a) {
 	loadData(view);
 
 	Query q = view.createQuery(0);
-	Result res = q.from(20).to(40).reversedOrder().exec();
+	Result res = q.range(20,40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1 ") << row.value.getString();

@@ -63,19 +63,15 @@ struct QueryRequest {
 	///Define view which will be used (for non-db queries, only flags can be used)
 	View view;
 	///List of keys
-	const Array &keys;
+	Array keys;
 	///Type of search
 	QueryMode mode;
 	///offset in result
 	natural offset;
 	///count of results
 	natural limit;
-	///specifies starting document-id if lower-bound key is mapped to multiple docs
-	StringRef startDoc;
-	///specifies starting document-id if upper-bound key is mapped to multiple docs
-	StringRef endDoc;
 	///arguments passed to the postprocessing function (or server's list function)
-	const Object &ppargs;
+	Object ppargs;
 	///Specifies mode for reduce
 	ReduceMode reduceMode;
 	///for reduce mode rmGroupLevel specifies the level (otherwise ignored)
@@ -90,6 +86,32 @@ struct QueryRequest {
 	bool nosort;
 	///set true to exclude end key
 	bool exclude_end;
+
+	///Retrive startDoc and endDoc using getKey() of ranged keys
+	bool docIdFromGetKey;
+
+	QueryRequest(const View &view)
+		:view(view)
+		,mode(qmAllItems)
+		,offset(0)
+		,limit(naturalNull)
+		,reduceMode(rmDefault)
+		,groupLevel(0)
+		,reversedOrder(false)
+		,nosort(false)
+		,exclude_end(false) {}
+	void reset() {
+		mode = qmAllItems;
+		offset = 0;
+		limit = naturalNull;
+		reduceMode = rmDefault;
+		groupLevel = 0;
+		reversedOrder = false;
+		nosort = false;
+		exclude_end = false;
+		keys.clear();
+		ppargs.clear();
+	}
 };
 
 
@@ -97,7 +119,7 @@ class IQueryableObject {
 public:
 	///Executes query on queryable object
 	/** @param r request to query
-	 * @return {"docs":[ ... rows...],...}
+	 * @return {"rows":[ ... rows...],...}
 	 *
 	 * The function may return additional informations about returned rows. The result
 	 * can be passed to the object Result

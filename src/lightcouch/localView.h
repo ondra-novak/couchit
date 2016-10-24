@@ -238,7 +238,7 @@ protected:
 	///Current document being currently processed
 	Value curDoc;
 
-	Queryable queryable;
+	mutable Queryable queryable;
 
 
 

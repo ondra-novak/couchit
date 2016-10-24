@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <httpclient/httpClient.h>
+#include <lightspeed/base/containers/resourcePool.h>
 #include <lightspeed/base/streams/netio.h>
 
 #include "json.h"
@@ -23,6 +24,7 @@
 
 #include "attachment.h"
 #include "iqueryable.h"
+#include "urlBuilder.h"
 namespace LightSpeed {
 class PoolAlloc;
 }
@@ -523,10 +525,6 @@ protected:
 
 
 
-	template<typename C>
-	void reqPathToFullPath(StringRef reqPath, C &output);
-
-
 	Value jsonPUTPOST(HttpClient::Method method, const StringRef &path, Value data, Value *headers, natural flags);
 
 
@@ -546,7 +544,24 @@ protected:
 
 	};
 
+	class UrlBld: public UrlBuilder, public AbstractResource {
+	public:
+	};
+
+	typedef ResourcePtr<UrlBld> PUrlBuilder;
+	class UrlBldPool: public AbstractResourcePool {
+	public:
+		UrlBldPool();
+		virtual AbstractResource *createResource();
+		virtual const char *getResourceName() const;
+	};
+
+	PUrlBuilder getUrlBuilder(ConstStrA resourcePath);
+
+	UrlBldPool urlBldPool;
+
 	Queryable queryable;
+
 
 public:
 

@@ -171,7 +171,7 @@ static void couchFindRange(PrintTextA &a) {
 	db.use(DATABASENAME);
 
 	Query q(db.createQuery(by_age));
-	Result res = q.from(20).to(40).reversedOrder().exec();
+	Result res = q.range(20,40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
 		a("%1 ") << row.value.getString();

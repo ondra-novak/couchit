@@ -8,10 +8,11 @@ namespace LightCouch {
 class Query {
 public:
 
-	Query(const View &view, const IQueryableObject &qau);
+	Query(const View &view, IQueryableObject &qau);
 
 
-	template<typename ... Args>
+	static const natural docIdFromGetKey = 1;
+	static const natural excludeEnd = 2;
 
 	///Select single key
 	/**
@@ -24,38 +25,29 @@ public:
 	 * @param v The argument MUST be array
 	 */
 	Query &keys(const Value &v);
-	///Define range search lower bound side of the range
+
+	///Query for specified range
 	/**
-	 * @param v single key defining lower bound (from < to)
+	 * @param from define lower bound of the range. You should always specify
+	 *  the lower bound regardless on, how the View is ordered
+	 * @param to define upper bound of the range. You should always specify
+	 *  the lower bound regardless on, how the View is ordered
+	 * @param flags combination of following flags
+	 *
+	 *  * @b docIdFromGetKey Function calls getKey on both bounds to retrieve
+	 *  document-id which more precisely specifies lower and upper bound
+	 *  in situation, when there are multiple values per key. If you want
+	 *  to set these document-ids, use Value::setKey. To un-set the document-id, use
+	 *  empty string instead document-id to disable this feature for particular key.
+	 *  * @b excludeEnd exclude ending key from the result.
+	 *
+	 * @return
 	 */
-	Query &from(const Value &v);
-	///Define range search upper bound side of the range
-	/**
-	 * @param v single key defining upper bound (from < to)
-	 */
-	Query &to(const Value &v);
-	///Define range search lower bound side of the range
-	/**
-	 * @param v single key defining lower bound (from < to)
-	 * @param docId specifies starting document by its id in case that lowest key
-	 *  returns multiple documents. T
-	 */
-	Query &from(const Value &v, const String &docId);
-	///Define range search upper bound side of the range
-	/**
-	 * @param v single key defining upper bound (from < to)
-	 * @param docId specifies ending document by its id in case that highest key
-	 *  returns multiple documents. T
-	 */
-	Query &to(const Value &v, const String &docId);
-	///Define range search upper bound side of the range
-	/**
-	 * @param v single key defining upper bound (from < to). Upper bound
-	 * is excluded
-	 * @note function works well if ordering is not reserved. Otherwise
-	 * it will include lower bound
-	 */
-	Query &to_exclusive(const Value &v);
+	Query &range(const Value &from, const Value &to, natural flags = 0);
+
+	Query &range(const Value &from, const StringRef &fromDoc, const Value &to, const StringRef &toDoc, bool exclusiveEnd = false);
+
+
 	///Defines ranged search as prefix
 	/** The function returns all values starting with specified key. It
 	 * is usefull for multicollumn keys.
@@ -76,7 +68,7 @@ public:
 	///Change limit (default is unlimited)
 	Query &limit(natural limit);
 	///Append argument to postprocessing
-	Query &arg(const StringRef &argname, const Value *value);
+	Query &arg(const StringRef &argname, const 	Value &value);
 	///Reverse order
 	/** The view can be declared with already reversed order. In this
 	 * case the function reverses already reversed order which results to
@@ -95,62 +87,29 @@ public:
 	/** Result may be unordered */
 	Query &nosort();
 
+	Query &reset();
+
 	Value exec();
 
 
 
+	static const Value minKey;
+	static const Value maxKey;
+
 protected:
 	QueryRequest request;
-	const IQueryableObject &qao;
+	IQueryableObject &qao;
 
 
 };
 
-
-class Row: public Value {
+class Result: public Value {
 public:
-	///contains key
-	const Value key;
-	///contains value
-	const Value value;
-	///contains document - will be nil, if documents are not requested in the query
-	const Value doc;
-	///contains source document ID
-	const Value id;
-	///contains error information for this row
-	const Value error;
 
-	Row(const Value &jrow);
+	Result(const Value &result);
 
-	///Returns 'true' if row exists (it is not error)
-	bool exists() const {return error != null;}
-
-};
-
-enum MergeType {
-	///combine rows from both results.
-	mergeUnion,
-	///make intersection - keep only rows with matching keys in both sides
-	mergeIntersection,
-	///make symetricall difference - keep only rows which doesn't match to each other
-	mergeSymDiff,
-	///remove rows from left results matching the keys from right result
-	mergeMinus,
-};
-
-
-class Result: public Value, public IteratorBase<Value, Result> {
-public:
-	Result(Value jsonResult);
-
-	const Value &getNext();
-	const Value &peek() const;
-	bool hasItems() const;
-
-	natural getTotal() const;
-	natural getOffset() const;
-	natural getRemain() const;
-	void rewind();
+	natural getTotal() const {return total;}
+	natural getOffset() const {return offset;}
 
 	///Join operation will use only first row of the dependent result (skipping additional rows returned)
 	/** Due to nature of CouchDB's view, the first row is also minimal row in order of CouchDB's collation
@@ -190,143 +149,56 @@ public:
 	 */
 	static const natural joinExclude = 3 | joinMissingRows;
 
-
-	///Join other view with result
-	/**
-	 * CouchDB inherently doesn't support joining views. You need to use this function
-	 * to extend the result by values from the other view. Function performs extra
-	 * lookup to CouchDB and distributes values to the row through bind condition.
-	 *
-	 * @param q query object containing a view to query. Function calls reset() on the query to ensure
-	 * that query is empty and ready to use. You can use Query or LocalView::Query object as any other
-	 * object inherited from QueryBase
-	 *
-	 * @param name Name of the result. Each row contains at least two fields: "key" and "value" and results
-	 * generated by map function also contains "id". This value specifies name of the field,
-	 * where "value" part of joined result will put.
-	 *
-	 * @param flags Combination of flags: joinFirstRow, joinLastRow, joinAllRows, joinMissingRows
-	 *
-	 * @param bindFn defines bind function. See below
-
-	 * @return combined result
-	 *
-	 * Bind function has following prototype
-	 * @code
-	 * Value bindFn(const Value &row)
-	 * @endcode
-	 *
-	 * The BindFn is called for every row in the current result. It should return foreign key which is
-	 * be used to query other view. It is not required that value must be from the row. It can be
-	 * also calculated somehow or generated by mixing row data with some external data.
-	 *
-	 * The function can return null to skip the row. Otherwise returned result is used directly as key to the
-	 * query.
-	 *
-	 */
 	template<typename BindFn>
-	Result join(Query &q, const StringRef & name, natural flags, BindFn bindFn);
+	Value join(Query &q, const StringRef & name, natural flags, BindFn bindFn);
 
-	///Sorts result
-	/** Function orders rows by compare function
-	 *
-	 * @param compareRowsFunction accepts two rows and returns -1, 0, or 1
-	 * @param descending set true to reverse ordering
-	 * @return
-	 *
-	 * The compareRowsFunction has following prototype
-	 * @code
-	 * int compareRowsFunction(const Value &left, const Value &right);
-	 * @endcode
-	 *
-	 * Function should return
-	 *
-	 *  - -1 if left is less than right
-	 *  - +1 if less is greater than right
-	 *  - 0 if they are equal
-	 *
-	 * If descending is set to true, result will be reversed
-	 */
-	template<typename Fn>
-	Result sort(Fn compareRowsFunction, bool descending = false) const;
+	class Iterator: public json::ValueIterator {
+	public:
+		Iterator(const json::ValueIterator &src):json::ValueIterator(src) {}
+		Iterator(json::ValueIterator &&src):json::ValueIterator(std::move(src)) {}
+		Value operator *() const {return Value(json::ValueIterator::operator *());}
+	};
+	Iterator begin() const {return Value::begin();}
+	Iterator end() const {return Value::end();}
 
-
-	///Aggregate groups of rows
-	/**
-	 * @param compareRowsFunction function which compares rows. It accepts 2xRow and returns -1,0, or 1
-	 * @param reduceFn function which reduces rows. It accepts ConstStringT<Value> and returns Value
-	 * @param descending set true to reverse ordering
-	 * @return new result
-	 *
-	 * The compareRowsFunction has following prototype
-	 * @code
-	 * int compareRowsFunction(const Value &left, const Value &right);
-	 * @endcode
-	 *
-	 * Function should return
-	 *
-	 *  - -1 if left is less than right
-	 *  - +1 if less is greater than right
-	 *  - 0 if they are equal
-	 *
-	 * If descending is set to true, result will be reversed
-	 *
-	 * The reduceFn has following prototype
-	 * @code
-	 * Value reduceFn(const ConstStringT<Value> &rows)
-	 * @endcode
-	 *
-	 * Function should return reduced row. Function should follow format of the row to allow the row
-	 * process using Row object. It should have at least "key" and "value"
-	 */
-	template<typename CmpFn, typename ReduceFn>
-	Result group(CmpFn compareRowsFunction, ReduceFn reduceFn, bool descending = false) const;
-
-
-
-	///Merges two results into one
-	/**
-	 *
-	 * @param other other result
-	 * @param mergeFn function which accepts two rows and returns one of them.
-	 * @return merged result
-	 *
-	 * The mergeFn has following prototype
-	 * @code
-	 * Value mergeFn(const Value &left,const Value &right);
-	 * @endcode
-	 *
-	 * mergeFn can return
-	 *   - left row: left row will be put to the result and left result will advance. Note that you need
-	 *    to return directly the argument left (references are compared)
-	 *   - right row: right row will be put to the result and right result will advance. Note that you need
-	 *    to return directly the argument right (references are compared)
-	 *   - anything except null: row will be put to the result and both (left and right) results will advance
-	 *   - null: nothing will be put to the result and both (left and right) results will advance
-	 *
-	 * If the argument left is null, there is no more items in the left result.
-	 * If the argument right is null, there is no more items in the right result.
-	 * Function will never called with both arguments set to null
-	 *
-	 * @note function expect, that results are already ordered. It doesn't perform ordering. You
-	 * have to perform it before using sort()
-	 */
-	template<typename MergeFn>
-	Result merge(const Result &other, MergeFn mergeFn) const;
-
-
-	using Value::begin;
-	using Value::end;
+	bool hasItems() const {return pos < cnt;}
+	Value getNext() {return operator[](pos++);}
+	Value peek() const {return operator[](pos);}
+	void rewind() {pos = 0;}
 
 protected:
 
-	natural rdpos;
 	natural total;
 	natural offset;
-	mutable Value out;
+	natural pos;
+	natural cnt;
+
 };
 
 
 
+class Row: public Value {
+public:
+	///contains key
+	const Value key;
+	///contains value
+	const Value value;
+	///contains document - will be nil, if documents are not requested in the query
+	const Value doc;
+	///contains source document ID
+	const Value id;
+	///contains error information for this row
+	const Value error;
+
+	Row(const Value &jrow);
+
+	///Returns 'true' if row exists (it is not error)
+	bool exists() const {return error != null;}
+
+
+};
+
+
 
 }
+
