@@ -52,6 +52,7 @@ CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
 
 StringRef CouchDB::fldTimestamp("~timestamp");
 StringRef CouchDB::fldPrevRevision("~prevRev");
+natural CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
 
@@ -67,9 +68,14 @@ CouchDB::CouchDB(const Config& cfg)
 }
 
 
-
+static bool isRelativePath(const StringRef &path) {
+	return path.substr(0,7) != "http://" && path.substr(0,8) != "https://";
+}
 
 Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) {
+
+	if (isRelativePath(path)) return requestGET(*getUrlBuilder(path),headers,flags);
+
 	if (headers != nullptr && headers->type() != json::object) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
@@ -160,6 +166,9 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
 }
 
 Value CouchDB::requestDELETE(const StringRef &path, Value *headers, natural flags) {
+
+	if (isRelativePath(path)) return requestDELETE(*getUrlBuilder(path),headers,flags);
+
 	if (headers != nullptr && headers->type() != json::object) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
 	}
@@ -201,6 +210,8 @@ Value CouchDB::requestDELETE(const StringRef &path, Value *headers, natural flag
 }
 
 Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StringRef &path, Value data, Value *headers, natural flags) {
+
+	if (isRelativePath(path)) return jsonPUTPOST(method,*getUrlBuilder(path),data,headers,flags);
 
 	if (headers != nullptr && headers->type() != json::object) {
 		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
@@ -723,9 +734,9 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		if (flt.flags & Filter::reverseOrder) {
 			url->add("descending","true");
 		}
-		for (auto &&itm: flt.args.getFwIter()) {
-			if (!sink.filterArgs[StringRef(itm.key)].defined()) {
-				url->add(itm.key,itm.value);
+		for (auto &&itm: flt.args) {
+			if (!sink.filterArgs[itm.getKey()].defined()) {
+				url->add(StringRef(itm.getKey()),StringRef(itm.toString()));
 			}
 		}
 	}
@@ -842,11 +853,11 @@ protected:
 };
 
 
-static Download downloadAttachmentCont(HttpClient &http, UrlBuilder &urlline, const StringRef &etag, FastLock &lock) {
+Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StringRef &etag) {
 
 	lock.lock();
 	try {
-		http.open(HttpClient::mGET, urlline.getArray());
+		http.open(HttpClient::mGET, *urlline);
 		if (!etag.empty()) http.setHeader(http.fldIfNoneMatch,etag);
 		SeqFileInput in = http.send();
 
@@ -862,7 +873,7 @@ static Download downloadAttachmentCont(HttpClient &http, UrlBuilder &urlline, co
 
 			}
 			http.close();
-			throw RequestError(THISLOCATION,urlline.getArray(),http.getStatus(), http.getStatusMessage(), errorVal);
+			throw RequestError(THISLOCATION,ConstStrA(*urlline),http.getStatus(), http.getStatusMessage(), errorVal);
 		} else {
 			HttpClient::HeaderValue ctx = http.getHeader(HttpClient::fldContentType);
 			HttpClient::HeaderValue len = http.getHeader(HttpClient::fldContentLength);
@@ -880,29 +891,48 @@ static Download downloadAttachmentCont(HttpClient &http, UrlBuilder &urlline, co
 
 }
 
-Download CouchDB::downloadAttachment(const Value &document, const StringRef &attachmentName,  const StringRef &etag) {
+Download CouchDB::downloadAttachment(const Document &document, const StringRef &attachmentName,  const StringRef &etag) {
 
-	UrlLine urlline;
 	StringRef documentId = document["_id"].getString();
 	StringRef revId = document["_rev"].getString();
-	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
-	ConvertReadIter<UrlEncodeConvert,StringRef::Iterator> docIdEnc(documentId.getFwIter())
-					,attNameEnc(attachmentName.getFwIter())
-					,revIdEnc(revId.getFwIter());
-	urlfmt("%1/%2/%3/%4?rev=%5") << baseUrl << database << &docIdEnc << &attNameEnc << &revIdEnc;
 
-	return downloadAttachmentCont(http,urlline,etag,lock);
+	if (revId.empty()) return downloadAttachment(documentId, attachmentName, etag);
+
+	PUrlBuilder url = getUrlBuilder("");
+	url->add(documentId);
+	url->add(attachmentName);
+	url->add("_rev",revId);
+
+	return downloadAttachmentCont(url,etag);
+
 
 }
 
-Download CouchDB::downloadLatestAttachment(const StringRef &docId, const StringRef &attachmentName,  const StringRef &etag) {
-	UrlLine urlline;
-	TextOut<UrlLine &, SmallAlloc<256> > urlfmt(urlline);
-	ConvertReadIter<UrlEncodeConvert,StringRef::Iterator> docIdEnc(docId.getFwIter())
-					,attNameEnc(attachmentName.getFwIter());
-	urlfmt("%1/%2/%3/%4") << baseUrl << database << &docIdEnc << &attNameEnc;
+Download CouchDB::downloadAttachment(const Value &document, const StringRef &attachmentName,  const StringRef &etag) {
 
-	return downloadAttachmentCont(http,urlline,etag,lock);
+	if (document.type() == json::string) return downloadAttachment((StringRef)document.getString(), attachmentName, etag);
+
+	StringRef documentId = document["_id"].getString();
+	StringRef revId = document["_rev"].getString();
+
+	if (revId.empty()) return downloadAttachment(documentId, attachmentName, etag);
+
+	PUrlBuilder url = getUrlBuilder("");
+	url->add(documentId);
+	url->add(attachmentName);
+	url->add("_rev",revId);
+
+	return downloadAttachmentCont(url,etag);
+
+}
+
+Download CouchDB::downloadAttachment(const StringRef &docId, const StringRef &attachmentName,  const StringRef &etag) {
+
+	PUrlBuilder url = getUrlBuilder("");
+	url->add(docId);
+	url->add(attachmentName);
+
+	return downloadAttachmentCont(url,etag);
 }
 
 
@@ -910,7 +940,121 @@ CouchDB::Queryable::Queryable(CouchDB& owner):owner(owner) {
 }
 
 Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
-	return Value();
+
+	PUrlBuilder url = owner.getUrlBuilder(r.view.viewPath);
+
+	ConstStrA startKey = "startkey";
+	ConstStrA endKey = "endkey";
+	ConstStrA startKeyDocId = "startkey_docid";
+	ConstStrA endKeyDocId = "endkey_docid";
+
+	bool desc = (r.view.flags & View::reverseOrder) != 0;
+	if (r.reversedOrder) desc = !desc;
+	if (desc) url->add("descending","true");
+	Value postBody;
+	if (desc) {
+		std::swap(startKey,endKey);
+		std::swap(startKeyDocId,endKeyDocId);
+	}
+
+	switch (r.mode) {
+		case qmAllItems: break;
+		case qmKeyList: if (r.keys.size() == 1) {
+							url->addJson("key",r.keys[1]);
+						}else if (r.keys.size() > 1){
+							String ser = Value(r.keys).stringify();
+							if (ser.length() > maxSerializedKeysSizeForGETRequest) {
+								postBody = r.keys;
+							} else {
+								url->add("keys",ser);
+							}
+						}
+						break;
+		case qmKeyRange: {
+							Value start = r.keys[0];
+							Value end = r.keys[1];
+							url->addJson(startKey,start);
+							url->addJson(endKey,end);
+							if (r.docIdFromGetKey) {
+								StringRef startDocId = start.getKey();
+								if (!startDocId.empty()) {
+									url->add(startKeyDocId, startDocId);
+								}
+								StringRef endDocId = end.getKey();
+								if (!endDocId.empty()) {
+									url->add(endKeyDocId, endDocId);
+								}
+							}
+						}
+						break;
+		case qmKeyPrefix:
+					url->addJson(startKey,Value(r.keys[0]).addToArray(Query::minKey));
+					url->addJson(endKey,Value(r.keys[0]).addToArray(Query::maxKey));
+				break;
+		case qmStringPrefix:
+				url->addJson(startKey,Value(r.keys[0]).addSuffix(Query::minString));
+				url->addJson(endKey,Value(r.keys[0]).addSuffix(Query::maxString));
+				break;
+		}
+
+
+	switch (r.reduceMode) {
+	case rmDefault:
+		if ((r.view.flags & View::reduce) == 0) url->add("reduce","false");
+		else {
+			natural level = (r.view.flags & View::groupLevelMask) / View::groupLevel;
+			if (r.mode == qmKeyList) {
+				url->add("group",level?"true":"false");
+			} else {
+				url->add("groupLevel",ToString<natural>(level));
+			}
+		}
+			break;
+	case rmGroup:
+		url->add("group","true");
+		break;
+	case rmGroupLevel:
+		url->add("groupLevel",ToString<natural>(r.groupLevel));
+		break;
+	case rmNoReduce:
+		url->add("reduce","false");
+		break;
+	case rmReduce:
+		break;
+	}
+
+	if (r.offset) url->add("skip",ToString<natural>(r.offset));
+	if (r.limit != naturalNull) url->add("limit",ToString<natural>(r.limit));
+	if (r.nosort) url->add("sorted","false");
+	if (r.view.flags & View::includeDocs) {
+		url->add("include_docs","true");
+		if (r.view.flags & View::conflicts) url->add("conflicts","true");
+		if (r.view.flags & View::attachments) url->add("attachments","true");
+		if (r.view.flags & View::attEncodingInfo) url->add("att_encoding_info","true");
+	}
+	if (r.exclude_end) url->add("inclusive_end","false");
+	if (r.view.flags & View::updateSeq) url->add("update_seq","false");
+	if (r.view.flags & View::updateAfter) url->add("stale","update_after");
+	else if (r.view.flags & View::stale) url->add("stale","ok");
+
+
+	if (r.view.args.type() == json::object) {
+		for(auto &&item: r.view.args) {
+			url->add(StringRef(item.getKey()),StringRef(item.toString()));
+		}
+	} else {
+		url->add("args",StringRef(r.view.args.toString()));
+	}
+
+	Value result;
+	if (postBody.defined()) {
+		result = owner.requestGET(*url,0,0);
+	} else {
+		result = owner.requestPOST(*url,postBody,0,0);
+	}
+	if (r.view.postprocess) result = r.view.postprocess(&owner, r.ppargs, result);
+	return result;
+
 }
 
 

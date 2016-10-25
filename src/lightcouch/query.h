@@ -95,6 +95,8 @@ public:
 
 	static const Value minKey;
 	static const Value maxKey;
+	static const String maxString;
+	static const String minString;
 
 protected:
 	QueryRequest request;

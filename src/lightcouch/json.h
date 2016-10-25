@@ -109,6 +109,25 @@ public:
 	String toString() const {return String(json::Value::toString());}
 	String stringify() const {return String(json::Value::stringify());}
 
+
+	Value addToArray(const Value &item) {
+		Array x(*this);
+		if (x.empty()) x.add(*this);
+		x.add(item);
+		return x;
+	}
+
+	Value addSuffix(const String &suffix) {
+		if (!empty()) {
+			Array x(*this);
+			std::size_t sz = size()-1;
+			x.trunc(sz);
+			x.add(operator[](sz).toString()+suffix);
+			return x;
+		} else {
+			return toString() + suffix;
+		}
+	}
 };
 
 

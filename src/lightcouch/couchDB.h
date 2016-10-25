@@ -72,6 +72,13 @@ public:
 	 */
 	static StringRef fldPrevRevision;
 
+	/**Maximal length of serialized form of keys to use GET request. Longer
+	 * keys are send through POST. Queries sent by POST cannot be cached. However if you
+	 * increase the number, it can also generate a lot of cache entries, because whole
+	 * requests are cached, not separate keys. Default value is 1024
+	 */
+	static natural maxSerializedKeysSizeForGETRequest;
+
 	///Download flag - disable cache while retrieving resule
 	/** Downloader will not include etag into header, so database will return complete response
 	 * Result will not stored into cache. This flag is useful if you need
@@ -110,6 +117,8 @@ public:
 
 	static const natural flgTryAgainCounterMask = 0xF800;
 	static const natural flgTryAgainCounterStep = 0x0800;
+
+
 
 	CouchDB(const Config &cfg);
 	~CouchDB();
@@ -419,6 +428,13 @@ public:
 	 * @param etag if not empty, function puts string as "if-none-match" header.
 	 */
 	Download downloadAttachment(const Value &document, const StringRef &attachmentName,  const StringRef &etag=StringRef());
+	///Downloads attachment
+	/**
+	 * @param document document. The document don't need to be complete, only _id and _rev must be there.
+	 * @param attachmentName name of attachment to retrieve
+	 * @param etag if not empty, function puts string as "if-none-match" header.
+	 */
+	Download downloadAttachment(const Document &document, const StringRef &attachmentName,  const StringRef &etag=StringRef());
 
 	///Downloads latest attachments
 	/** Allows to easily download the latest attachment by given docId an dattachmentName
@@ -428,7 +444,10 @@ public:
 	 * @param etag (optional) etag, if not empty, then it is put to the header and result can be notModified
 	 * @return download object
 	 */
-	Download downloadLatestAttachment(const StringRef &docId, const StringRef &attachmentName,  const StringRef &etag=StringRef());
+	Download downloadAttachment(const StringRef &docId, const StringRef &attachmentName,  const StringRef &etag=StringRef());
+	Download downloadAttachment(const String docId, const StringRef &attachmentName,  const StringRef &etag=StringRef()) {
+		return downloadAttachment((StringRef)docId,attachmentName, etag);
+	}
 
 
 	///For function updateDesignDocument
@@ -562,6 +581,7 @@ protected:
 
 	Queryable queryable;
 
+	Download downloadAttachmentCont(PUrlBuilder urlline, const StringRef &etag);
 
 public:
 

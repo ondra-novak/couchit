@@ -60,14 +60,14 @@ void Document::setRev(const Value& rev) {
 	set("_rev",rev);
 }
 
-void Document::setDeleted(StringRefT<StringRef> fieldsToKept) {
+void Document::setDeleted(StringRefT<StringRef> fieldsToKept, bool timestamp) {
 	json::Object delDoc;
 	for (auto &&fld : fieldsToKept) {
 		delDoc(fld,(*this)[fld]);
 	}
 	delDoc.set("_deleted",true);
 	setContent(delDoc);
-	enableTimestamp();
+	if (timestamp) enableTimestamp();
 }
 
 void Document::enableTimestamp() {
@@ -94,6 +94,26 @@ Value Document::getAttachment(const StringRef &name) const {
 Document::Document(const StringRef& id, const StringRef& rev) {
 	set("_id",id);
 	if (!rev.empty()) set("_rev",rev);
+}
+
+Value Document::attachments() const {
+	return (*this)["_attachments"];
+}
+
+Value Document::conflicts() const {
+	return (*this)["_conflicts"];
+}
+
+Value Document::getTimestamp() const {
+	return (*this)[CouchDB::fldTimestamp];
+}
+
+String Document::getPrevRevision() const {
+	return (*this)[CouchDB::fldPrevRevision];
+}
+
+bool Document::isDeleted() const {
+	return (*this)["_deleted"].getBool();
 }
 
 

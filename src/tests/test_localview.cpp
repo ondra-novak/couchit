@@ -27,7 +27,9 @@ static const char *strdata="[[\"Kermit Byrd\",76,184],[\"Odette Hahn\",44,181],"
 class LocalViewByName: public LocalView {
 public:
 	virtual void map(const Value &doc) override {
-		emit(doc["name"],{doc["age"] ,doc["height"]} );
+		Value k ({doc["name"]});
+		Value v ({doc["age"] ,doc["height"]});
+		emit(k,v);
 	}
 
 };
@@ -158,6 +160,20 @@ static void localView_couchReduce(PrintTextA &a) {
 	}
 }
 
+static void localView_couchReduceAll(PrintTextA &a) {
+
+	LocalView_age_group_height view;
+	loadData(view);
+
+	Query q = view.createQuery(0);
+	Result res = q.reduceAll().exec();
+
+	while (res.hasItems()) {
+		Row row = res.getNext();
+		a("%1:%2 ") << row.key[0].getUInt()
+				<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
+	}
+}
 
 
 
@@ -166,6 +182,7 @@ defineTest test_localView_wildcard("couchdb.localview.wildcard","Kenneth Meyer,4
 defineTest test_localView_findgroup("couchdb.localview.findgroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ",&localView_FindGroup);
 defineTest test_localView_findrange("couchdb.localview.findrange","Daniel Cochran Ramona Lang Urielle Pennington ",&localView_FindRange);
 defineTest test_localview_couchReduce("couchdb.localview.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&localView_couchReduce);
+defineTest test_localview_couchReduceAll("couchdb.localview.reduceAll","0:169 ",&localView_couchReduceAll);
 
 
 }

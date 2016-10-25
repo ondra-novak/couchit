@@ -35,9 +35,6 @@ public:
 	static const natural reduce=0x02;
 	///Controls whether the endkey is excluded in the result. Default is false
 	static const natural exludeEnd=0x04;
-	///Enforce GET method for various situations, where POST could be used
-	/** this helps to caching and E-Tags, but may create large URI */
-	static const natural forceGETMethod=0x08;
 	///never update the view
 	static const natural stale=0x10;
 	///update view after values are returned
@@ -69,16 +66,6 @@ public:
 	///Masks groupLevel, maximum 255 levels
 	static const natural groupLevelMask=0xFF000000;
 
-	///Defines list arguments
-	/** these arguments will be always applied for the lits */
-	struct ListArg {
-		///key
-		StringA key;
-		///value
-		StringA value;
-	};
-
-	typedef ConstStringT<ListArg> ListArgs;
 	///Function called to postprocess to view
 	/**
 	 * @param CouchDb* pointer to an active instance of CouchDB (currently used for query)
@@ -100,7 +87,7 @@ public:
      * @param flags various flags
      * @param args additional arguments preconfigured for this view
      */
-	View(StringA viewPath, natural flags, ListArgs args = ListArgs());
+	View(StringA viewPath, natural flags, Value args = Value());
 
 	///Declare more specific view
 	/**
@@ -108,22 +95,13 @@ public:
 	 * @param flags various view flags
 	 * @param ppfunction function called to post-process result. Note, results from post-processing are
 	 * not cached. If you need to cache results, use Lists on the server side instead
-	 * @param args additional arguments preconfigured for this view
+	 * @param args additional arguments passed to list-function on the couchDb. It must be Object
 	 */
-	View(StringA viewPath, natural flags, const Postprocessing &ppfunction, ListArgs args = ListArgs() );
-
-	View addArg(ConstStringT<ListArg> args) const;
-
-	View setArgs(ConstStringT<ListArg> args) const;
-
-	View setFlags(natural flags) const;
-
-	View setPath(StringA path) const;
-
+	View(StringA viewPath, natural flags, const Postprocessing &ppfunction, Value args = Value() );
 
 	const StringA viewPath;
 	const natural flags;
-	const StringCore<ListArg> args;
+	const Value args;
 	Postprocessing postprocess;
 };
 
@@ -140,7 +118,7 @@ public:
 	 * @param flags some flags to define additional behaviour
 	 * @param args optional arguments passed to the filter
 	 */
-	Filter(StringA filter, natural flags, ConstStringT<ListArg> args = ConstStringT<ListArg>() );
+	Filter(StringA filter, natural flags, Value args = Value()  );
 	///Declare filter using the view
 	/**
 	 * @param view view that will be used to filter results
@@ -156,13 +134,6 @@ public:
 	///return all current revisions, including deleted
 	static const natural allRevs = 0x10000;
 
-	Filter addArg(ConstStringT<ListArg> args) const;
-
-	Filter setArgs(ConstStringT<ListArg> args) const;
-
-	Filter setFlags(natural flags) const;
-
-	Filter setPath(StringA path) const;
 
 };
 

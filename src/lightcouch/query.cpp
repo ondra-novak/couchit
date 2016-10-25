@@ -1,9 +1,21 @@
 #include "query.h"
 
+#include <immujson/abstractValue.h>
 namespace LightCouch {
 
+const StringRef maxStringRef("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
+
+
+static Value initMaxKey() {
+	json::AbstractValue localUndefined;
+	localUndefined.addRef();
+	return Object(&localUndefined)(maxStringRef,maxStringRef);
+}
+
 const Value Query::minKey(nullptr);
-const Value Query::maxKey(Value::fromString("{\"\\xFFFF\\xFFFF\\xFFFF\":null}"));
+const Value Query::maxKey(initMaxKey());
+const String Query::maxString(maxStringRef);
+const String Query::minString("");
 
 
 Query::Query(const View& view, IQueryableObject& qao)
@@ -90,6 +102,7 @@ Query& Query::key(const Value& v) {
 }
 
 Query& Query::range(const Value& from, const Value& to, natural flags) {
+	request.mode = qmKeyRange;
 	request.keys.clear();
 	request.keys.add(from);
 	request.keys.add(to);
@@ -100,6 +113,7 @@ Query& Query::range(const Value& from, const Value& to, natural flags) {
 
 Query& Query::range(const Value& from, const StringRef& fromDoc,
 		const Value& to, const StringRef& toDoc, bool exclusiveEnd) {
+	request.mode = qmKeyRange;
 	request.keys.clear();
 	if (fromDoc.empty() && toDoc.empty()) {
 		request.keys.add(from);
@@ -122,11 +136,12 @@ Result::Result(const Value& result):pos(0),cnt(result.size()) {
 	if (result.type() == json::object) {
 		total = result["total_rows"].getUInt();
 		offset = result["offset"].getUInt();
-		*this = result["rows"];
+		Value::operator=(result["rows"]);
 	} else {
-		*this = result;
+		Value::operator=(result);
 		total = offset = 0;
 	}
+	cnt = size();
 }
 
 Row::Row(const Value& jrow)

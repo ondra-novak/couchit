@@ -157,7 +157,7 @@ static const char *strdata="[[\"Kermit Byrd\",76,184],[\"Odette Hahn\",44,181],"
 
 
 static View by_name("_design/testview/_view/by_name");
-static View by_name_cacheable("_design/testview/_view/by_name", View::forceGETMethod|View::includeDocs);
+static View by_name_cacheable("_design/testview/_view/by_name", View::includeDocs);
 static View by_age_group("_design/testview/_view/by_age_group");
 static View by_age("_design/testview/_view/by_age");
 static View by_age_list("_design/testview/_list/rowcopy/by_age");

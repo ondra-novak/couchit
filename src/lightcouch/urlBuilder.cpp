@@ -18,15 +18,12 @@ void LightCouch::UrlBuilder::init(ConstStrA basicUrl, ConstStrA dbname, ConstStr
 	buffer.clear();
 	if (resourcePath.empty()) {
 		buffer.blockWrite(basicUrl,true);
-		buffer.write('/');
 		buffer.blockWrite(dbname,true);
 	} else if (resourcePath[0] == '/') {
 		buffer.blockWrite(basicUrl,true);
-		buffer.write('/');
-		buffer.blockWrite(resourcePath,true);
+		buffer.blockWrite(resourcePath.offset(1),true);
 	} else {
 		buffer.blockWrite(basicUrl,true);
-		buffer.write('/');
 		buffer.blockWrite(dbname,true);
 		buffer.write('/');
 		buffer.blockWrite(resourcePath,true);

@@ -35,10 +35,10 @@ void LocalView::updateDocLk(const Value& doc) {
 	StringRef docId = doc["_id"].getString();
 	eraseDocLk(docId);
 	Value delFlag = doc["_deleted"];
-	if (delFlag == null || delFlag.getBool() == false) {
+	if (!delFlag.defined() || delFlag.getBool() == false) {
 		curDoc=doc;
 		map(doc);
-		curDoc = null;
+		curDoc = Value();
 	}
 }
 
@@ -80,12 +80,12 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 		Value doc = row.doc;
 
 		//runMapFn is true and there is document
-		if (runMapFn && doc != null) {
+		if (runMapFn && doc.defined()) {
 			//process through the map function
 			updateDocLk(doc);
 		} else {
 			//otherwise if there is no document
-			if (doc == null) {
+			if (!doc.defined()) {
 				//create fake one to store docId
 				doc = Object("_id",row.id);
 			}
@@ -205,6 +205,11 @@ Query LocalView::createQuery(natural viewFlags) const {
 	return Query(v, queryable);
 }
 
+Query LocalView::createQuery(natural viewFlags, PostProcessFn fn) const {
+	View v(StringA(),viewFlags,fn);
+	return Query(v, queryable);
+}
+
 Value LocalView::runReduce(const Value &rows) const {
 
 	AutoArray<KeyAndDocId, SmallAlloc<256> > keylist;
@@ -221,7 +226,7 @@ Value LocalView::runReduce(const Value &rows) const {
 }
 
 static bool canGroupKeys(const Value &subj, const Value &sliced) {
-	if (sliced == null) return false;
+	if (!sliced.defined()) return false;
 	if (subj.type() == json::array) {
 		natural cnt = subj.size();
 		if (cnt >= sliced.size()) {
@@ -281,7 +286,7 @@ bool excludeEnd) const {
 
 
 	Optional<KeyToValue::Iterator> iter;
-	if (seekPos->key != null) {
+	if (seekPos->key.defined()) {
 		iter = keyToValueMap.seek(*seekPos,0,dir);
 	} else {
 		if (descending) iter = keyToValueMap.getBkIter();
@@ -289,7 +294,7 @@ bool excludeEnd) const {
 	}
 
 	Optional<KeyToValue::Iterator> iend;
-	if (stopPos->key != null) {
+	if (stopPos->key.defined()) {
 		bool found;
 		iend = keyToValueMap.seek(*stopPos,&found,dir);
 	}
@@ -317,11 +322,11 @@ bool excludeEnd) const {
 
 	if (groupLevel != naturalNull) {
 		if (groupLevel == 0) {
-			grows = runReduce(rows);
+			grows = {Object("key",nullptr)("value",runReduce(rows))};
 		} else {
 			Array res;
 			Array collect;
-			Value lastKey = null;
+			Value lastKey;
 
 
 			for (auto &&val : rows) {
@@ -329,7 +334,7 @@ bool excludeEnd) const {
 				Value key = val["key"];
 				if (!canGroupKeys(key, lastKey)) {
 
-					if (lastKey != null) {
+					if (lastKey.defined()) {
 						Value z = runReduce(collect);
 						res.add(Object("key",lastKey)("value", z));
 					}
@@ -338,8 +343,6 @@ bool excludeEnd) const {
 
 				}
 				collect.add(val);
-
-				return false;
 			}
 
 			if (!collect.empty()) {
@@ -359,5 +362,86 @@ bool excludeEnd) const {
 
 }
 
+LocalView::Queryable::Queryable(const LocalView& lview):lview(lview) {
+
+}
+
+/*
+ *
+ * Result LocalView::Query::exec() const {
+	finishCurrent();
+	Value result;
+	if (keys == null || keys.empty()) {
+		result = lview.searchRange(startkey,endkey, groupLevel, descent, offset, maxlimit,offset_doc,(viewFlags & View::exludeEnd) != 0);
+	} else {
+		result = lview.searchKeys(keys,groupLevel);
+	}
+	if (ppfn) result = ppfn( args, result);
+	return Result(result);
+}
+ */
+Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
+
+	bool descend = ((r.view.flags & View::reverseOrder) != 0) != r.reversedOrder;
+	natural groupLevel;
+	bool reduce;
+	Value result;
+
+
+
+	switch(r.reduceMode) {
+	case rmDefault:
+		reduce = (r.view.flags & View::reduce) != 0;
+		groupLevel = (r.view.flags & View::groupLevelMask)/View::groupLevel;
+		break;
+	case rmGroup:
+		reduce = true;
+		groupLevel = 256;
+		break;
+	case rmNoReduce:
+		reduce = false;
+		break;
+	case rmGroupLevel:
+		reduce = true;
+		groupLevel = r.groupLevel;
+		break;
+	case rmReduce:
+		reduce = true;
+		groupLevel = 0;
+		break;
+	}
+
+	if (reduce == false) groupLevel = naturalNull;
+	switch (r.mode) {
+	case qmAllItems:
+		result = lview.searchRange(Query::minKey,Query::maxKey,groupLevel,descend,r.offset,r.limit,StringRef(),false);
+		break;
+	case qmKeyList:
+		result = lview.searchKeys(r.keys,groupLevel);
+		break;
+	case qmKeyRange:
+		result = lview.searchRange(r.keys[0],r.keys[1],groupLevel,descend,r.offset,r.limit,r.keys[0].getKey(),r.exclude_end);
+		break;
+	case qmKeyPrefix: {
+			result = lview.searchRange(Value(r.keys[0]).addToArray(Query::minKey),
+					Value(r.keys[0]).addToArray(Query::maxKey)
+					,groupLevel,descend,r.offset,r.limit,StringRef(),false);
+		}
+		break;
+	case qmStringPrefix: {
+		result = lview.searchRange(Value(r.keys[0]).addSuffix(Query::minString),
+				Value(r.keys[0]).addSuffix(Query::maxString)
+				,groupLevel,descend,r.offset,r.limit,StringRef(),false);
+		}
+
+	}
+	if (r.view.postprocess) result = r.view.postprocess(0, r.ppargs, result);
+	return result;
+
+
+
+}
+
 
 } /* namespace LightCouch */
+

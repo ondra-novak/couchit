@@ -71,13 +71,15 @@ public:
 	///Sets document deleted
 	/** Document marked as deleted updated through Changeset object will be deleted. You
 	 * can specify which fields will be kept.
-	 * @param json JSON factory that provides new value creation
-	 * @param fieldsToKept list of fields tath will be kept. It is important for filtered replication.
+	 * @param fieldsToKept list of fields that will be kept. It is important for filtered replication.
 	 * It is not good idea to keep whole document, because it still wastes a space
 	 *
-	 * Deleted document has always timestamp enabled
+	 * @param timestamp if set true, the deleted document will have timestamp of deletion. It
+	 * is recommended if you plan to purge the database someday. This will help to find out, how
+	 * old the deleted document is. You can also let the replication to skip very old deleted
+	 * documents so it is safe to purge them.
 	 */
-	void setDeleted(StringRefT<StringRef> fieldsToKept = StringRefT<StringRef>());
+	void setDeleted(StringRefT<StringRef> fieldsToKept = StringRefT<StringRef>(), bool timestamp=true);
 
 	///Enables timestamping of changes
 	/** Document with timestamps carries field, which contains timestamp of last update. Once this is
@@ -118,12 +120,42 @@ public:
 	void setID(const Value &id);
 	void setRev(const Value &rev);
 
+	///Retrieves list of conflicts to be deleted by this document (because conflicts has been resolved)
 	Value getConflictsToDelete() const;
 
-protected:
-	json::Array conflictsToDelete;
+	///Retrieves all attatchments
+	Value attachments() const;
 
-	void cleanup();
+	///Retrieves all conflicts
+	Value conflicts() const;
+
+	///Retrieves timestamp of last change
+	/**
+	 * @return timestamp of last change
+	 *
+	 * @note Timestamping must be enabled for the document. See enableTimestamp(). If
+	 * timestamp is not available, function returns undefined
+	 */
+	Value getTimestamp() const;
+
+	///Retrieves id of previous revision
+	/**
+	 * @return id of previous revision.
+	 *
+	 * @note Revision tracking must be enabled for the document. see enableRevTracking()
+	 */
+	String getPrevRevision() const;
+
+	///Determines, whether document is deleted
+	/**
+	 * @retval true, document is deleted
+	 * @retval false, document is not deleted
+	 */
+	bool isDeleted() const;
+
+protected:
+	Value conflictsToDelete;
+
 };
 
 
