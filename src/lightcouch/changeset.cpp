@@ -23,31 +23,42 @@ Changeset::Changeset(CouchDB &db):db(db) {
 
 Changeset& Changeset::update(const Document &document) {
 	if (!document.dirty()) return *this;
-	Value id = document.getIDValue();
+	Value doc = document;
+	Value id = doc["_id"];
 	if (!id.defined())
 		throw DocumentHasNoID(THISLOCATION, document);
-	docMap[id] = DocInfo(document);
 
-/*
-	DocInfo editedDoc(document);
-	Value doc = document;
-	if (!doc["_id"].defined())
-	DocInfo nfo;
-	nfo.doc = doc;
-	nf
-	docMap.insert(doc["_id"],)
-	if (document["_id"] == null) {
-		document.set("_id",db.genUIDValue());
+	Value ctodel = document.getConflictsToDelete();
+	if (ctodel.defined()) {
+		Array ccdocs;
+		for (auto &&item: ctodel) {
+			ccdocs.add(Object("_id",id)
+					("_rev",item)
+					("_deleted",true));
+		}
+		ctodel = ccdocs;
 	}
-	docs.add(document);
-	eraseConflicts(document["_id"], document.getConflictsToDelete());*/
+
+	scheduledDocs[id.getString()] = std::make_pair(doc, ctodel);
+
+	return *this;
+}
+
+Changeset& Changeset::update(const Value &document) {
+	Value doc = document;
+	Value id = doc["_id"];
+	if (!id.defined())
+		throw DocumentHasNoID(THISLOCATION, document);
+
+	scheduledDocs[id.getString()] = std::make_pair(doc, Value());
+
 	return *this;
 }
 
 
 
 Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
-	if (docMap.empty()) return *this;
+	if (scheduledDocs.empty()) return *this;
 
 	///if validator is not present, do not run empty cycle.
 
@@ -55,38 +66,39 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 
 	Array docsToCommit;
 
-	const Validator *v;
-	if ((v = db.getValidator())!=0) {
-		for(auto &&item: docMap) {
-			Validator::Result r = v->validateDoc(item.second.doc);;
+	const Validator *v  = db.getValidator();
+	for(auto &&item: scheduledDocs) {
+		Value doc = item.second.first;
+		Value conflicts = item.second.second;
+
+		if (v) {
+			Validator::Result r = v->validateDoc(doc);;
 			if (!r) throw ValidationFailedException(THISLOCATION,r);
+		}
 
-			bool hasTm = item.second.doc[CouchDB::fldTimestamp].defined();
-			bool hasPrevRev =  item.second.doc[CouchDB::fldPrevRevision].defined();
-			if (hasTm && !now.defined()) {
-				now = Value(TimeStamp::now().asUnix());
-			}
-			if (hasTm || hasPrevRev) {
-				Object adj(item.second.doc);
-				if (hasTm) adj.set(CouchDB::fldTimestamp, now);
-				if (hasPrevRev) adj.set(CouchDB::fldPrevRevision, item.second.doc["_rev"]);
-				item.second.doc = adj;
-			}
+		bool hasTm = doc[CouchDB::fldTimestamp].defined();
+		bool hasPrevRev =  doc[CouchDB::fldPrevRevision].defined();
+		if (hasTm && !now.defined()) {
+			now = Value(TimeStamp::now().asUnix());
+		}
+		if (hasTm || hasPrevRev) {
+			Object adj(doc);
+			if (hasTm) adj.set(CouchDB::fldTimestamp, now);
+			if (hasPrevRev) adj.set(CouchDB::fldPrevRevision, doc["_rev"]);
+			doc = adj;
+		}
 
-			docsToCommit.add(item.second.doc);
-			for (auto &&c: item.second.conflicts) {
-				docsToCommit.add(c);
-			}
+		docsToCommit.add(doc);
+
+		for (auto &&c: item.second.second) {
+			docsToCommit.add(c);
 		}
 	}
 
-	Object wholeRequest;
-	wholeRequest.set("docs", docsToCommit);
-	if (all_or_nothing)
-		wholeRequest.set("all_or_nothing",true);
 
-	Value out = db.requestPOST("_bulk_docs", wholeRequest);
-
+	commitedDocs.clear();
+	scheduledDocs.clear();
+	Value out = db.bulkUpload(docsToCommit, all_or_nothing);
 
 	AutoArray<UpdateException::ErrorItem> errors;
 
@@ -94,26 +106,17 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 		Value rev = item["rev"];
 		Value err = item["error"];
 		String id = item["id"];
-		DocMap::iterator itr = docMap.find(id);
-		if (itr == docMap.end()) {
+		if (err.defined()) {
 			UpdateException::ErrorItem e;
-			e.errorDetails = item;
-			e.errorType = "internal_error";
-			e.reason = "Couchdb returned an unknown document";
-			errors.add(e);
-		} else {
-			if (err.defined()) {
-				UpdateException::ErrorItem e;
 
-				e.errorDetails = item;
-				e.document = itr->second.doc;
-				e.errorType = err;
-				e.reason = item["reason"];
-				errors.add(e);
-			}
-			if (rev.defined()) {
-				itr->second.newRevId = rev;
-			}
+			e.errorDetails = item;
+			e.document = id;
+			e.errorType = err;
+			e.reason = item["reason"];
+			errors.add(e);
+		}
+		if (rev.defined()) {
+			commitedDocs.insert(std::make_pair(StringRef(id),item));
 		}
 	}
 	if (errors.length()) throw UpdateException(THISLOCATION,errors);
@@ -127,8 +130,8 @@ Changeset::Changeset(const Changeset& other):db(other.db) {
 }
 
 
-void Changeset::revert(const String &docId) {
-	docMap.erase(docId);
+void Changeset::revert(const StringRef &docId) {
+	scheduledDocs.erase(docId);
 }
 
 
@@ -149,56 +152,23 @@ Changeset& Changeset::erase(const String &docId, const String &revId) {
 	return *this;
 }
 
-Value Changeset::getDoc(const String& docId) const {
+String Changeset::getCommitRev(const StringRef& docId) const {
 
-	auto iter = docMap.find(docId);
-	if (iter == docMap.end()) return Value();
-	Object o(iter->second.doc);
-	o.set("_rev",iter->second.newRevId);
-	return o;
-
-}
-
-String Changeset::getRev(const String& docId) const {
-	auto iter = docMap.find(docId);
-	if (iter == docMap.end()) return String();
-	return iter->second.newRevId;
-
+	auto f = commitedDocs.find(docId);
+	if (f == commitedDocs.end()) return String();
+	else {
+		return f->second["_rev"];
+	}
 }
 
 Changeset& Changeset::preview(LocalView& view) {
-	for (auto &&item:docMap) {
-		view.updateDoc(item.second.doc);
+	for (auto &&item:scheduledDocs) {
+		view.updateDoc(item.second.first);
 	}
 	return *this;
 
 
 }
-
-Changeset::DocInfo::DocInfo(const Document& editedDoc) {
-
-	this->doc = editedDoc;
-	Array conflicts;
-	for (auto &&item: editedDoc.getConflictsToDelete()) {
-		Document doc;
-		doc.setID(editedDoc.getIDValue());
-		doc.setRev(item);
-		doc.setDeleted();
-		conflicts.add(doc);
-	}
-	this->conflicts = conflicts;
-
-}
-
-/*
-void Changeset::eraseConflicts(ConstValue docId, ConstValue conflictList) {
-	if (conflictList != null)
-		conflictList->enumEntries(JSON::IEntryEnum::lambda([&](const ConstValue &v, ConstStrA, natural ){
-		erase(docId, v);
-		return false;
-	}));
-}*/
-
 
 } /* namespace assetex */
 

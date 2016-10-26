@@ -24,9 +24,6 @@ public:
 	Changeset(CouchDB &db);
 	Changeset(const Changeset& other);
 
-
-
-
 	///Updates document in database
 	/** Function schedules document for update. Once document is scheduled, Document instance can
 	 * be destroyed, because document is kept inside of changeset. Changes are applied by function commit()
@@ -39,6 +36,8 @@ public:
 	 *
 	 */
 	Changeset &update(const Document &document);
+
+	Changeset &update(const Value &document);
 
 	///Erases document defined only by documentId and revisionId. Useful to erase conflicts
 	/**
@@ -84,17 +83,12 @@ public:
 	Changeset &commit(bool all_or_nothing=true);
 
 
-	///Retrieves updated revision of the document after commit
-	/** If called after commit, it contains update _rev */
-	Value getDoc(const String &docId) const;
-
-	///Retrieves revision of the document
-	/** if called after commit, it returns updated rev */
-	String getRev(const String &docId) const;
+	///Retrieves revision of the committed document
+	String getCommitRev(const StringRef &docId) const;
 
 	///Revets changes made in document docId
 	/** Removes document from the changeset */
-	void revert(const String &docId);
+	void revert(const StringRef &docId);
 
 	///Preview all changes in a local view
 	/** Function just only sends all changes to a local view, without making the
@@ -117,19 +111,8 @@ public:
 protected:
 
 
-	struct DocInfo {
-		String newRevId;
-		Value doc;
-		Value conflicts;
-
-		DocInfo(const Document &editedDoc);
-		DocInfo() {}
-	};
-
-	typedef std::pair<String, Value> RevAndDoc;
-	typedef std::map<String, DocInfo> DocMap;
-
-	DocMap docMap;
+	std::map<StringRef, std::pair<Value,Value> > scheduledDocs;
+	std::map<StringRef, Value> commitedDocs;
 
 	CouchDB &db;
 

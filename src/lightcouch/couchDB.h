@@ -230,6 +230,9 @@ public:
 	void deleteDatabase();
 
 
+	///Bulk upload
+	Value bulkUpload(const Value docs, bool all_or_nothing);
+
 
 	///Determines last sequence number
 	/** Function requests server to retrieve last sequence number. You will need

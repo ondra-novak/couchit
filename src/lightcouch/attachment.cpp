@@ -28,11 +28,11 @@ AttachmentData::AttachmentData(const Value &attachment)
 	:AttachmentDataRef(ConstBin(), attachment["content_type"].getString())
 {
 
-	AttachmentData x = fromBase64(attachment["data"].getString(),String());
+	AttachmentData x = fromBase64(attachment["data"].getString(),StringRef());
 	bindata = x.bindata;
 }
 
-AttachmentData::AttachmentData(Download&& dwn):AttachmentDataRef(ConstBin(),dwn.contentType)
+AttachmentData::AttachmentData(Download&& dwn):AttachmentDataRef(ConstBin(),dwn.contentType.str())
 ,ctx(dwn.contentType)
 {
 	byte *b = bindata.createBuffer(dwn.length);

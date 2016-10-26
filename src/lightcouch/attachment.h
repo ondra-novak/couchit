@@ -56,7 +56,7 @@ public:
 	 * @param contentType content type
 	 */
 	AttachmentData(const StringB &data, const String &contentType)
-		:AttachmentDataRef(data,contentType),bindata(data),ctx(contentType) {}
+		:AttachmentDataRef(data,StringRef(contentType)),bindata(data),ctx(contentType) {}
 	///Constructor from JSON value
 	/**
 	 * @param attachment value contains attachment from a document. It required that

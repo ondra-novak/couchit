@@ -6,14 +6,8 @@ namespace LightCouch {
 const StringRef maxStringRef("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
 
 
-static Value initMaxKey() {
-	json::AbstractValue localUndefined;
-	localUndefined.addRef();
-	return Object(&localUndefined)(maxStringRef,maxStringRef);
-}
-
 const Value Query::minKey(nullptr);
-const Value Query::maxKey(initMaxKey());
+const Value Query::maxKey(Object(maxStringRef,maxStringRef));
 const String Query::maxString(maxStringRef);
 const String Query::minString("");
 
@@ -96,6 +90,7 @@ Query& Query::reset() {
 }
 
 Query& Query::key(const Value& v) {
+	request.mode = qmKeyList;
 	request.keys.clear();
 	request.keys.add(v);
 	return *this;

@@ -631,7 +631,7 @@ bool CouchDB::uploadDesignDocument(const Value &content, DesignDocUpdateRule upd
 
 	} catch (HttpStatusException &e) {
 		if (e.getStatus() == 404) {
-			chset.update(newddoc);
+			chset.update(content);
 		} else {
 			throw;
 		}
@@ -677,7 +677,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 
 	PUrlBuilder url = getUrlBuilder("_changes");
 
-	if (sink.seqNumber != null) {
+	if (sink.seqNumber.defined()) {
 		url->add("since", sink.seqNumber.toString());
 	}
 	if (sink.outlimit != naturalNull) {
@@ -960,7 +960,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 	switch (r.mode) {
 		case qmAllItems: break;
 		case qmKeyList: if (r.keys.size() == 1) {
-							url->addJson("key",r.keys[1]);
+							url->addJson("key",r.keys[0]);
 						}else if (r.keys.size() > 1){
 							String ser = Value(r.keys).stringify();
 							if (ser.length() > maxSerializedKeysSizeForGETRequest) {
@@ -1014,7 +1014,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		url->add("group","true");
 		break;
 	case rmGroupLevel:
-		url->add("groupLevel",ToString<natural>(r.groupLevel));
+		url->add("group_level",ToString<natural>(r.groupLevel));
 		break;
 	case rmNoReduce:
 		url->add("reduce","false");
@@ -1042,12 +1042,12 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		for(auto &&item: r.view.args) {
 			url->add(StringRef(item.getKey()),StringRef(item.toString()));
 		}
-	} else {
+	} else if (r.view.args.defined()) {
 		url->add("args",StringRef(r.view.args.toString()));
 	}
 
 	Value result;
-	if (postBody.defined()) {
+	if (!postBody.defined()) {
 		result = owner.requestGET(*url,0,0);
 	} else {
 		result = owner.requestPOST(*url,postBody,0,0);
@@ -1077,6 +1077,18 @@ CouchDB::PUrlBuilder CouchDB::getUrlBuilder(ConstStrA resourcePath) {
 	b->init(baseUrl,database,resourcePath);
 	return b;
 }
+
+Value CouchDB::bulkUpload(const Value docs, bool all_or_nothing) {
+	PUrlBuilder b = getUrlBuilder("_bulk_docs");
+
+	Object wholeRequest;
+	wholeRequest.set("docs", docs);
+	if (all_or_nothing)
+		wholeRequest.set("all_or_nothing",true);
+
+	return requestPOST(*b,wholeRequest,0,0);
+}
+
 
 } /* namespace assetex */
 

@@ -19,6 +19,8 @@ using json::Object;
 using json::Array;
 
 
+template<typename T> class StringRefIterT;
+
 template<typename T>
 class StringRefT: public json::StringView<T> {
 public:
@@ -34,14 +36,14 @@ public:
 	StringRefT(const LightSpeed::FlatArray<const T, Impl> &str):json::StringView<T>(str.data(), str.length()) {}
 	operator LightSpeed::ConstStringT<T>() const {return LightSpeed::ConstStringT<T>(this->data, this->length);}
 
-	typedef typename LightSpeed::ConstStringT<T>::Iterator Iterator;
 	typedef typename LightSpeed::ConstStringT<T>::SplitIterator SplitIterator;
+	typedef StringRefIterT<T> Iterator;
 
-	Iterator getFwIter() const {return LightSpeed::ConstStringT<T>(*this).getFwIter();}
+	StringRefIterT<T> getFwIter() const {return StringRefIterT<T>(*this);}
 
 	explicit operator std::basic_string<T>() const;
 };
-
+/*
 template<>
 class StringRefT<char>: public json::StringView<char> {
 public:
@@ -60,13 +62,27 @@ public:
 
 	typedef LightSpeed::ConstStringT<char>::Iterator Iterator;
 	typedef typename LightSpeed::ConstStringT<char>::SplitIterator SplitIterator;
+	typedef StringRefIterT<char> Iterator;
 
-	Iterator getFwIter() const {return LightSpeed::ConstStringT<char>(*this).getFwIter();}
+	StringRefIterT<char> getFwIter() const {return StringRefIterT<char>(*this);}
 	SplitIterator split(char c) const {return LightSpeed::ConstStringT<char>(*this).split(c);}
 
 	explicit operator std::basic_string<char>() const;
 };
+*/
 
+template<typename T>
+class StringRefIterT: public LightSpeed::IteratorBase<T, StringRefIterT<T> > {
+public:
+	StringRefIterT(const StringRefT<T> &str):str(str),pos(0) {}
+	bool hasItems() const {return pos < str.length;}
+	const T &getNext() {return str[pos++];}
+	const T &peek() const {return str[pos];}
+protected:
+	StringRefT<T> str;
+	LightSpeed::natural pos;
+
+};
 
 typedef StringRefT<char> StringRef;
 typedef StringRefT<unsigned char> BinaryRef;
