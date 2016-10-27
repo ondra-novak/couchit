@@ -35,6 +35,8 @@ public:
 	static const natural reduce=0x02;
 	///Controls whether the endkey is excluded in the result. Default is false
 	static const natural exludeEnd=0x04;
+	///Disable caching for this view
+	static const natural noCache=0x04;
 	///never update the view
 	static const natural stale=0x10;
 	///update view after values are returned

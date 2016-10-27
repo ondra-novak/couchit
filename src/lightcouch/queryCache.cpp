@@ -10,19 +10,30 @@
 #include "lightspeed/base/sync/synchronize.h"
 #include "lightspeed/base/actions/promise.tcc"
 #include "lightspeed/base/containers/map.tcc"
+#include "fnv.h"
 
 namespace LightCouch {
+
+static std::uintptr_t hashUrl(ConstStrA url) {
+	typedef FNV1a<sizeof(std::uintptr_t)> HashFn;
+	ConstStrA::Iterator iter = url.getFwIter();
+	return HashFn::hash([&]() -> int {
+		if (iter.hasItems()) return (byte)iter.getNext();
+		else return -1;
+	});
+
+}
 
 
 QueryCache::CachedItem QueryCache::find(ConstStrA url) {
 
 	Synchronized<FastLock> _(lock);
 
-	const CachedItem *itm = itemMap.find(StrKey(url));
-	if (itm) {
-		return *itm;
-	} else {
-		return CachedItem();
+	auto f = itemMap.find(hashUrl(url));
+	if (f == itemMap.end()) return CachedItem();
+	else {
+		f->second.used = true;
+		return f->second;
 	}
 
 }
@@ -33,9 +44,28 @@ void QueryCache::clear() {
 
 void QueryCache::set(ConstStrA url, const CachedItem& item) {
 	Synchronized<FastLock> _(lock);
-	StrKey k((StringA(url)));
-	itemMap.erase(k);
-	itemMap.insert(k, item);
+
+	if (itemMap.size() >= maxSize) {
+		optimize();
+	}
+
+	std::uintptr_t hash = hashUrl(url);
+	itemMap.erase(hash);
+	itemMap.insert(std::make_pair(hash, item));
+
+}
+
+void QueryCache::optimize() {
+	decltype(itemMap) newMap;
+	for(auto &&item : itemMap) {
+		if (item.second.used) {
+			item.second.used = false;
+			newMap.insert(item);
+		}
+	}
+	maxSize = newMap.size()*2;
+	if (maxSize < initialMaxSize) maxSize = initialMaxSize;
+	newMap.swap(itemMap);
 }
 
 QueryCache::~QueryCache() {

@@ -208,20 +208,22 @@ static void couchCaching(PrintTextA &a) {
 
 	for (natural i = 0; i < 3; i++) {
 		Query q(db.createQuery(by_name_cacheable));
-		Result res = q.keys({
+		Value r = q.keys({
 			{"Kermit Byrd"},
 			{"Owen Dillard"},
 			{"Nicole Jordan"}
 				}).exec();
+		bool cached = r.getHandle() == v;
+		Result res(r);
 		while (res.hasItems()) {
 			Row row = res.getNext();
 			a("%1,%2,%3:%4 ") << row.key[0].getString()
 					<<row.value[0].getUInt()
 					<<row.value[1].getUInt()
-					<<(v == res.getHandle()?"true":"false");
+					<< cached;
 
 		}
-		v = res.getHandle();
+		v = r.getHandle();
 	}
 
 }
@@ -473,7 +475,7 @@ defineTest test_couchFindGroup("couchdb.findGroup","Kenneth Meyer Scarlett Frazi
 defineTest test_couchFindRange("couchdb.findRange","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRange);
 defineTest test_couchFindKeys("couchdb.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&couchFindKeys);
 defineTest test_couchRetrieveDocument("couchdb.retrieveDoc","{\"_local_seq\":8,\"age\":76,\"height\":184,\"name\":\"Kermit Byrd\"}",&couchRetrieveDocument);
-defineTest test_couchCaching("couchdb.caching","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,100,100 Owen Dillard,100,100 Nicole Jordan,100,100 ",&couchCaching);
+defineTest test_couchCaching("couchdb.caching","Kermit Byrd,76,184:0 Owen Dillard,80,151:0 Nicole Jordan,75,150:0 Kermit Byrd,76,184:1 Owen Dillard,80,151:1 Nicole Jordan,75,150:1 Kermit Byrd,76,184:1 Owen Dillard,80,151:1 Nicole Jordan,75,150:1 ",&couchCaching);
 defineTest test_couchReduce("couchdb.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce);
 //defineTest test_couchCaching2("couchdb.caching2","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,76,184 Nicole Jordan,75,150 ",&couchCaching2);
 defineTest test_couchChangesOneShot("couchdb.changesOneShot","1",&couchChangeSetOneShot);

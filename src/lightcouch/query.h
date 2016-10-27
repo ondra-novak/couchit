@@ -89,6 +89,12 @@ public:
 
 	Query &reset();
 
+	///Disable caching for this query
+	/** If the query is so unique or if the source is changing often, you
+	 * can disable the cache, so the result will not waste a space in the cache.
+	 */
+	Query &nocache();
+
 	Value exec();
 
 

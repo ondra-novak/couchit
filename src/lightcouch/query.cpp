@@ -149,5 +149,11 @@ Row::Row(const Value& jrow)
 {
 }
 
+Query& Query::nocache() {
+	request.nocache = true;
+	return *this;
+}
+
 
 }
+

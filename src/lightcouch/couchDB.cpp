@@ -89,7 +89,7 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
 	bool usecache = (flags & flgDisableCache) == 0;
 	if (usecache && (!cache
 		|| path.substr(0,baseUrlLen) != baseUrl
-		|| path.substr(baseUrlLen +1, databaseLen) != database)) {
+		|| path.substr(baseUrlLen, databaseLen) != database)) {
 		usecache = false;
 	}
 
@@ -108,7 +108,7 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
     do {
     	redirectRetry = false;
 		http.setHeader(HttpClient::fldAccept,"application/json");
-		if (cachedItem != nil) {
+		if (cachedItem != nil && cachedItem->isDefined()) {
 			http.setHeader(HttpClient::fldIfNoneMatch, cachedItem->etag);
 		}
 		if (headers!= nullptr)
@@ -149,7 +149,7 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
 		if (usecache) {
 			BredyHttpSrv::HeaderValue fld = http.getHeader(HttpClient::fldETag);
 			if (fld.defined) {
-				cache->set(cacheKey, QueryCache::CachedItem(fld, v));
+				cache->set(cacheKey, QueryCache::CachedItem(StringRef(fld), v));
 			}
 		}
 		if (flags & flgStoreHeaders && headers != nullptr) {
@@ -947,6 +947,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 	ConstStrA endKey = "endkey";
 	ConstStrA startKeyDocId = "startkey_docid";
 	ConstStrA endKeyDocId = "endkey_docid";
+	bool useCache;
 
 	bool desc = (r.view.flags & View::reverseOrder) != 0;
 	if (r.reversedOrder) desc = !desc;
@@ -957,16 +958,22 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		std::swap(startKeyDocId,endKeyDocId);
 	}
 
+	useCache = (r.view.flags & View::noCache) == 0 && !r.nocache;
+
 	switch (r.mode) {
 		case qmAllItems: break;
 		case qmKeyList: if (r.keys.size() == 1) {
 							url->addJson("key",r.keys[0]);
 						}else if (r.keys.size() > 1){
-							String ser = Value(r.keys).stringify();
-							if (ser.length() > maxSerializedKeysSizeForGETRequest) {
-								postBody = r.keys;
+							if (useCache) {
+								String ser = Value(r.keys).stringify();
+								if (ser.length() > maxSerializedKeysSizeForGETRequest) {
+									postBody = r.keys;
+								} else {
+									url->add("keys",ser);
+								}
 							} else {
-								url->add("keys",ser);
+								postBody = Object("keys",r.keys);
 							}
 						}
 						break;

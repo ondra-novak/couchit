@@ -89,6 +89,8 @@ struct QueryRequest {
 
 	///Retrive startDoc and endDoc using getKey() of ranged keys
 	bool docIdFromGetKey;
+	///disable caching
+	bool nocache;
 
 	QueryRequest(const View &view)
 		:view(view)
@@ -99,7 +101,8 @@ struct QueryRequest {
 		,groupLevel(0)
 		,reversedOrder(false)
 		,nosort(false)
-		,exclude_end(false) {}
+		,exclude_end(false)
+		,nocache(false) {}
 	void reset() {
 		mode = qmAllItems;
 		offset = 0;
@@ -109,6 +112,7 @@ struct QueryRequest {
 		reversedOrder = false;
 		nosort = false;
 		exclude_end = false;
+		nocache = false;
 		keys.clear();
 		ppargs.clear();
 	}
