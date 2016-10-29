@@ -397,7 +397,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StringRef &attachm
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(documentId);
 	url->add(attachmentName);
-	url->add("rev",revId);
+	if (!revId.empty()) url->add("rev",revId);
 
 	//the lock is unlocked in the UploadClass
 	lock.lock();
@@ -505,7 +505,7 @@ Document CouchDB::newDocument() {
 
 Document CouchDB::newDocument(const StringRef &prefix) {
 	Synchronized<FastLock> _(lock);
-	return Document(genUID(),StringRef(prefix));
+	return Document(genUID(StringRef(prefix)),StringRef());
 }
 
 template<typename Fn>

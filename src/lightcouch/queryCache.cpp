@@ -14,6 +14,9 @@
 
 namespace LightCouch {
 
+
+natural QueryCache::maxlru = 4;
+
 static std::uintptr_t hashUrl(ConstStrA url) {
 	typedef FNV1a<sizeof(std::uintptr_t)> HashFn;
 	ConstStrA::Iterator iter = url.getFwIter();
@@ -32,7 +35,7 @@ QueryCache::CachedItem QueryCache::find(ConstStrA url) {
 	auto f = itemMap.find(hashUrl(url));
 	if (f == itemMap.end()) return CachedItem();
 	else {
-		f->second.used = true;
+		f->second.lru = maxlru;
 		return f->second;
 	}
 
@@ -58,12 +61,12 @@ void QueryCache::set(ConstStrA url, const CachedItem& item) {
 void QueryCache::optimize() {
 	decltype(itemMap) newMap;
 	for(auto &&item : itemMap) {
-		if (item.second.used) {
-			item.second.used = false;
+		item.second.lru--;
+		if (item.second.lru) {
 			newMap.insert(item);
 		}
 	}
-	maxSize = newMap.size()*2;
+	maxSize = newMap.size()*maxlru/(maxlru-1);
 	if (maxSize < initialMaxSize) maxSize = initialMaxSize;
 	newMap.swap(itemMap);
 }

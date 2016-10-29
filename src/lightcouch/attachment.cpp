@@ -7,6 +7,8 @@
 
 #include <lightspeed/base/containers/convertString.h>
 #include <lightspeed/utils/base64.h>
+#include "lightspeed/base/containers/autoArray.tcc"
+
 #include "attachment.h"
 
 #include <lightspeed/base/iter/iterConv.h>

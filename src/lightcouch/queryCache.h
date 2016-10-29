@@ -42,15 +42,23 @@ using namespace LightSpeed;
 class QueryCache {
 public:
 
-	QueryCache():maxSize(100),initialMaxSize(100) {}
+	///Specifies max lru for item
+	/**
+	 * LRU defines when the cache item is removed and how much the cache can grow. Everytime
+	 * the cache is compacted, LRU-counter for all items is decreased and the cache can grow twice.
+	 * Once LRU-counter reaches zero, item is removed from the cache.
+	 */
+	static natural maxlru;
+
+	QueryCache():maxSize(1000),initialMaxSize(1000) {}
 	QueryCache(natural hint_size):maxSize(hint_size),initialMaxSize(hint_size) {}
 
 	struct CachedItem {
 		const String etag;
 		const Value value;
-		bool used;
+		natural lru;
 
-		CachedItem():used(false) {}
+		CachedItem() {}
 		///Create cached item
 		/**
 		 *
@@ -59,7 +67,7 @@ public:
 		 * @param value value to store
 		 */
 		CachedItem(String etag,const Value &value)
-			:etag(etag),value(value),used(false) {}
+			:etag(etag),value(value),lru(maxlru) {}
 		bool isDefined() const {return value.defined();}
 	};
 

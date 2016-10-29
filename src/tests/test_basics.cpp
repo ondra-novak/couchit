@@ -348,14 +348,14 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	}
 }
 
-static void loadSomeDataThread3(StringRef locId) {
+static void loadSomeDataThread3(String locId) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
 	for (natural i = 0; i < 3; i++) {
 		Changeset chset = db.createChangeset();
 		Document doc;
-		doc("_id",locId.substr(i-1))
+		doc("_id",locId.substr(i))
 		   ("aaa",100);
 		chset.update(doc);
 		chset.commit(db);
@@ -367,11 +367,11 @@ static void couchChangeSetWaitForData3(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	StringRef uid = db.genUID();
+	String uid = db.genUID();
 	int counter=0;
 
 	Thread thr;
-	thr.start(ThreadFunction::create(&loadSomeDataThread3,uid));
+	thr.start(ThreadFunction([&uid](){loadSomeDataThread3(uid);}));
 
 	ChangesSink chsink (db.createChangesSink());
 	chsink.setTimeout(10000);
@@ -448,7 +448,7 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	Document doc = db.newDocument(".data");
+	Document doc = db.newDocument("data-");
 	Upload upl = db.uploadAttachment(doc,"testAttachment","text/plain");
 	ConstStrA sentence("The quick brown fox jumps over the lazy dog");
 	upl.write(sentence.data(),sentence.length());
