@@ -305,19 +305,19 @@ Value QueryServer::compileDesignDocument(const Value &document) {
 	Value vviews = document["views"];
 	Object compiled;
 
-	if (vshows != null) {
+	if (vshows.defined()) {
 		compiled.set("shows",compileDesignSection(this->shows,vshows,"shows"));
 	}
-	if (vlists != null) {
+	if (vlists.defined()) {
 		compiled.set("lists",compileDesignSection(this->lists,vlists,"lists"));
 	}
-	if (vupdates != null) {
+	if (vupdates.defined()) {
 		compiled.set("updates",compileDesignSection(this->updates,vupdates,"updates"));
 	}
-	if (vfilters != null) {
+	if (vfilters.defined()) {
 		compiled.set("filters",compileDesignSection(this->filters,vfilters,"filters"));
 	}
-	if (vviews != null) {
+	if (vviews.defined()) {
 		compiled.set("views",compileDesignSection(this->views,vviews,"views"));
 	}
 	return compiled;
@@ -332,7 +332,7 @@ template<typename T>
 Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA sectionName) {
 
 	Object out;
-	section.forEach([&](Value value){
+	for(auto && value: section){
 		ConstStrA itemname = StringRef(value.getKey());
 		bool inmap = false;
 		if (value.type() == json::object) {
@@ -353,10 +353,15 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 		}
 
 		Value compiled = createCompiledFnRef(*fnptr);
-		if (inmap) compiled = Object("map", compiled);
+		if (inmap) {
+			Object o;
+			o.set("map", createCompiledFnRef(*fnptr));
+			compiled = o;
+		} else{
+			compiled = createCompiledFnRef(*fnptr);
+		}
 		out.set(StringRef(itemname), compiled);
-		return false;
-	});
+	}
 	return out;
 
 }
@@ -435,7 +440,7 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 				eof = true;
 				return null;
 			} else {
-				throw QueryServerError(THISLOCATION,"protocol_error",StringA(ConstStrA("Expects list_row or list_end, got:")+req[0].getString()));
+				throw QueryServerError(THISLOCATION,"protocol_error",StringA(ConstStrA("Expects list_row or list_end, got:")+ConstStrA(req[0].getString())));
 			}
 		}
 
@@ -468,7 +473,7 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 		bool headerSent;
 	};
 
-	AbstractListBase &listFn = dynamic_cast<const FnCallValue<AbstractListBase> &>(*fn.getHandle()).getFunction();
+	AbstractListBase &listFn = dynamic_cast<const FnCallValue<AbstractListBase> &>(*fn.getHandle()->unproxy()).getFunction();
 
 	ListCtx listCtx(stream,args[0]);
 	listFn.run(listCtx,args[1]);
@@ -478,7 +483,7 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 }
 
 Value QueryServer::commandUpdate(const Value& fn, const Value& args) {
-	AbstractUpdateFnBase &updateFn = dynamic_cast<const FnCallValue<AbstractUpdateFnBase> &>(*fn.getHandle()).getFunction();
+	AbstractUpdateFnBase &updateFn = dynamic_cast<const FnCallValue<AbstractUpdateFnBase> &>(*fn.getHandle()->unproxy()).getFunction();
 	Document doc(args[0]);
 	Value response = updateFn.run(doc, args[1]);
 	if (doc.dirty()) {
@@ -491,7 +496,7 @@ Value QueryServer::commandUpdate(const Value& fn, const Value& args) {
 
 Value QueryServer::commandView(const Value& fn,
 		const Value& args) {
-	AbstractViewBase &mapDocFn = dynamic_cast<const FnCallValue<AbstractViewBase> &>(*fn.getHandle()).getFunction();
+	AbstractViewBase &mapDocFn = dynamic_cast<const FnCallValue<AbstractViewBase> &>(*fn.getHandle()->unproxy()).getFunction();
 
 	class FakeEmit: public IEmitFn {
 	public:
@@ -521,7 +526,7 @@ Value QueryServer::commandView(const Value& fn,
 }
 
 Value QueryServer::commandFilter(const Value& fn, const Value& args) {
-	AbstractFilterBase &filterFn = dynamic_cast<const FnCallValue<AbstractFilterBase> &>(*fn.getHandle()).getFunction();
+	AbstractFilterBase &filterFn = dynamic_cast<const FnCallValue<AbstractFilterBase> &>(*fn.getHandle()->unproxy()).getFunction();
 
 	Value docs= args[0];
 	Array results;
@@ -621,36 +626,36 @@ Value QueryServer::generateDesignDocuments() {
 		const RegListFn::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
-		ddocs.set(StringRef(ddoc.getKey()),
-				Object(ddoc).object("lists")
-						(StringRef(itemName), createVersionedRef(kv.key,kv.value->version())));
+		Object e(ddoc);
+		e.object("lists")(StringRef(itemName), createVersionedRef(kv.key,kv.value->version()));
+		ddocs.set(ddoc.getKey(),e);
 	}
 
 	for (RegShowFn::Iterator iter = shows.getFwIter(); iter.hasItems();) {
 		const RegShowFn::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
-		ddocs.set(StringRef(ddoc.getKey()),
-				Object(ddoc).object("shows")
-					(StringRef(itemName), createVersionedRef(kv.key,kv.value->version())));
+		Object e(ddoc);
+		e.object("shows")(StringRef(itemName), createVersionedRef(kv.key,kv.value->version()));
+		ddocs.set(ddoc.getKey(),e);
 	}
 
 	for (RegUpdateFn::Iterator iter = updates.getFwIter(); iter.hasItems();) {
 		const RegUpdateFn::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
-		ddocs.set(StringRef(ddoc.getKey()),
-				Object(ddoc).object("updates")
-					(StringRef(itemName), createVersionedRef(kv.key,kv.value->version())));
+		Object e(ddoc);
+		e.object("updates")(StringRef(itemName), createVersionedRef(kv.key,kv.value->version()));
+		ddocs.set(ddoc.getKey(),e);
 	}
 
 	for (RegFilterFn::Iterator iter = filters.getFwIter(); iter.hasItems();) {
 		const RegFilterFn::KeyValue &kv = iter.getNext();
 		ConstStrA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
-		ddocs.set(StringRef(ddoc.getKey()),
-				Object(ddoc).object("filters")
-					(StringRef(itemName), createVersionedRef(kv.key,kv.value->version())));
+		Object e(ddoc);
+		e.object("filters")(StringRef(itemName), createVersionedRef(kv.key,kv.value->version()));
+		ddocs.set(ddoc.getKey(),e);
 	}
 
 	Value ddocv = ddocs;

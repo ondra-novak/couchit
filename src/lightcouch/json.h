@@ -116,12 +116,12 @@ public:
 
 	Value(const Value &other):json::Value(other) {}
 
-	LightSpeed::ConstStrA getString() const {return StringRef(json::Value::getString());}
+	StringRef getString() const {return StringRef(json::Value::getString());}
 	Value operator[](const LightSpeed::ConstStrA &name) const {return json::Value::operator[](StringRef(name));}
 	Value operator[](uintptr_t index) const {return json::Value::operator[](index);}
 	Value operator[](const Path &path) const {return json::Value::operator[](path);}
 
-	LightSpeed::ConstStrA getKey() const {return StringRef(json::Value::getKey());}
+	StringRef getKey() const {return StringRef(json::Value::getKey());}
 	String toString() const {return String(json::Value::toString());}
 	String stringify() const {return String(json::Value::stringify());}
 
