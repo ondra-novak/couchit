@@ -18,12 +18,11 @@ public:
 
 	void init(ConstStrA basicUrl, ConstStrA dbname, ConstStrA resourcePath);
 	void init();
-	UrlBuilder &add(ConstStrA path);
-	UrlBuilder &add(ConstStrA key, ConstStrA value);
-	UrlBuilder &addJson(ConstStrA key, Value value);
-	ConstStrA toString() const;
-	operator StringRef() const {return StringRef(buffer.getArray());}
-	operator ConstStrA() const {return ConstStrA(StringRef(buffer.getArray()));}
+	UrlBuilder &add(StrViewA path);
+	UrlBuilder &add(StrViewA key, StrViewA value);
+	UrlBuilder &addJson(StrViewA key, Value value);
+	operator StrViewA() const {return ~ConstStrA(buffer.getArray());}
+	operator ConstStrA() const {return buffer.getArray();}
 
 protected:
 

@@ -182,7 +182,7 @@ static void couchLoadData(PrintTextA &print) {
 		doc("name",item[0])
 			("age",item[1])
 			("height",item[2])
-			("_id",StringRef(ToString<natural>(id,16)));
+			("_id",~ToString<natural>(id,16));
 		id+=14823;
 		savedDocs.add(doc);
 		chset.update(doc);
@@ -192,7 +192,7 @@ static void couchLoadData(PrintTextA &print) {
 	Set<String> uuidmap;
 
 	for (natural i = 0; i < savedDocs.length(); i++) {
-		StringRef uuid = savedDocs[i]["_id"].getString();
+		StrViewA uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
 	print("%1") << uuidmap.size();

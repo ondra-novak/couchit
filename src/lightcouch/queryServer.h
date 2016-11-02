@@ -213,12 +213,12 @@ public:
 	 */
 	virtual Value getRow() = 0;
 	///send text to output
-	virtual void send(StringRef text) = 0;
+	virtual void send(StrViewA text) = 0;
 	///send json to output
 	virtual void send(Value jsonValue) = 0;
 	///send anything convertible to string
 	template<typename Str>
-	void send(const Str &txt) {send(StringRef(txt));}
+	void send(const Str &txt) {send(StrViewA(txt));}
 	///retrieve view header
 	virtual Value getViewHeader() const = 0;
 	///Initializes output

@@ -3,12 +3,12 @@
 #include <immujson/abstractValue.h>
 namespace LightCouch {
 
-const StringRef maxStringRef("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
+const StrViewA maxStrViewA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
 
 
 const Value Query::minKey(nullptr);
-const Value Query::maxKey(Object(maxStringRef,maxStringRef));
-const String Query::maxString(maxStringRef);
+const Value Query::maxKey(Object(maxStrViewA,maxStrViewA));
+const String Query::maxString(maxStrViewA);
 const String Query::minString("");
 
 
@@ -48,7 +48,7 @@ Query& Query::limit(natural limit) {
 	return *this;
 }
 
-Query& Query::arg(const StringRef& argname, const Value& value) {
+Query& Query::arg(const StrViewA& argname, const Value& value) {
 	request.ppargs.set(argname,value);
 	return *this;
 }
@@ -106,8 +106,8 @@ Query& Query::range(const Value& from, const Value& to, natural flags) {
 	return *this;
 }
 
-Query& Query::range(const Value& from, const StringRef& fromDoc,
-		const Value& to, const StringRef& toDoc, bool exclusiveEnd) {
+Query& Query::range(const Value& from, const StrViewA& fromDoc,
+		const Value& to, const StrViewA& toDoc, bool exclusiveEnd) {
 	request.mode = qmKeyRange;
 	request.keys.clear();
 	if (fromDoc.empty() && toDoc.empty()) {

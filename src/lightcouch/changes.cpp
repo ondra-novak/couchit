@@ -88,7 +88,7 @@ Changes ChangesSink::exec() {
 }
 
 ChangesSink& ChangesSink::setFilterFlags(natural flags) {
-	return setFilter(Filter(ConstStrA(),flags));
+	return setFilter(Filter(String(),flags));
 }
 
 void ChangesSink::cancelWait() {

@@ -54,7 +54,7 @@ CompareResult compareJson(const Value &left, const Value &right) {
 			else if (l>r) return cmpResultGreater;
 			else return cmpResultEqual;
 		}
-		case json::string: return compareStringsUnicode(StringRef(left.getString()),StringRef(right.getString()));
+		case json::string: return compareStringsUnicode(~left.getString(),~right.getString());
 		case json::array: {
 				auto li = left.begin(),le= left.end();
 				auto ri = right.begin(), re =right.end();
@@ -71,7 +71,7 @@ CompareResult compareJson(const Value &left, const Value &right) {
 			auto li = left.begin(),le= left.end();
 			auto ri = right.begin(), re =right.end();
 			while (li!=le && li!=le) {
-				CompareResult r = compareStringsUnicode(StringRef((*li).getKey()),StringRef((*ri).getKey()));
+				CompareResult r = compareStringsUnicode(~(*li).getKey(),~(*ri).getKey());
 				if (r != cmpResultEqual) return r;
 				r = compareJson(*li,*ri);
 				if (r != cmpResultEqual) return r;

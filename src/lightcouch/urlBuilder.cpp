@@ -31,17 +31,20 @@ void LightCouch::UrlBuilder::init(ConstStrA basicUrl, ConstStrA dbname, ConstStr
 	curSep = '/';
 }
 
-UrlBuilder &LightCouch::UrlBuilder::add(ConstStrA path) {
-	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rd(path.getFwIter());
+UrlBuilder &LightCouch::UrlBuilder::add(StrViewA path) {
+	ConstStrA cpath = ~path;
+	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rd(cpath.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rd);
 	return *this;
 }
 
-UrlBuilder &LightCouch::UrlBuilder::add(ConstStrA key, ConstStrA value) {
+UrlBuilder &LightCouch::UrlBuilder::add(StrViewA key, StrViewA value) {
+	ConstStrA ckey = ~key;
+	ConstStrA cvalue = ~value;
 	if (curSep == '/') curSep = '?'; else curSep = '&';
-	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdkey(key.getFwIter());
-	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdvalue(value.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdkey(ckey.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdvalue(cvalue.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rdkey);
 	buffer.write('=');
@@ -49,9 +52,10 @@ UrlBuilder &LightCouch::UrlBuilder::add(ConstStrA key, ConstStrA value) {
 	return *this;
 }
 
-UrlBuilder &LightCouch::UrlBuilder::addJson(ConstStrA key, Value value) {
+UrlBuilder &LightCouch::UrlBuilder::addJson(StrViewA key, Value value) {
+	ConstStrA ckey = ~key;
 	if (curSep == '/') curSep = '?'; else curSep = '&';
-	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdkey(key.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdkey(ckey.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rdkey);
 	buffer.write('=');
@@ -66,8 +70,5 @@ UrlBuilder &LightCouch::UrlBuilder::addJson(ConstStrA key, Value value) {
 void UrlBuilder::init() {
 }
 
-ConstStrA LightCouch::UrlBuilder::toString() const {
-	return buffer.getArray();
-}
 
 } /* namespace LightCouch */

@@ -29,7 +29,7 @@ static void genFastUUIDS(PrintTextA &print) {
 
 	for (natural i = 0; i < 50; i++) {
 		String uuid = Value(db.genUID("test-"));
-		out.print("%1\n") << uuid;
+		out.print("%1\n") << ~uuid;
 		uuidmap.insert(uuid);
 		Thread::sleep(100);
 	}

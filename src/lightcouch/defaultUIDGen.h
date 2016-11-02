@@ -42,7 +42,7 @@ namespace LightCouch {
 class DefaultUIDGen: public IIDGen {
 public:
 	DefaultUIDGen();
-	virtual ConstStrA operator()(AutoArray<char> &buffer, ConstStrA prefix);
+	virtual StrViewA operator()(AutoArray<char> &buffer, StrViewA prefix);
 
 	///Generates UID statically
 	/**
@@ -55,14 +55,14 @@ public:
 	 *   match requested length. It requires to have randomGen not null
 	 * @return result is string reference to the buffer
 	 */
-	static ConstStrA generateUID(AutoArray<char> &buffer,
-			ConstStrA prefix,
+	static StrViewA generateUID(AutoArray<char> &buffer,
+			StrViewA prefix,
 			natural timeparam, natural counterparam,
 			Rand *randomGen, natural totalCount=20);
 
 	static DefaultUIDGen &getInstance();
 
-	virtual StringA operator()(ConstStrA prefix);
+	virtual String operator()(StrViewA prefix);
 
 protected:
 	natural counter;

@@ -82,14 +82,14 @@ public:
 
 	///Declare the view
 	/** Declare single view or list by the path only */
-    View(StringA viewPath);
+    View(String viewPath);
     ///Declare more specific view
     /**
      * @param viewPath path to the view relative to the database's root. It can be also path to the list
      * @param flags various flags
      * @param args additional arguments preconfigured for this view
      */
-	View(StringA viewPath, natural flags, Value args = Value());
+	View(String viewPath, natural flags, Value args = Value());
 
 	///Declare more specific view
 	/**
@@ -99,9 +99,9 @@ public:
 	 * not cached. If you need to cache results, use Lists on the server side instead
 	 * @param args additional arguments passed to list-function on the couchDb. It must be Object
 	 */
-	View(StringA viewPath, natural flags, const Postprocessing &ppfunction, Value args = Value() );
+	View(String viewPath, natural flags, const Postprocessing &ppfunction, Value args = Value() );
 
-	const StringA viewPath;
+	const String viewPath;
 	const natural flags;
 	const Value args;
 	Postprocessing postprocess;
@@ -120,7 +120,7 @@ public:
 	 * @param flags some flags to define additional behaviour
 	 * @param args optional arguments passed to the filter
 	 */
-	Filter(StringA filter, natural flags, Value args = Value()  );
+	Filter(String filter, natural flags, Value args = Value()  );
 	///Declare filter using the view
 	/**
 	 * @param view view that will be used to filter results
@@ -132,7 +132,7 @@ public:
 
 
 	///Declare filter without flags (convert string name of the filter to the filter definition)
-	Filter(StringA filter);
+	Filter(String filter);
 	///return all current revisions, including deleted
 	static const natural allRevs = 0x10000;
 

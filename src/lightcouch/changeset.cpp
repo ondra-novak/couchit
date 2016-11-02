@@ -116,7 +116,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 			errors.add(e);
 		}
 		if (rev.defined()) {
-			commitedDocs.insert(std::make_pair(StringRef(id),item));
+			commitedDocs.insert(std::make_pair(StrViewA(id),item));
 		}
 	}
 	if (errors.length()) throw UpdateException(THISLOCATION,errors);
@@ -130,7 +130,7 @@ Changeset::Changeset(const Changeset& other):db(other.db) {
 }
 
 
-void Changeset::revert(const StringRef &docId) {
+void Changeset::revert(const StrViewA &docId) {
 	scheduledDocs.erase(docId);
 }
 
@@ -152,7 +152,7 @@ Changeset& Changeset::erase(const String &docId, const String &revId) {
 	return *this;
 }
 
-String Changeset::getCommitRev(const StringRef& docId) const {
+String Changeset::getCommitRev(const StrViewA& docId) const {
 
 	auto f = commitedDocs.find(docId);
 	if (f == commitedDocs.end()) return String();

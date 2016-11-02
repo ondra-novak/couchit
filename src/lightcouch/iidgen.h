@@ -9,6 +9,7 @@
 #define LIGHTCOUCH_IIDGEN_H_
 #include <lightspeed/base/containers/constStr.h>
 #include "lightspeed/base/containers/autoArray.h"
+#include "json.h"
 
 
 namespace LightCouch {
@@ -31,7 +32,7 @@ using namespace LightSpeed;
 		 *  @param prefix allows specify prefix - it is used to encode type of the object
 		 * @return const-string contains newly generated UID. It can be created inside of the buffer.
 		 */
-		virtual ConstStrA operator()(AutoArray<char> &buffer, ConstStrA prefix) = 0;
+		virtual StrViewA operator()(AutoArray<char> &buffer, StrViewA prefix) = 0;
 	};
 
 

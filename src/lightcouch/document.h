@@ -39,22 +39,22 @@ public:
 	 * @param id id of document
 	 * @param rev revision. It can be empty for new document
 	 */
-	Document(const StringRef &id, const StringRef &rev);
+	Document(const StrViewA &id, const StrViewA &rev);
 
 
 	///Retrieves current document ID. Empty if missing
-	StringRef getID() const;
+	StrViewA getID() const;
 	///Retrieves current document revision ID. Empty if missing
-	StringRef getRev() const;
+	StrViewA getRev() const;
 
 	///Retrieves current document ID. Function returns null if missing
 	Value getIDValue() const;
 	///Retrieves current document revision ID. Function returns null if missing
 	Value getRevValue() const;
 
-	void deleteAttachment(const StringRef &name);
-	void inlineAttachment(const StringRef &name, const AttachmentDataRef &data);
-	Value getAttachment(const StringRef &name) const;
+	void deleteAttachment(const StrViewA &name);
+	void inlineAttachment(const StrViewA &name, const AttachmentDataRef &data);
+	Value getAttachment(const StrViewA &name) const;
 
 
 
@@ -79,7 +79,7 @@ public:
 	 * old the deleted document is. You can also let the replication to skip very old deleted
 	 * documents so it is safe to purge them.
 	 */
-	void setDeleted(StringRefT<StringRef> fieldsToKept = StringRefT<StringRef>(), bool timestamp=true);
+	void setDeleted(StringView<StrViewA> fieldsToKept = StringView<StrViewA>(), bool timestamp=true);
 
 	///Enables timestamping of changes
 	/** Document with timestamps carries field, which contains timestamp of last update. Once this is

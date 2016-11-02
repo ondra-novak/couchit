@@ -44,14 +44,14 @@ namespace LightCouch {
 CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
 	this->keepAlive = true;
 	this->useHTTP10 = false;
-	this->userAgent = StringRef("LightCouch/1.0 (+https://github.com/ondra-novak/lightcouch)");
+	this->userAgent = "LightCouch/1.0 (+https://github.com/ondra-novak/lightcouch)";
 	this->httpsProvider = cfg.httpsProvider;
 	this->proxyProvider = cfg.proxyProvider;
 	if (cfg.iotimeout != null) this->iotimeout = cfg.iotimeout;
 }
 
-StringRef CouchDB::fldTimestamp("~timestamp");
-StringRef CouchDB::fldPrevRevision("~prevRev");
+StrViewA CouchDB::fldTimestamp("~timestamp");
+StrViewA CouchDB::fldPrevRevision("~prevRev");
 natural CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
@@ -68,11 +68,11 @@ CouchDB::CouchDB(const Config& cfg)
 }
 
 
-static bool isRelativePath(const StringRef &path) {
+static bool isRelativePath(const StrViewA &path) {
 	return path.substr(0,7) != "http://" && path.substr(0,8) != "https://";
 }
 
-Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) {
+Value CouchDB::requestGET(const StrViewA &path, Value *headers, natural flags) {
 
 	if (isRelativePath(path)) return requestGET(*getUrlBuilder(path),headers,flags);
 
@@ -93,7 +93,7 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
 		usecache = false;
 	}
 
-	StringRef cacheKey = path.substr(prefixLen);
+	StrViewA cacheKey = path.substr(prefixLen);
 
 	//there will be stored cached item
 	Optional<QueryCache::CachedItem> cachedItem;
@@ -102,18 +102,18 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
 		cachedItem = cache->find(cacheKey);
 	}
 
-	http.open(HttpClient::mGET, path);
+	http.open(HttpClient::mGET, ~path);
 	bool redirectRetry = false;
 	SeqFileInput response(NULL);
     do {
     	redirectRetry = false;
 		http.setHeader(HttpClient::fldAccept,"application/json");
 		if (cachedItem != nil && cachedItem->isDefined()) {
-			http.setHeader(HttpClient::fldIfNoneMatch, cachedItem->etag);
+			http.setHeader(HttpClient::fldIfNoneMatch, ~cachedItem->etag);
 		}
 		if (headers!= nullptr)
 			headers->forEach([this](Value v){
-				this->http.setHeader(StringRef(v.getKey()),StringRef(v.getString()));
+				this->http.setHeader(~v.getKey(),~v.getString());
 				return true;
 			});
 
@@ -124,7 +124,7 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
 		}
 		if (http.getStatus() == 301 || http.getStatus() == 302 || http.getStatus() == 303 || http.getStatus() == 307) {
 			HttpClient::HeaderValue val = http.getHeader(http.fldLocation);
-			if (!val.defined) throw RequestError(THISLOCATION,ConstStrA(path),http.getStatus(),http.getStatusMessage(), Value("Redirect without Location"));
+			if (!val.defined) throw RequestError(THISLOCATION,~path,http.getStatus(),http.getStatusMessage(), Value("Redirect without Location"));
 			http.close();
 			http.open(HttpClient::mGET, val);
 			redirectRetry = true;
@@ -143,19 +143,19 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
 
 		}
 		http.close();
-		throw RequestError(THISLOCATION,ConstStrA(path),http.getStatus(), http.getStatusMessage(), errorVal);
+		throw RequestError(THISLOCATION,~path,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		Value v = Value::parse(readStreamFn);
 		if (usecache) {
 			BredyHttpSrv::HeaderValue fld = http.getHeader(HttpClient::fldETag);
 			if (fld.defined) {
-				cache->set(cacheKey, QueryCache::CachedItem(StringRef(fld), v));
+				cache->set(cacheKey, QueryCache::CachedItem(~fld, v));
 			}
 		}
 		if (flags & flgStoreHeaders && headers != nullptr) {
 			Object obj;
-			http.enumHeaders([&](StringRef key, StringRef value) {
-				obj(key,value);
+			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
+				obj(~key,~value);
 				return false;
 			});
 			*headers = obj;
@@ -165,7 +165,7 @@ Value CouchDB::requestGET(const StringRef &path, Value *headers, natural flags) 
 	}
 }
 
-Value CouchDB::requestDELETE(const StringRef &path, Value *headers, natural flags) {
+Value CouchDB::requestDELETE(const StrViewA &path, Value *headers, natural flags) {
 
 	if (isRelativePath(path)) return requestDELETE(*getUrlBuilder(path),headers,flags);
 
@@ -174,10 +174,10 @@ Value CouchDB::requestDELETE(const StringRef &path, Value *headers, natural flag
 	}
 
 	Synchronized<FastLock> _(lock);
-	http.open(HttpClient::mDELETE, path);
+	http.open(HttpClient::mDELETE, ~path);
 	http.setHeader(HttpClient::fldAccept,"application/json");
 	if (headers) headers->forEach([this](Value v){
-		this->http.setHeader(StringRef(v.getKey()),StringRef(v.getString()));
+		this->http.setHeader(~v.getKey(),~v.getString());
 		return true;
 	});
 
@@ -193,13 +193,13 @@ Value CouchDB::requestDELETE(const StringRef &path, Value *headers, natural flag
 
 		}
 		http.close();
-		throw RequestError(THISLOCATION,ConstStrA(path),http.getStatus(), http.getStatusMessage(), errorVal);
+		throw RequestError(THISLOCATION,~path,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		Value v = Value::parse(readStreamFn);
 		if (flags & flgStoreHeaders && headers != nullptr) {
 			Object obj;
-			http.enumHeaders([&](StringRef key, StringRef value) {
-				obj(key, value);
+			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
+				obj(~key, ~value);
 				return false;
 			});
 			*headers = obj;
@@ -209,7 +209,7 @@ Value CouchDB::requestDELETE(const StringRef &path, Value *headers, natural flag
 	}
 }
 
-Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StringRef &path, Value data, Value *headers, natural flags) {
+Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StrViewA &path, Value data, Value *headers, natural flags) {
 
 	if (isRelativePath(path)) return jsonPUTPOST(method,*getUrlBuilder(path),data,headers,flags);
 
@@ -219,12 +219,12 @@ Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StringRef &path, Val
 
 
 	Synchronized<FastLock> _(lock);
-	http.open(method, path);
+	http.open(method, ~path);
 	http.setHeader(HttpClient::fldAccept,"application/json");
 	http.setHeader(HttpClient::fldContentType,"application/json");
 	if (headers != nullptr)
 		headers->forEach([this](Value v){
-		this->http.setHeader(StringRef(v.getKey()),StringRef(v.getString()));
+		this->http.setHeader(~v.getKey(),~v.getString());
 		return true;
 	});
 
@@ -246,13 +246,13 @@ Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StringRef &path, Val
 
 		}
 		http.close();
-		throw RequestError(THISLOCATION,ConstStrA(path),http.getStatus(), http.getStatusMessage(), errorVal);
+		throw RequestError(THISLOCATION,~path,http.getStatus(), http.getStatusMessage(), errorVal);
 	} else {
 		Value v = Value::parse(readStreamFn);
 		if (flags & flgStoreHeaders && headers != nullptr) {
 			Object obj;
-			http.enumHeaders([&](StringRef key, StringRef value) {
-				obj(key, value);
+			http.enumHeaders([&](ConstStrA key, ConstStrA value) {
+				obj(~key, ~value);
 				return false;
 			});
 			*headers = obj;
@@ -263,10 +263,10 @@ Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StringRef &path, Val
 }
 
 
-Value CouchDB::requestPUT(const StringRef &path, const Value &postData, Value *headers, natural flags) {
+Value CouchDB::requestPUT(const StrViewA &path, const Value &postData, Value *headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPUT,path,postData,headers,flags);
 }
-Value CouchDB::requestPOST(const StringRef &path, const Value &postData, Value *headers, natural flags) {
+Value CouchDB::requestPOST(const StrViewA &path, const Value &postData, Value *headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPOST,path,postData,headers,flags);
 }
 
@@ -284,12 +284,12 @@ String CouchDB::getCurrentDB() const {
 
 void CouchDB::createDatabase() {
 	PUrlBuilder url = getUrlBuilder("");
-	requestPUT(url->toString(),Value());
+	requestPUT(*url,Value());
 }
 
 void CouchDB::deleteDatabase() {
 	PUrlBuilder url = getUrlBuilder("");
-	requestDELETE(url->toString(),nullptr);
+	requestDELETE(*url,nullptr);
 }
 
 CouchDB::~CouchDB() {
@@ -323,27 +323,27 @@ Query CouchDB::createQuery(natural viewFlags) {
 	return createQuery(v);
 }
 
-Value CouchDB::retrieveLocalDocument(const StringRef &localId, natural flags) {
+Value CouchDB::retrieveLocalDocument(const StrViewA &localId, natural flags) {
 	PUrlBuilder url = getUrlBuilder("_local");
 	url->add(localId);
-	return requestGET(url->toString(),nullptr, flags & (flgDisableCache|flgRefreshCache));
+	return requestGET(*url,nullptr, flags & (flgDisableCache|flgRefreshCache));
 }
 
-StringRef CouchDB::genUID() {
-	return uidGen(uidBuffer,StringRef());
+StrViewA CouchDB::genUID() {
+	return uidGen(uidBuffer,StrViewA());
 }
 
-StringRef CouchDB::genUID(StringRef prefix) {
+StrViewA CouchDB::genUID(StrViewA prefix) {
 	return uidGen(uidBuffer,prefix);
 }
 
-Value CouchDB::retrieveDocument(const StringRef &docId, const StringRef & revId, natural flags) {
+Value CouchDB::retrieveDocument(const StrViewA &docId, const StrViewA & revId, natural flags) {
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(docId).add("rev",revId);
 	return requestGET(*url,nullptr, flags & (flgDisableCache|flgRefreshCache));
 }
 
-Value CouchDB::retrieveDocument(const StringRef &docId, natural flags) {
+Value CouchDB::retrieveDocument(const StrViewA &docId, natural flags) {
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(docId);
 
@@ -359,12 +359,12 @@ Value CouchDB::retrieveDocument(const StringRef &docId, natural flags) {
 
 }
 
-CouchDB::UpdateResult CouchDB::updateDoc(StringRef updateHandlerPath, StringRef documentId,
+CouchDB::UpdateResult CouchDB::updateDoc(StrViewA updateHandlerPath, StrViewA documentId,
 		Value arguments) {
 	PUrlBuilder url = getUrlBuilder(updateHandlerPath);
 	url->add(documentId);
 	for (auto &&v:arguments) {
-		StringRef key = v.getKey();
+		StrViewA key = v.getKey();
 		String vstr = v.toString();
 		url->add(key,vstr);
 	}
@@ -374,13 +374,13 @@ CouchDB::UpdateResult CouchDB::updateDoc(StringRef updateHandlerPath, StringRef 
 
 }
 
-Value CouchDB::showDoc(const StringRef &showHandlerPath, const StringRef &documentId,
+Value CouchDB::showDoc(const StrViewA &showHandlerPath, const StrViewA &documentId,
 		const Value &arguments, natural flags) {
 
 	PUrlBuilder url = getUrlBuilder(showHandlerPath);
 	url->add(documentId);
 	for (auto &&v:arguments) {
-		StringRef key = v.getKey();
+		StrViewA key = v.getKey();
 		String vstr = v.toString();
 		url->add(key,vstr);
 	}
@@ -390,10 +390,10 @@ Value CouchDB::showDoc(const StringRef &showHandlerPath, const StringRef &docume
 }
 
 
-Upload CouchDB::uploadAttachment(const Value &document, const StringRef &attachmentName, const StringRef &contentType) {
+Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType) {
 
-	StringRef documentId = document["_id"].getString();
-	StringRef revId = document["_rev"].getString();
+	StrViewA documentId = document["_id"].getString();
+	StrViewA revId = document["_rev"].getString();
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(documentId);
 	url->add(attachmentName);
@@ -438,8 +438,8 @@ Upload CouchDB::uploadAttachment(const Value &document, const StringRef &attachm
 
 					}
 					http.close();
-					StringRef url(*urlline);
-					throw RequestError(THISLOCATION,ConstStrA(url),http.getStatus(), http.getStatusMessage(), errorVal);
+					StrViewA url(*urlline);
+					throw RequestError(THISLOCATION,~url,http.getStatus(), http.getStatusMessage(), errorVal);
 				} else {
 					Value v = Value::parse(responseData);
 					http.close();
@@ -465,9 +465,9 @@ Upload CouchDB::uploadAttachment(const Value &document, const StringRef &attachm
 
 	try {
 		//open request
-		http.open(HttpClient::mPUT, StringRef(*url));
+		http.open(HttpClient::mPUT, (*url));
 		//send header
-		http.setHeader(HttpClient::fldContentType, contentType);
+		http.setHeader(HttpClient::fldContentType,~contentType);
 		//create upload object
 		return Upload(new UploadClass(lock,http,url));
 	} catch (...) {
@@ -479,7 +479,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StringRef &attachm
 
 }
 
-String CouchDB::uploadAttachment(const Value &document, const StringRef &attachmentName, const AttachmentDataRef &attachmentData) {
+String CouchDB::uploadAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData) {
 
 	Upload upld = uploadAttachment(document,attachmentName,attachmentData.contentType);
 	upld.write(attachmentData.data(), attachmentData.length());
@@ -489,29 +489,29 @@ String CouchDB::uploadAttachment(const Value &document, const StringRef &attachm
 
 Value CouchDB::genUIDValue() {
 	Synchronized<FastLock> _(lock);
-	return StringRef(genUID());
+	return StrViewA(genUID());
 }
 
-Value CouchDB::genUIDValue(StringRef prefix) {
+Value CouchDB::genUIDValue(StrViewA prefix) {
 	Synchronized<FastLock> _(lock);
-	return StringRef(genUID(prefix));
+	return StrViewA(genUID(prefix));
 }
 
 
 Document CouchDB::newDocument() {
 	Synchronized<FastLock> _(lock);
-	return Document(genUID(),StringRef());
+	return Document(genUID(),StrViewA());
 }
 
-Document CouchDB::newDocument(const StringRef &prefix) {
+Document CouchDB::newDocument(const StrViewA &prefix) {
 	Synchronized<FastLock> _(lock);
-	return Document(genUID(StringRef(prefix)),StringRef());
+	return Document(genUID(StrViewA(prefix)),StrViewA());
 }
 
 template<typename Fn>
 class DesignDocumentParse: public json::Parser<Fn> {
 public:
-	AutoArray<char> functionBuff;
+	std::string functionBuff;
 
 	typedef json::Parser<Fn> Super;
 
@@ -533,14 +533,13 @@ public:
 				Super::checkString(functionkw+1);
 
 				functionBuff.clear();
-				functionBuff.append(ConstStrA(functionkw));
+				functionBuff.append(functionkw);
 
-				AutoArray<char>::WriteIter wr = functionBuff.getWriteIterator();
 
 				Stack<char, SmallAlloc<256> > levelStack;
 				while(true) {
 					char c = Super::rd.nextCommit();
-					wr.write(c);
+					functionBuff.push_back(c);
 					if (c == '(' || c == '[' || c == '{') {
 						levelStack.push(c);
 					} else if (c == ')' || c == ']' || c == '}') {
@@ -553,10 +552,10 @@ public:
 						if (levelStack.empty() && c == '}') break;
 					} else if (c == '"') {
 						json::Value v = Super::parseString();
-						v.serialize([&](char c) {wr.write(c);});
+						v.serialize([&](char c) {functionBuff.push_back(c);});
 					}
 				}
-				return json::Value(StringRef(functionBuff));
+				return json::Value(functionBuff);
 			} else {
 				throw json::ParseError("Unexpected token");
 			}
@@ -566,7 +565,7 @@ public:
 	}
 };
 
-static const StringRef _designSlash("_design/");
+static const StrViewA _designSlash("_design/");
 
 
 
@@ -667,8 +666,8 @@ bool CouchDB::uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updat
 bool  CouchDB::uploadDesignDocument(const char* content,
 		natural contentLen, DesignDocUpdateRule updateRule) {
 
-	StringRef ctt(content, contentLen);
-	StringRef::Iterator iter = ctt.getFwIter();
+	ConstStrA ctt(content, contentLen);
+	ConstStrA::Iterator iter = ctt.getFwIter();
 	return uploadDesignDocument(parseDesignDocument(iter), updateRule);
 
 }
@@ -681,20 +680,20 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		url->add("since", sink.seqNumber.toString());
 	}
 	if (sink.outlimit != naturalNull) {
-		url->add("limit",ToString<natural>(sink.outlimit));
+		url->add("limit",~ToString<natural>(sink.outlimit));
 	}
 	if (sink.timeout > 0) {
 		url->add("feed","longpoll");
 		if (sink.timeout == naturalNull) {
 			url->add("heartbeat","true");
 		} else {
-			url->add("timeout",ToString<natural>(sink.timeout));
+			url->add("timeout",~ToString<natural>(sink.timeout));
 		}
 	}
 	if (sink.filter != null) {
 		const Filter &flt = sink.filter;
 		if (!flt.viewPath.empty()) {
-			ConstStrA fltpath = flt.viewPath;
+			ConstStrA fltpath = ~flt.viewPath;
 			ConstStrA ddocName;
 			ConstStrA filterName;
 			bool isView = false;
@@ -709,7 +708,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 			}
 			filterName = x;
 
-			String fpath({StringRef(ddocName),"/",StringRef(filterName)});
+			String fpath({~ddocName,"/",~filterName});
 
 			if (isView) {
 				url->add("filter","_view");
@@ -736,13 +735,13 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		}
 		for (auto &&itm: flt.args) {
 			if (!sink.filterArgs[itm.getKey()].defined()) {
-				url->add(StringRef(itm.getKey()),StringRef(itm.toString()));
+				url->add(StrViewA(itm.getKey()),StrViewA(itm.toString()));
 			}
 		}
 	}
 	for (auto &&v : sink.filterArgs) {
 			String val = v.toString();
-			StringRef key = v.getKey();
+			StrViewA key = v.getKey();
 			url->add(key,val);
 	}
 
@@ -853,12 +852,12 @@ protected:
 };
 
 
-Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StringRef &etag) {
+Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StrViewA &etag) {
 
 	lock.lock();
 	try {
 		http.open(HttpClient::mGET, *urlline);
-		if (!etag.empty()) http.setHeader(http.fldIfNoneMatch,etag);
+		if (!etag.empty()) http.setHeader(http.fldIfNoneMatch,~etag);
 		SeqFileInput in = http.send();
 
 		auto readStreamFn = [&in](){return in.getNext();};
@@ -880,8 +879,8 @@ Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StringRef &e
 			HttpClient::HeaderValue etag = http.getHeader(HttpClient::fldETag);
 			natural llen = naturalNull;
 			if (len.defined) parseUnsignedNumber(len.getFwIter(), llen, 10);
-			if (status == 304) return Download(new EmptyDownload,StringRef(ctx),StringRef(etag),llen,true);
-			else return Download(new StreamDownload(in.getStream(),lock,http),StringRef(ctx),StringRef(etag),llen,false);
+			if (status == 304) return Download(new EmptyDownload,~ctx,~etag,llen,true);
+			else return Download(new StreamDownload(in.getStream(),lock,http),~ctx,~etag,llen,false);
 		}
 	} catch (...) {
 		lock.unlock();
@@ -891,10 +890,10 @@ Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StringRef &e
 
 }
 
-Download CouchDB::downloadAttachment(const Document &document, const StringRef &attachmentName,  const StringRef &etag) {
+Download CouchDB::downloadAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag) {
 
-	StringRef documentId = document["_id"].getString();
-	StringRef revId = document["_rev"].getString();
+	StrViewA documentId = document["_id"].getString();
+	StrViewA revId = document["_rev"].getString();
 
 	if (revId.empty()) return downloadAttachment(documentId, attachmentName, etag);
 
@@ -908,12 +907,12 @@ Download CouchDB::downloadAttachment(const Document &document, const StringRef &
 
 }
 
-Download CouchDB::downloadAttachment(const Value &document, const StringRef &attachmentName,  const StringRef &etag) {
+Download CouchDB::downloadAttachment(const Value &document, const StrViewA &attachmentName,  const StrViewA &etag) {
 
-	if (document.type() == json::string) return downloadAttachment((StringRef)document.getString(), attachmentName, etag);
+	if (document.type() == json::string) return downloadAttachment((StrViewA)document.getString(), attachmentName, etag);
 
-	StringRef documentId = document["_id"].getString();
-	StringRef revId = document["_rev"].getString();
+	StrViewA documentId = document["_id"].getString();
+	StrViewA revId = document["_rev"].getString();
 
 	if (revId.empty()) return downloadAttachment(documentId, attachmentName, etag);
 
@@ -926,7 +925,7 @@ Download CouchDB::downloadAttachment(const Value &document, const StringRef &att
 
 }
 
-Download CouchDB::downloadAttachment(const StringRef &docId, const StringRef &attachmentName,  const StringRef &etag) {
+Download CouchDB::downloadAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag) {
 
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(docId);
@@ -938,6 +937,7 @@ Download CouchDB::downloadAttachment(const StringRef &docId, const StringRef &at
 
 CouchDB::Queryable::Queryable(CouchDB& owner):owner(owner) {
 }
+
 
 Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
@@ -980,27 +980,27 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		case qmKeyRange: {
 							Value start = r.keys[0];
 							Value end = r.keys[1];
-							url->addJson(startKey,start);
-							url->addJson(endKey,end);
+							url->addJson(~startKey,start);
+							url->addJson(~endKey,end);
 							if (r.docIdFromGetKey) {
-								StringRef startDocId = start.getKey();
+								StrViewA startDocId = start.getKey();
 								if (!startDocId.empty()) {
-									url->add(startKeyDocId, startDocId);
+									url->add(~startKeyDocId, startDocId);
 								}
-								StringRef endDocId = end.getKey();
+								StrViewA endDocId = end.getKey();
 								if (!endDocId.empty()) {
-									url->add(endKeyDocId, endDocId);
+									url->add(~endKeyDocId, endDocId);
 								}
 							}
 						}
 						break;
 		case qmKeyPrefix:
-					url->addJson(startKey,Value(r.keys[0]).addToArray(Query::minKey));
-					url->addJson(endKey,Value(r.keys[0]).addToArray(Query::maxKey));
+					url->addJson(~startKey,addToArray(r.keys[0],Query::minKey));
+					url->addJson(~endKey,addToArray(r.keys[0],Query::maxKey));
 				break;
 		case qmStringPrefix:
-				url->addJson(startKey,Value(r.keys[0]).addSuffix(Query::minString));
-				url->addJson(endKey,Value(r.keys[0]).addSuffix(Query::maxString));
+				url->addJson(~startKey,addSuffix(r.keys[0],Query::minString));
+				url->addJson(~endKey,addSuffix(r.keys[0],Query::maxString));
 				break;
 		}
 
@@ -1013,7 +1013,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 			if (r.mode == qmKeyList) {
 				url->add("group",level?"true":"false");
 			} else {
-				url->add("groupLevel",ToString<natural>(level));
+				url->add("groupLevel",~ToString<natural>(level));
 			}
 		}
 			break;
@@ -1021,7 +1021,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		url->add("group","true");
 		break;
 	case rmGroupLevel:
-		url->add("group_level",ToString<natural>(r.groupLevel));
+		url->add("group_level",~ToString<natural>(r.groupLevel));
 		break;
 	case rmNoReduce:
 		url->add("reduce","false");
@@ -1030,8 +1030,8 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		break;
 	}
 
-	if (r.offset) url->add("skip",ToString<natural>(r.offset));
-	if (r.limit != naturalNull) url->add("limit",ToString<natural>(r.limit));
+	if (r.offset) url->add("skip",~ToString<natural>(r.offset));
+	if (r.limit != naturalNull) url->add("limit",~ToString<natural>(r.limit));
 	if (r.nosort) url->add("sorted","false");
 	if (r.view.flags & View::includeDocs) {
 		url->add("include_docs","true");
@@ -1047,10 +1047,10 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 	if (r.view.args.type() == json::object) {
 		for(auto &&item: r.view.args) {
-			url->add(StringRef(item.getKey()),StringRef(item.toString()));
+			url->add(StrViewA(item.getKey()),StrViewA(item.toString()));
 		}
 	} else if (r.view.args.defined()) {
-		url->add("args",StringRef(r.view.args.toString()));
+		url->add("args",StrViewA(r.view.args.toString()));
 	}
 
 	Value result;
@@ -1076,12 +1076,12 @@ const char* CouchDB::UrlBldPool::getResourceName() const {
 	return "Url buffer";
 }
 
-CouchDB::PUrlBuilder CouchDB::getUrlBuilder(ConstStrA resourcePath) {
-	if (database.empty() && resourcePath.head(1) != ConstStrA("/"))
+CouchDB::PUrlBuilder CouchDB::getUrlBuilder(StrViewA resourcePath) {
+	if (database.empty() && resourcePath.substr(0,1) != StrViewA("/"))
 		throw ErrorMessageException(THISLOCATION,"No database selected");
 
 	PUrlBuilder b(urlBldPool);
-	b->init(baseUrl,database,resourcePath);
+	b->init(~baseUrl,~database,~resourcePath);
 	return b;
 }
 

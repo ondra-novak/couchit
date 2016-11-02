@@ -10,143 +10,59 @@
 
 #include <immujson/json.h>
 #include <lightspeed/base/containers/flatArray.h>
+#include <lightspeed/base/containers/stringBase.h>
 #include <lightspeed/base/text/textOut.h>
 
 namespace LightCouch {
 
-using json::Path;
-using json::Object;
-using json::Array;
+
+typedef json::Value Value;
+typedef json::String String;
+typedef json::Object Object;
+typedef json::Array Array;
+typedef json::Path Path;
+typedef json::StrViewA StrViewA;
+using json::StringView;
 
 
-template<typename T> class StringRefIterT;
 
-template<typename T>
-class StringRefT: public json::StringView<T> {
-public:
-	StringRefT()  {}
-	StringRefT(const json::StringView<T> &other):json::StringView<T>(other) {}
-	StringRefT(const T *str) :json::StringView<T>(str) {}
-	StringRefT(const T *str, std::size_t length):json::StringView<T>(str,length) {}
-	StringRefT(const std::basic_string<T> &string):json::StringView<T>(string) {}
-	StringRefT(const std::vector<T> &string) :json::StringView<T>(string) {}
-	template<typename Impl>
-	StringRefT(const LightSpeed::FlatArray<T, Impl> &str):json::StringView<T>(str.data(), str.length()) {}
-	template<typename Impl>
-	StringRefT(const LightSpeed::FlatArray<const T, Impl> &str):json::StringView<T>(str.data(), str.length()) {}
-	operator LightSpeed::ConstStringT<T>() const {return LightSpeed::ConstStringT<T>(this->data, this->length);}
 
-	typedef typename LightSpeed::ConstStringT<T>::SplitIterator SplitIterator;
-	typedef StringRefIterT<T> Iterator;
-
-	StringRefIterT<T> getFwIter() const {return StringRefIterT<T>(*this);}
-
-	explicit operator std::basic_string<T>() const;
-};
-/*
-template<>
-class StringRefT<char>: public json::StringView<char> {
-public:
-	StringRefT()  {}
-	StringRefT(const json::String &other):json::StringView<char>(other.operator json::StringView<char>()) {}
-	StringRefT(const json::StringView<char> &other):json::StringView<char>(other) {}
-	StringRefT(const char *str) :json::StringView<char>(str) {}
-	StringRefT(const char *str, std::size_t length):json::StringView<char>(str,length) {}
-	StringRefT(const std::basic_string<char> &string):json::StringView<char>(string) {}
-	StringRefT(const std::vector<char> &string) :json::StringView<char>(string) {}
-	template<typename Impl>
-	StringRefT(const LightSpeed::FlatArray<char,Impl> &str):json::StringView<char>(str.data(), str.length()) {}
-	template<typename Impl>
-	StringRefT(const LightSpeed::FlatArray<const char,Impl> &str):json::StringView<char>(str.data(), str.length()) {}
-	operator LightSpeed::ConstStringT<char>() const {return LightSpeed::ConstStringT<char>(this->data, this->length);}
-
-	typedef LightSpeed::ConstStringT<char>::Iterator Iterator;
-	typedef typename LightSpeed::ConstStringT<char>::SplitIterator SplitIterator;
-	typedef StringRefIterT<char> Iterator;
-
-	StringRefIterT<char> getFwIter() const {return StringRefIterT<char>(*this);}
-	SplitIterator split(char c) const {return LightSpeed::ConstStringT<char>(*this).split(c);}
-
-	explicit operator std::basic_string<char>() const;
-};
-*/
 
 template<typename T>
-class StringRefIterT: public LightSpeed::IteratorBase<T, StringRefIterT<T> > {
-public:
-	StringRefIterT(const StringRefT<T> &str):str(str),pos(0) {}
-	bool hasItems() const {return pos < str.length;}
-	const T &getNext() {return str[pos++];}
-	const T &peek() const {return str[pos];}
-protected:
-	StringRefT<T> str;
-	LightSpeed::natural pos;
+static inline json::StringView<T> operator~(const LightSpeed::ConstStringT<T> &x) {
+	return json::StringView<T>(x.data(),x.length());
+}
+template<typename T>
+static inline json::StringView<T> operator~(const LightSpeed::StringCore<T> &x) {
+	return json::StringView<T>(x.data(),x.length());
+}
+template<typename T>
+static inline LightSpeed::ConstStringT<T> operator~(const json::StringView<T> &x) {
+	return LightSpeed::ConstStringT<T>(x.data,x.length);
+}
 
-};
+static inline LightSpeed::ConstStringT<char> operator~(const json::String&x) {
+	json::StringView<char> y = x;
+	return ~y;
+}
 
-typedef StringRefT<char> StringRef;
-typedef StringRefT<unsigned char> BinaryRef;
+static inline Value addToArray(Value v, Value add) {
+	Array c(v);
+	c.add(add);
+	return c;
+}
 
-
-class String: public json::String {
-public:
-	template<typename T>
-	String(T &&x):json::String(x) {}
-	String() {}
-	String(const LightSpeed::ConstStrA &str):json::String(StringRef(str)) {}
-	String(const String &other):json::String(other) {}
-	String(const std::initializer_list<json::StringView<char> > &strlist):json::String(strlist){}
-	operator LightSpeed::ConstStrA() const {return StringRef(*this);}
-/*
-	using json::String::operator>;
-	using json::String::operator<;
-	using json::String::operator==;
-	using json::String::operator!=;
-	using json::String::operator>=;
-	using json::String::operator<=;*/
-};
-
-class Value: public json::Value {
-public:
-	template<typename T>
-	Value(T &&x):json::Value(x) {}
-//	Value(const String &x):json::Value((Value)x) {}
-	Value() {}
-	Value(const std::initializer_list<json::Value> &data):json::Value(data) {}
-
-	Value(const Value &other):json::Value(other) {}
-
-	StringRef getString() const {return StringRef(json::Value::getString());}
-	Value operator[](const LightSpeed::ConstStrA &name) const {return json::Value::operator[](StringRef(name));}
-	Value operator[](uintptr_t index) const {return json::Value::operator[](index);}
-	Value operator[](const Path &path) const {return json::Value::operator[](path);}
-
-	StringRef getKey() const {return StringRef(json::Value::getKey());}
-	String toString() const {return String(json::Value::toString());}
-	String stringify() const {return String(json::Value::stringify());}
-
-
-	Value addToArray(const Value &item) {
-		Array x(*this);
-		if (x.empty()) x.add(*this);
-		x.add(item);
-		return x;
-	}
-
-	Value addSuffix(const String &suffix) {
-		if (!empty()) {
-			Array x(*this);
-			std::size_t sz = size()-1;
+static inline Value addSuffix(Value v,const String &suffix) {
+		if (!v.empty()) {
+			Array x(v);
+			std::size_t sz = v.size()-1;
 			x.trunc(sz);
-			x.add(operator[](sz).toString()+suffix);
+			x.add(v[sz].toString()+suffix);
 			return x;
 		} else {
-			return toString() + suffix;
+			return v.toString() + suffix;
 		}
 	}
-};
-
-
 
 
 }

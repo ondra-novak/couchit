@@ -90,7 +90,7 @@ static void couchLoadData(PrintTextA &print) {
 		doc("name",item[0])
 			("age",item[1])
 			("height",item[2])
-			("_id",StringRef(ToString<natural>(id,16)));
+			("_id",~ToString<natural>(id,16));
 		id+=14823;
 		savedDocs.add(doc);
 		chset.update(doc);
@@ -100,7 +100,7 @@ static void couchLoadData(PrintTextA &print) {
 	Set<String> uuidmap;
 
 	for (natural i = 0; i < savedDocs.length(); i++) {
-		StringRef uuid = savedDocs[i]["_id"].getString();
+		StrViewA uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
 	print("%1") << uuidmap.size();
@@ -310,7 +310,7 @@ static void couchChangeSetOneShot(PrintTextA &a) {
 	a("%1") << (count > 10);
 }
 
-static void loadSomeDataThread(StringRef locId) {
+static void loadSomeDataThread(StrViewA locId) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -327,7 +327,7 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	StringRef uid = db.genUID();
+	StrViewA uid = db.genUID();
 
 	Thread thr;
 	thr.start(ThreadFunction::create(&loadSomeDataThread,uid));
@@ -441,7 +441,7 @@ static void couchRetrieveDocument(PrintTextA &a) {
 	Document doc = db.retrieveDocument(row.id.getString(), CouchDB::flgSeqNumber);
 	//this is random - cannot be tested
 	doc.unset("_id").unset("_rev");
-	a("%1") << Value(doc).toString();
+	a("%1") << ~Value(doc).toString();
 }
 
 static void couchStoreAndRetrieveAttachment(PrintTextA &a) {

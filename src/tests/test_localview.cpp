@@ -78,7 +78,7 @@ static void loadData(LocalView &view) {
 		doc("name",kv[0])
 			("age",kv[1])
 			("height",kv[2])
-			("_id",StringRef(gen(buffer,"")));
+			("_id",gen(buffer,""));
 		view.updateDoc(doc);
 	}
 

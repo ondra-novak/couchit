@@ -137,7 +137,7 @@ struct ResultJoinHlp {
 };
 
 template<typename BindFn>
-inline Result LightCouch::Result::join(QueryBase& q, const StringRef &name, natural flags,  BindFn bindFn)
+inline Result LightCouch::Result::join(QueryBase& q, const StrViewA &name, natural flags,  BindFn bindFn)
 {
 	typedef MultiMap<Value, ResultJoinHlp, JsonIsLess> ResultMap;
 	ResultMap map;
@@ -184,7 +184,7 @@ inline Result LightCouch::Result::join(QueryBase& q, const StringRef &name, natu
 					(name,row.value.joinRows.tail(1)[0]));
 					break;
 			case joinAllRows: output.add(Object(row.value.baseObject)
-					(name,Value(StringRefT<Value>(row.value.joinRows))));
+					(name,Value(StrViewAT<Value>(row.value.joinRows))));
 					break;
 			default:
 				//skip row

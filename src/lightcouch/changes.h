@@ -30,7 +30,7 @@ public:
 	///sequence number
 	const Value seqId;
 	///document id
-	const StringRef id;
+	const StrViewA id;
 	///list of revisions changed
 	const Value revisions;
 	///true, if document has been deleted
@@ -169,7 +169,7 @@ public:
 	 * @return
 	 */
 	template<typename T>
-	ChangesSink& arg(StringRef key, T value);
+	ChangesSink& arg(StrViewA key, T value);
 	///Limit output for max count result
 	/**
 	 * @param count count of results to be in output. Specify naturalNull to remove limit
@@ -239,7 +239,7 @@ protected:
 
 
 template<typename T>
-inline ChangesSink& LightCouch::ChangesSink::arg(StringRef key, T value) {
+inline ChangesSink& LightCouch::ChangesSink::arg(StrViewA key, T value) {
 
 	filterArgs.set(key, value);
 	return *this;

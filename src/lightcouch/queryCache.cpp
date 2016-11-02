@@ -17,18 +17,18 @@ namespace LightCouch {
 
 natural QueryCache::maxlru = 4;
 
-static std::uintptr_t hashUrl(ConstStrA url) {
+static std::uintptr_t hashUrl(StrViewA url) {
 	typedef FNV1a<sizeof(std::uintptr_t)> HashFn;
-	ConstStrA::Iterator iter = url.getFwIter();
+	std::size_t sz = url.length,pos = 0;
 	return HashFn::hash([&]() -> int {
-		if (iter.hasItems()) return (byte)iter.getNext();
+		if (pos < sz) return (byte)url[pos++];
 		else return -1;
 	});
 
 }
 
 
-QueryCache::CachedItem QueryCache::find(ConstStrA url) {
+QueryCache::CachedItem QueryCache::find(StrViewA url) {
 
 	Synchronized<FastLock> _(lock);
 
@@ -45,7 +45,7 @@ void QueryCache::clear() {
 	itemMap.clear();
 }
 
-void QueryCache::set(ConstStrA url, const CachedItem& item) {
+void QueryCache::set(StrViewA url, const CachedItem& item) {
 	Synchronized<FastLock> _(lock);
 
 	if (itemMap.size() >= maxSize) {

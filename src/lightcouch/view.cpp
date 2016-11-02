@@ -9,25 +9,25 @@
 
 namespace LightCouch {
 
-View::View(StringA viewPath)
+View::View(String viewPath)
 	:viewPath(viewPath),flags(0)
 
 {
 }
 
-View::View(StringA viewPath, natural flags,Value args)
+View::View(String viewPath, natural flags,Value args)
 :viewPath(viewPath),flags(flags),args(args)
 
 {
 }
 
-View::View(StringA viewPath, natural flags,const Postprocessing &ppfunction, Value args)
+View::View(String viewPath, natural flags,const Postprocessing &ppfunction, Value args)
 :viewPath(viewPath),flags(flags),args(args),postprocess(ppfunction)
 
 {
 }
 
-Filter::Filter(StringA filter, natural flags, Value args)
+Filter::Filter(String filter, natural flags, Value args)
 	:View(filter,flags,args)
 {
 }
@@ -37,7 +37,7 @@ Filter::Filter(const View& view, bool allRevs)
 {
 }
 
-Filter::Filter(StringA filter):View(filter) {
+Filter::Filter(String filter):View(filter) {
 }
 
 

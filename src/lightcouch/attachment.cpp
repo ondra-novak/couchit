@@ -18,7 +18,7 @@ namespace LightCouch {
 String AttachmentDataRef::toBase64() const {
 	AutoArrayStream<char, SmallAlloc<1024> > buff;
 	ConvertWriteIter<ByteToBase64Convert,decltype(buff) &>(buff).copy(ConstBin(*this).getFwIter());
-	return StringRef(buff.getArray());
+	return ~ConstStrA(buff.getArray());
 }
 
 Value AttachmentDataRef::toInline() const {
@@ -30,7 +30,7 @@ AttachmentData::AttachmentData(const Value &attachment)
 	:AttachmentDataRef(ConstBin(), attachment["content_type"].getString())
 {
 
-	AttachmentData x = fromBase64(attachment["data"].getString(),StringRef());
+	AttachmentData x = fromBase64(attachment["data"].getString(),StrViewA());
 	bindata = x.bindata;
 }
 
@@ -52,8 +52,8 @@ AttachmentData::AttachmentData(Download&& dwn):AttachmentDataRef(ConstBin(),dwn.
 }
 
 
-AttachmentData AttachmentData::fromBase64(const StringRef &base64, const StringRef &contentType) {
-	StringB b = convertString(Base64ToByteConvert(), ConstStrA(base64));
+AttachmentData AttachmentData::fromBase64(const StrViewA &base64, const StrViewA &contentType) {
+	StringB b = convertString(Base64ToByteConvert(), ~base64);
 	return AttachmentData(b,contentType);
 }
 
