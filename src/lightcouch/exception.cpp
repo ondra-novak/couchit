@@ -27,7 +27,7 @@ void RequestError::message(ExceptionMsg& msg) const {
 		<< this->url
 		<< this->status
 		<< this->statusMsg
-		<< ~details;
+		<< convStr(details);
 }
 
 
@@ -71,7 +71,7 @@ natural UpdateException::getErrorCnt() const {
 }
 
 void DocumentHasNoID::message(ExceptionMsg& msg) const {
-	msg("Document has no id: %1") << ~document.toString();
+	msg("Document has no id: %1") << convStr(document.toString());
 }
 
 

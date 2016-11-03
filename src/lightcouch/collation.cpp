@@ -14,8 +14,8 @@
 namespace LightCouch {
 
 
- CompareResult compareStringsUnicode(ConstStrA str1, ConstStrA str2) {
-	Utf8ToWideReader<ConstStrA::Iterator> iter1(str1.getFwIter()), iter2(str2.getFwIter());
+ CompareResult compareStringsUnicode(StrView str1, StrView str2) {
+	Utf8ToWideReader<StrView::Iterator> iter1(str1.getFwIter()), iter2(str2.getFwIter());
 	iter1.enableSkipInvalidChars(true);
 	iter2.enableSkipInvalidChars(true);
 
@@ -54,7 +54,7 @@ CompareResult compareJson(const Value &left, const Value &right) {
 			else if (l>r) return cmpResultGreater;
 			else return cmpResultEqual;
 		}
-		case json::string: return compareStringsUnicode(~left.getString(),~right.getString());
+		case json::string: return compareStringsUnicode(left.getString(),right.getString());
 		case json::array: {
 				auto li = left.begin(),le= left.end();
 				auto ri = right.begin(), re =right.end();
@@ -71,7 +71,7 @@ CompareResult compareJson(const Value &left, const Value &right) {
 			auto li = left.begin(),le= left.end();
 			auto ri = right.begin(), re =right.end();
 			while (li!=le && li!=le) {
-				CompareResult r = compareStringsUnicode(~(*li).getKey(),~(*ri).getKey());
+				CompareResult r = compareStringsUnicode((*li).getKey(),(*ri).getKey());
 				if (r != cmpResultEqual) return r;
 				r = compareJson(*li,*ri);
 				if (r != cmpResultEqual) return r;

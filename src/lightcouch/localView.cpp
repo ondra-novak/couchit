@@ -141,7 +141,7 @@ void LocalView::addDocLk(const Value &doc, const Value& key, const Value& value)
 CompareResult LocalView::KeyAndDocId::compare(const KeyAndDocId& other) const {
 	CompareResult c = compareJson(key,other.key);
 	if (c == cmpResultEqual) {
-		return compareStringsUnicode(~docId,~other.docId);
+		return compareStringsUnicode(docId,other.docId);
 	} else {
 		return c;
 	}

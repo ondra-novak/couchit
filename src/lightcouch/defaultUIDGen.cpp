@@ -43,7 +43,7 @@ StrView DefaultUIDGen::generateUID(AutoArray<char>& buffer, StrView prefix,
 		natural totalCount) {
 
 	buffer.clear();
-	buffer.append(~prefix);
+	buffer.append(prefix);
 	AutoArray<char>::WriteIter iter = buffer.getWriteIterator();
 	TextOut<AutoArray<char>::WriteIter &, SmallAlloc<256> > out(iter);
 	out.setBase(62);
@@ -56,7 +56,7 @@ StrView DefaultUIDGen::generateUID(AutoArray<char>& buffer, StrView prefix,
 		}
 	}
 
-	return ~ConstStrA(buffer);
+	return buffer;
 }
 
 DefaultUIDGen &DefaultUIDGen::getInstance() {

@@ -123,7 +123,7 @@ void LightCouch::QueryServer::runDispatch(PInOutStream stream) {
 
 		try {
 
-			Command cmd = commands[~req[0].getString()];
+			Command cmd = commands[convStr(req[0].getString())];
 			Value resp;
 			switch (cmd) {
 				case cmdReset: resp=commandReset(req);break;
@@ -136,7 +136,7 @@ void LightCouch::QueryServer::runDispatch(PInOutStream stream) {
 			}
 			resp.serialize(resOutput);
 		} catch (QueryServerError &e) {
-			Value out({"error",~e.getType(),~e.getExplain()});
+			Value out({"error",convStr(e.getType()),convStr(e.getExplain())});
 			out.serialize(resOutput);
 		} catch (VersionMistmatch &m) {
 			Value out({"error","try_again","restarting query server, please try again"});
@@ -163,28 +163,27 @@ Value QueryServer::commandAddLib(const Value& ) {
 	throw QueryServerError(THISLOCATION,"unsupported","You cannot add lib to native C++ query server");
 }
 
-static natural extractVersion(ConstStrA &name) {
+static std::pair<StrView,natural> extractVersion(const StrView &name) {
 	natural versep = name.find('@');
 	if (versep == naturalNull)
 		throw QueryServerError(THISLOCATION,"no_version_defined", "View definition must contain version marker @version");
-	ConstStrA ver = name.offset(versep+1);
-	name = name.head(versep);
+	StrView ver = name.offset(versep+1);
+	StrView rawname = name.head(versep);
 	natural verid;
 	if (!parseUnsignedNumber(ver.getFwIter(), verid,10))
 		throw QueryServerError(THISLOCATION,"invald version", "Version must be number");
-	return verid;
+	return std::make_pair(rawname,verid);
 
 }
 
 Value QueryServer::commandAddFun(const Value& req) {
-	ConstStrA name = ~req[1].getString();
-	natural verId = extractVersion(name);
+	auto vinfo = extractVersion(req[1].getString());
 
-	const AllocPointer<AbstractViewBase>  *fn = views.find(StrKey(name));
+	const AllocPointer<AbstractViewBase>  *fn = views.find(StrKey(ConstStrA(vinfo.first)));
 	if (fn == 0) {
-		throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Map Function '")+name+ConstStrA("' not found")));
+		throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Map Function '")+vinfo.first+ConstStrA("' not found")));
 	}
-	if ((*fn)->version() != verId)
+	if ((*fn)->version() != vinfo.second)
 		throw VersionMistmatch(THISLOCATION);
 	preparedMaps.add(PreparedMap(*(*fn)));
 	return true;
@@ -240,7 +239,7 @@ Value QueryServer::commandReduce(const Value& req) {
 	}
 
 	for (auto &&val: fnlist) {
-		ConstStrA name = ~val.getString();
+		ConstStrA name = convStr(val.getString());
 		const AllocPointer<AbstractViewBase>  *fn = views.find(StrKey(name));
 		if (fn == 0 ) {
 			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Reduce Function '")+name+ConstStrA("' not found")));
@@ -265,7 +264,7 @@ Value QueryServer::commandReReduce(const Value& req) {
 	}
 
 	for (auto &&val: fnlist) {
-		ConstStrA name = ~val.getString();
+		ConstStrA name = convStr(val.getString());
 
 		const AllocPointer<AbstractViewBase>  *fn = views.find(StrKey(name));
 		if (fn == 0 ) {
@@ -333,22 +332,21 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 
 	Object out;
 	for(auto && value: section){
-		ConstStrA itemname = ~value.getKey();
+		StrView itemname = value.getKey();
 		bool inmap = false;
 		if (value.type() == json::object) {
 			value = value["map"];
 			if (!value.defined()) return false;
 			inmap = true;
 		}
-		ConstStrA name = ~value.getString();
-		natural verId = extractVersion(name);
+		auto verId = extractVersion(value.getString());
 
-		auto fnptr = reg.find(StrKey(name));
+		auto fnptr = reg.find(StrKey(ConstStrA(verId.first)));
 		if (fnptr == 0) {
-			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Function '")+name+ConstStrA("' in section '")+sectionName+ConstStrA("' not found")));
+			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Function '")+verId.first+ConstStrA("' in section '")+sectionName+ConstStrA("' not found")));
 		}
 
-		if ((*fnptr)->version() != verId) {
+		if ((*fnptr)->version() != verId.second) {
 			throw VersionMistmatch(THISLOCATION);
 		}
 
@@ -360,7 +358,7 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 		} else{
 			compiled = createCompiledFnRef(*fnptr);
 		}
-		out.set(~itemname, compiled);
+		out.set(itemname, compiled);
 	}
 	return out;
 
@@ -381,16 +379,16 @@ Value QueryServer::commandDDoc(const Value& req, const PInOutStream& stream) {
 	} else {
 		Value doc = ddcache[docid];
 		if (!doc.defined())
-			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("The document '")+(~docid)+ConstStrA("' is not cached at the query server")));
+			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("The document '")+(docid)+ConstStrA("' is not cached at the query server")));
 		Value fn = doc;
 		Value path = req[2];
 		for (natural i = 0, cnt = path.size(); i < cnt; i++) {
 			fn = fn[path[i].getString()];
 			if (!fn.defined())
-				throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Path not found'")+(~path.toString())+ConstStrA("'")));
+				throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Path not found'")+convStr(path.toString())+ConstStrA("'")));
 		}
 		Value arguments = req[3];
-		DDocCommand cmd = ddocCommands[~path[0].getString()];
+		DDocCommand cmd = ddocCommands[convStr(path[0].getString())];
 		Value resp;
 		switch(cmd){
 			case ddcmdShows: resp = commandShow(fn,arguments);break;
@@ -440,7 +438,7 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 				eof = true;
 				return null;
 			} else {
-				throw QueryServerError(THISLOCATION,"protocol_error",StringA(ConstStrA("Expects list_row or list_end, got:")+(~req[0].getString())));
+				throw QueryServerError(THISLOCATION,"protocol_error",StringA(ConstStrA("Expects list_row or list_end, got:")+(convStr(req[0].getString()))));
 			}
 		}
 
@@ -571,13 +569,13 @@ Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, Con
 		suffix = fnName.offset(pos+1);
 	}
 
-	StrView strDocName(~docName);
+	StrView strDocName(docName);
 	//pick named object
 	Value doc = container[strDocName];
 	if (!doc.defined()) {
 		Object obj;
 		obj("_id",Value(String("_design/")+String(strDocName)))
-			("language",~qserverName);
+			("language",convStr(qserverName));
 		doc = obj;
 		container.set(strDocName,doc);
 		///pick name object
@@ -591,7 +589,7 @@ Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, Con
 Value createVersionedRef(ConstStrA name, natural ver) {
 	TextFormatBuff<char, SmallAlloc<256 >> fmt;
 	fmt("%1@%2") << name << ver;
-	return Value(~ConstStrA(fmt.write()));
+	return Value(convStr(ConstStrA(fmt.write())));
 }
 
 Value QueryServer::generateDesignDocuments() {
@@ -605,12 +603,12 @@ Value QueryServer::generateDesignDocuments() {
 		Object ddocobj(ddoc);
 		{
 			auto sub1 = ddocobj.object("views");
-			auto view = sub1.object(~itemName);
+			auto view = sub1.object(convStr(itemName));
 			view("map",createVersionedRef(kv.key,kv.value->version()));
 			switch (kv.value->reduceMode()) {
 			case AbstractViewBase::rmNone:break;
 			case AbstractViewBase::rmFunction:
-				view("reduce",~kv.key);break;
+				view("reduce",convStr(kv.key));break;
 			case AbstractViewBase::rmSum:
 				view("reduce","_sum");break;
 			case AbstractViewBase::rmCount:
@@ -627,7 +625,7 @@ Value QueryServer::generateDesignDocuments() {
 		ConstStrA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
 		Object e(ddoc);
-		e.object("lists")(~itemName, createVersionedRef(kv.key,kv.value->version()));
+		e.object("lists")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
@@ -636,7 +634,7 @@ Value QueryServer::generateDesignDocuments() {
 		ConstStrA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
 		Object e(ddoc);
-		e.object("shows")(~itemName, createVersionedRef(kv.key,kv.value->version()));
+		e.object("shows")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
@@ -645,7 +643,7 @@ Value QueryServer::generateDesignDocuments() {
 		ConstStrA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
 		Object e(ddoc);
-		e.object("updates")(~itemName, createVersionedRef(kv.key,kv.value->version()));
+		e.object("updates")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
@@ -654,7 +652,7 @@ Value QueryServer::generateDesignDocuments() {
 		ConstStrA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
 		Object e(ddoc);
-		e.object("filters")(~itemName, createVersionedRef(kv.key,kv.value->version()));
+		e.object("filters")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 

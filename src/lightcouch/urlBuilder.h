@@ -21,7 +21,7 @@ public:
 	UrlBuilder &add(StrView path);
 	UrlBuilder &add(StrView key, StrView value);
 	UrlBuilder &addJson(StrView key, Value value);
-	operator StrView() const {return ~ConstStrA(buffer.getArray());}
+	operator StrView() const {return buffer.getArray();}
 	operator ConstStrA() const {return buffer.getArray();}
 
 protected:

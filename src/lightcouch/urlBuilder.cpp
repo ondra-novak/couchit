@@ -32,19 +32,16 @@ void LightCouch::UrlBuilder::init(ConstStrA basicUrl, ConstStrA dbname, ConstStr
 }
 
 UrlBuilder &LightCouch::UrlBuilder::add(StrView path) {
-	ConstStrA cpath = ~path;
-	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rd(cpath.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, StrView::Iterator> rd(path.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rd);
 	return *this;
 }
 
 UrlBuilder &LightCouch::UrlBuilder::add(StrView key, StrView value) {
-	ConstStrA ckey = ~key;
-	ConstStrA cvalue = ~value;
 	if (curSep == '/') curSep = '?'; else curSep = '&';
-	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdkey(ckey.getFwIter());
-	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdvalue(cvalue.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, StrView::Iterator> rdkey(key.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, StrView::Iterator> rdvalue(value.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rdkey);
 	buffer.write('=');
@@ -53,9 +50,8 @@ UrlBuilder &LightCouch::UrlBuilder::add(StrView key, StrView value) {
 }
 
 UrlBuilder &LightCouch::UrlBuilder::addJson(StrView key, Value value) {
-	ConstStrA ckey = ~key;
 	if (curSep == '/') curSep = '?'; else curSep = '&';
-	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdkey(ckey.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, StrView::Iterator> rdkey(key.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rdkey);
 	buffer.write('=');

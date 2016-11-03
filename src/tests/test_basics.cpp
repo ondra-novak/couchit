@@ -90,7 +90,7 @@ static void couchLoadData(PrintTextA &print) {
 		doc("name",item[0])
 			("age",item[1])
 			("height",item[2])
-			("_id",~ToString<natural>(id,16));
+			("_id",convStr(ToString<natural>(id,16)));
 		id+=14823;
 		savedDocs.add(doc);
 		chset.update(doc);
@@ -441,7 +441,7 @@ static void couchRetrieveDocument(PrintTextA &a) {
 	Document doc = db.retrieveDocument(row.id.getString(), CouchDB::flgSeqNumber);
 	//this is random - cannot be tested
 	doc.unset("_id").unset("_rev");
-	a("%1") << ~Value(doc).toString();
+	a("%1") << convStr(Value(doc).toString());
 }
 
 static void couchStoreAndRetrieveAttachment(PrintTextA &a) {

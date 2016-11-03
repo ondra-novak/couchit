@@ -58,21 +58,21 @@ public:
 
 
 template<typename T>
-static inline json::StringView<T> operator~(const LightSpeed::ConstStringT<T> &x) {
+static inline json::StringView<T> convStr(const LightSpeed::ConstStringT<T> &x) {
 	return json::StringView<T>(x.data(),x.length());
 }
 template<typename T>
-static inline json::StringView<T> operator~(const LightSpeed::StringCore<T> &x) {
+static inline json::StringView<T> convStr(const LightSpeed::StringCore<T> &x) {
 	return json::StringView<T>(x.data(),x.length());
 }
 template<typename T>
-static inline LightSpeed::ConstStringT<T> operator~(const json::StringView<T> &x) {
+static inline LightSpeed::ConstStringT<T> convStr(const json::StringView<T> &x) {
 	return LightSpeed::ConstStringT<T>(x.data,x.length);
 }
 
-static inline LightSpeed::ConstStringT<char> operator~(const json::String&x) {
+static inline LightSpeed::ConstStringT<char> convStr(const json::String&x) {
 	json::StringView<char> y = x;
-	return ~y;
+	return convStr(y);
 }
 
 static inline Value addToArray(Value v, Value add) {
