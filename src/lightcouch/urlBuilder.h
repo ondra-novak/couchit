@@ -18,10 +18,10 @@ public:
 
 	void init(ConstStrA basicUrl, ConstStrA dbname, ConstStrA resourcePath);
 	void init();
-	UrlBuilder &add(StrViewA path);
-	UrlBuilder &add(StrViewA key, StrViewA value);
-	UrlBuilder &addJson(StrViewA key, Value value);
-	operator StrViewA() const {return ~ConstStrA(buffer.getArray());}
+	UrlBuilder &add(StrView path);
+	UrlBuilder &add(StrView key, StrView value);
+	UrlBuilder &addJson(StrView key, Value value);
+	operator StrView() const {return ~ConstStrA(buffer.getArray());}
 	operator ConstStrA() const {return buffer.getArray();}
 
 protected:

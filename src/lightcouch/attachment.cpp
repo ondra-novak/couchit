@@ -30,7 +30,7 @@ AttachmentData::AttachmentData(const Value &attachment)
 	:AttachmentDataRef(ConstBin(), attachment["content_type"].getString())
 {
 
-	AttachmentData x = fromBase64(attachment["data"].getString(),StrViewA());
+	AttachmentData x = fromBase64(attachment["data"].getString(),StrView());
 	bindata = x.bindata;
 }
 
@@ -52,7 +52,7 @@ AttachmentData::AttachmentData(Download&& dwn):AttachmentDataRef(ConstBin(),dwn.
 }
 
 
-AttachmentData AttachmentData::fromBase64(const StrViewA &base64, const StrViewA &contentType) {
+AttachmentData AttachmentData::fromBase64(const StrView &base64, const StrView &contentType) {
 	StringB b = convertString(Base64ToByteConvert(), ~base64);
 	return AttachmentData(b,contentType);
 }

@@ -33,7 +33,7 @@ void LocalView::updateDoc(const Value& doc) {
 	updateDocLk(doc);
 }
 void LocalView::updateDocLk(const Value& doc) {
-	StrViewA docId = doc["_id"].getString();
+	StrView docId = doc["_id"].getString();
 	eraseDocLk(docId);
 	Value delFlag = doc["_deleted"];
 	if (!delFlag.defined() || delFlag.getBool() == false) {
@@ -60,7 +60,7 @@ void LocalView::emit() {
 	addDocLk(curDoc,nullptr, nullptr);
 }
 
-void LocalView::eraseDocLk(const StrViewA &docId) {
+void LocalView::eraseDocLk(const StrView &docId) {
 	DocToKey::ListIter list = docToKeyMap.find(docId);
 	while (list.hasItems()) {
 		const Value &k = list.getNext();
@@ -97,7 +97,7 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 
 }
 
-void LocalView::eraseDoc(const StrViewA &docId) {
+void LocalView::eraseDoc(const StrView &docId) {
 
 	Exclusive _(lock);
 	eraseDocLk(docId);
@@ -111,7 +111,7 @@ void LocalView::addDoc(const Value& doc, const Value& key,
 	addDocLk(doc, key, value);
 }
 
-Value LocalView::getDocument(const StrViewA &docId) const {
+Value LocalView::getDocument(const StrView &docId) const {
 	Shared _(lock);
 	DocToKey::ListIter iter = docToKeyMap.find(docId);
 	if (iter.hasItems()) {
@@ -128,7 +128,7 @@ Value LocalView::reduce(const ConstStringT<KeyAndDocId>&,const ConstStringT<Valu
 
 void LocalView::addDocLk(const Value &doc, const Value& key, const Value& value) {
 
-	StrViewA docId = doc["_id"].getString();
+	StrView docId = doc["_id"].getString();
 	bool exist= false;
 	keyToValueMap.insert(KeyAndDocId(key,docId),ValueAndDoc(value,doc),&exist);
 	if (!exist) {
@@ -186,7 +186,7 @@ Value LocalView::searchKeys(const Value &keys, natural groupLevel) const {
 
 Value LocalView::searchOneKey(const Value &key) const {
 
-	KeyToValue::Iterator iter = keyToValueMap.seek(KeyAndDocId(key, StrViewA()));
+	KeyToValue::Iterator iter = keyToValueMap.seek(KeyAndDocId(key, StrView()));
 	Array res;
 
 	while (iter.hasItems()) {
@@ -260,13 +260,13 @@ static Value sliceKey(const Value &key, natural groupLevel) {
 
 Value LocalView::searchRange(const Value &startKey, const Value &endKey,
 natural groupLevel, bool descending, natural offset, natural limit,
-const StrViewA &offsetDoc,
+const StrView &offsetDoc,
 bool excludeEnd) const {
 
 	Shared _(lock);
 
 	KeyAndDocId startK(startKey,offsetDoc);
-	KeyAndDocId endK(endKey,excludeEnd?StrViewA():StrViewA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF"));
+	KeyAndDocId endK(endKey,excludeEnd?StrView():StrView("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF"));
 
 	KeyAndDocId *seekPos;
 	KeyAndDocId *stopPos;
@@ -415,7 +415,7 @@ Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 	if (reduce == false) groupLevel = naturalNull;
 	switch (r.mode) {
 	case qmAllItems:
-		result = lview.searchRange(Query::minKey,Query::maxKey,groupLevel,descend,r.offset,r.limit,StrViewA(),false);
+		result = lview.searchRange(Query::minKey,Query::maxKey,groupLevel,descend,r.offset,r.limit,StrView(),false);
 		break;
 	case qmKeyList:
 		result = lview.searchKeys(r.keys,groupLevel);
@@ -426,13 +426,13 @@ Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 	case qmKeyPrefix: {
 			result = lview.searchRange(addToArray(r.keys[0],Query::minKey),
 						addToArray(r.keys[0],Query::maxKey)
-					,groupLevel,descend,r.offset,r.limit,StrViewA(),false);
+					,groupLevel,descend,r.offset,r.limit,StrView(),false);
 		}
 		break;
 	case qmStringPrefix: {
 		result = lview.searchRange(addSuffix(r.keys[0],Query::minString),
 				addSuffix(r.keys[0],Query::maxString)
-				,groupLevel,descend,r.offset,r.limit,StrViewA(),false);
+				,groupLevel,descend,r.offset,r.limit,StrView(),false);
 		}
 
 	}

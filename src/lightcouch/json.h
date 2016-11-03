@@ -21,9 +21,38 @@ typedef json::String String;
 typedef json::Object Object;
 typedef json::Array Array;
 typedef json::Path Path;
-typedef json::StrViewA StrViewA;
 using json::StringView;
 
+
+///Contains string compatible with json::StringView and also LightSpeed::FlatArray which can be used as ConstStrA
+/** class StrView augments json::StringView with operations from LightSpeed including iterators.
+ * It also makes string acceptable by many functions which accepts ConstStrA
+ */
+class StrView: public json::StringView<char>, public LightSpeed::FlatArrayBase<const char, StrView> {
+public:
+
+	///main super class is json::StringView
+	typedef json::StringView<char> Super;
+	using Super::empty;
+	using Super::operator[];
+	using Super::StringView;
+
+	StrView() {}
+	StrView(const json::String &x):Super(x) {}
+	StrView(const StringView<char> &other):json::StringView<char>(other) {}
+	template<typename Impl>
+	StrView(const LightSpeed::FlatArray<char, Impl> &other)
+		:json::StringView<char>(other.data(),other.length()) {}
+	template<typename Impl>
+	StrView(const LightSpeed::FlatArray<const char, Impl> &other)
+		:json::StringView<char>(other.data(),other.length()) {}
+
+	explicit operator std::string () const {
+		return std::string(Super::data, Super::length);
+	}
+	const char *data() const {return Super::data;}
+	LightSpeed::natural length() const {return Super::length;}
+};
 
 
 
@@ -48,6 +77,7 @@ static inline LightSpeed::ConstStringT<char> operator~(const json::String&x) {
 
 static inline Value addToArray(Value v, Value add) {
 	Array c(v);
+	if (c.empty()) c.add(v);
 	c.add(add);
 	return c;
 }

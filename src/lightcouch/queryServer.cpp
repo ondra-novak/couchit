@@ -368,11 +368,11 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 
 
 Value QueryServer::commandDDoc(const Value& req, const PInOutStream& stream) {
-	StrViewA docid = req[1].getString();
+	StrView docid = req[1].getString();
 	if (docid == "new") {
 		//cache new document
 
-		StrViewA docid = req[2].getString();
+		StrView docid = req[2].getString();
 		Value ddoc = req[3];
 
 		Value compiledDDoc = compileDesignDocument(ddoc);
@@ -452,7 +452,7 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 			return {"end",chunks};
 		}
 
-		virtual void send(StrViewA text) {
+		virtual void send(StrView text) {
 			chunks.add(text);
 		}
 		virtual void send(Value jsonValue) {
@@ -571,7 +571,7 @@ Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, Con
 		suffix = fnName.offset(pos+1);
 	}
 
-	StrViewA strDocName(~docName);
+	StrView strDocName(~docName);
 	//pick named object
 	Value doc = container[strDocName];
 	if (!doc.defined()) {
@@ -619,7 +619,7 @@ Value QueryServer::generateDesignDocuments() {
 				view("reduce","_stats");break;
 			}
 		}
-		ddocs.set(StrViewA(ddoc.getKey()), ddocobj);
+		ddocs.set(StrView(ddoc.getKey()), ddocobj);
 	}
 
 	for (RegListFn::Iterator iter = lists.getFwIter(); iter.hasItems();) {

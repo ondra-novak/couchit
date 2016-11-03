@@ -32,7 +32,7 @@ using namespace LightSpeed;
 		 *  @param prefix allows specify prefix - it is used to encode type of the object
 		 * @return const-string contains newly generated UID. It can be created inside of the buffer.
 		 */
-		virtual StrViewA operator()(AutoArray<char> &buffer, StrViewA prefix) = 0;
+		virtual StrView operator()(AutoArray<char> &buffer, StrView prefix) = 0;
 	};
 
 

@@ -28,9 +28,9 @@ public:
 	 * @param data reference to binary data
 	 * @param contenType content type
 	 */
-	AttachmentDataRef(const ConstBin data, const StrViewA &contentType)
+	AttachmentDataRef(const ConstBin data, const StrView &contentType)
 		:ConstBin(data),contentType(contentType) {}
-	const StrViewA contentType;
+	const StrView contentType;
 
 	///Converts data to base64 string.
 	String toBase64() const;
@@ -56,7 +56,7 @@ public:
 	 * @param contentType content type
 	 */
 	AttachmentData(const StringB &data, const String &contentType)
-		:AttachmentDataRef(data,StrViewA(contentType)),bindata(data),ctx(contentType) {}
+		:AttachmentDataRef(data,StrView(contentType)),bindata(data),ctx(contentType) {}
 	///Constructor from JSON value
 	/**
 	 * @param attachment value contains attachment from a document. It required that
@@ -74,7 +74,7 @@ public:
 	 * @param contentType contenr type
 	 * @return attachment object
 	 */
-	static AttachmentData fromBase64(const StrViewA &base64, const StrViewA &contentType);
+	static AttachmentData fromBase64(const StrView &base64, const StrView &contentType);
 
 private:
 	StringB bindata;

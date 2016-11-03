@@ -45,7 +45,7 @@ public:
 	 */
 	Query &range(const Value &from, const Value &to, natural flags = 0);
 
-	Query &range(const Value &from, const StrViewA &fromDoc, const Value &to, const StrViewA &toDoc, bool exclusiveEnd = false);
+	Query &range(const Value &from, const StrView &fromDoc, const Value &to, const StrView &toDoc, bool exclusiveEnd = false);
 
 
 	///Defines ranged search as prefix
@@ -68,7 +68,7 @@ public:
 	///Change limit (default is unlimited)
 	Query &limit(natural limit);
 	///Append argument to postprocessing
-	Query &arg(const StrViewA &argname, const 	Value &value);
+	Query &arg(const StrView &argname, const 	Value &value);
 	///Reverse order
 	/** The view can be declared with already reversed order. In this
 	 * case the function reverses already reversed order which results to
@@ -158,7 +158,7 @@ public:
 	static const natural joinExclude = 3 | joinMissingRows;
 
 	template<typename BindFn>
-	Value join(Query &q, const StrViewA & name, natural flags, BindFn bindFn);
+	Value join(Query &q, const StrView & name, natural flags, BindFn bindFn);
 
 	class Iterator: public json::ValueIterator {
 	public:

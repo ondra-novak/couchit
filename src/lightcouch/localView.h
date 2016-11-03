@@ -70,7 +70,7 @@ public:
 	/**
 	 * @param docId documentId to erase
 	 */
-	void eraseDoc(const StrViewA &docId);
+	void eraseDoc(const StrView &docId);
 	///Directly adds the document
 	/**
 	 *
@@ -90,7 +90,7 @@ public:
 	 *
 	 * @note the document must be included in the view.
 	 */
-	Value getDocument(const StrViewA &docId) const;
+	Value getDocument(const StrView &docId) const;
 
 
 	typedef View::Postprocessing PostProcessFn;
@@ -139,10 +139,10 @@ protected:
 
 	struct KeyAndDocId: public Comparable<KeyAndDocId> {
 		Value key;
-		StrViewA docId;
+		StrView docId;
 
 		KeyAndDocId() {}
-		KeyAndDocId(const Value &key,const StrViewA &docId):key(key),docId(docId) {}
+		KeyAndDocId(const Value &key,const StrView &docId):key(key),docId(docId) {}
 
 		CompareResult compare(const KeyAndDocId &other) const;
 
@@ -220,7 +220,7 @@ protected:
 
 	///Contains for each document set of keys
 	/** It is used to easy find keys to erase during update */
-	typedef MultiMap<StrViewA, Value> DocToKey;
+	typedef MultiMap<StrView, Value> DocToKey;
 	///Contains keys mapped to documents
 	/** Key contains the key itself and documentId to easyly handle duplicated keys */
 	typedef Map<KeyAndDocId, ValueAndDoc> KeyToValue;
@@ -242,7 +242,7 @@ protected:
 
 
 
-	void eraseDocLk(const StrViewA &docId);
+	void eraseDocLk(const StrView &docId);
 	void addDocLk(const Value &doc, const Value &key, const Value &value);
 	void updateDocLk(const Value &doc);
 
@@ -251,7 +251,7 @@ protected:
 	Value searchOneKey(const Value &key) const;
 	Value searchRange(const Value &startKey, const Value &endKey,
 			natural groupLevel, bool descending, natural offset, natural limit,
-			const StrViewA & offsetDoc,
+			const StrView & offsetDoc,
 			bool excludeEnd) const;
 
 

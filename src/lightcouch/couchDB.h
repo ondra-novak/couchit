@@ -65,12 +65,12 @@ public:
 	 * is updated by other way, the timestamp don't need to be updated. Timestamping
 	 * is supported by Changeset class
 	 */
-	static StrViewA fldTimestamp;
+	static StrView fldTimestamp;
 	///Contains ID of previous revision
 	/** Note this feature is optional and supported only by LightCouch. The class Changeset
 	 * will put there id of previous revision.
 	 */
-	static StrViewA fldPrevRevision;
+	static StrView fldPrevRevision;
 
 	/**Maximal length of serialized form of keys to use GET request. Longer
 	 * keys are send through POST. Queries sent by POST cannot be cached. However if you
@@ -135,7 +135,7 @@ public:
 	 * @param flags various flags that controls caching or behaviour
 	 * @return parsed response
 	 */
-	Value requestGET(const StrViewA &path, Value *headers = nullptr, natural flags = 0);
+	Value requestGET(const StrView &path, Value *headers = nullptr, natural flags = 0);
 	///Performs POST request from the database
 	/** POST request are not cached.
 	 *
@@ -148,7 +148,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	Value requestPOST(const StrViewA& path, const Value &postData, Value *headers = nullptr, natural flags = 0);
+	Value requestPOST(const StrView& path, const Value &postData, Value *headers = nullptr, natural flags = 0);
 	///Performs PUT request from the database
 	/** PUT request are not cached.
 	 *
@@ -161,7 +161,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	Value requestPUT(const StrViewA &path, const Value &postData, Value *headers = nullptr, natural flags = 0);
+	Value requestPUT(const StrView &path, const Value &postData, Value *headers = nullptr, natural flags = 0);
 
 	///Performs DELETE request at database
 	/**
@@ -171,7 +171,7 @@ public:
 	 * @param flags flags that controls behaviour
 	 * @return
 	 */
-	Value requestDELETE(const StrViewA &path, Value *headers = nullptr, natural flags = 0);
+	Value requestDELETE(const StrView &path, Value *headers = nullptr, natural flags = 0);
 
 
 
@@ -183,7 +183,7 @@ public:
 	 * lost in time of return
 	 *
 	 */
-	StrViewA genUID();
+	StrView genUID();
 
 	///Generates new UID using preconfigured generator
 	/**See Config how to setup custom generator
@@ -193,7 +193,7 @@ public:
 	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
 	 * lost in time of return
 	 */
-	StrViewA genUID(StrViewA prefix);
+	StrView genUID(StrView prefix);
 
 	///Generates new UID and returns it as Value. It can be directly used to create new document.
 	/**
@@ -213,7 +213,7 @@ public:
 	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
 	 * in MT environment or use additional synchronization
 	 */
-	Value genUIDValue(StrViewA prefix);
+	Value genUIDValue(StrView prefix);
 
 
 	///Changes current database
@@ -283,7 +283,7 @@ public:
 	 * @note if sequence numbers are tracked, function disables caching, because
 	 * sequence numbers are not updated when local document is stored
 	 */
-	Value retrieveLocalDocument(const StrViewA &localId, natural flags = 0);
+	Value retrieveLocalDocument(const StrView &localId, natural flags = 0);
 
 	///Retrieves document (by its id)
 	/**
@@ -295,7 +295,7 @@ public:
 	 * @note Retrieveing many documents using this method is slow. You should use Query
 	 * to retrieve multiple documents. However, some document properties are not available through the Query
 	 */
-	Value retrieveDocument(const StrViewA &docId, natural flags = 0);
+	Value retrieveDocument(const StrView &docId, natural flags = 0);
 
 
 	///Retrieves other revision of the document
@@ -305,7 +305,7 @@ public:
 	 * @param flags can be only flgDisableCache or zero. The default value is recommended.
 	 * @return json with document
 	 */
-	Value retrieveDocument(const StrViewA &docId, const StrViewA &revId, natural flags = flgDisableCache);
+	Value retrieveDocument(const StrView &docId, const StrView &revId, natural flags = flgDisableCache);
 
 	///Creates new document
 	/**
@@ -320,7 +320,7 @@ public:
 	 * @param prefix prefix append to UID - can be used to specify type of the document
 	 * @return Value which can be converted to Document object
 	 */
-	Document newDocument(const StrViewA &prefix);
+	Document newDocument(const StrView &prefix);
 
 	///Retrieves pointer to validator
 	/**
@@ -367,7 +367,7 @@ public:
 	 *
 	 *  @exception RequestError if function returns any other status then 200 or 201
 	 */
-	UpdateResult updateDoc(StrViewA updateHandlerPath, StrViewA documentId, Value arguments);
+	UpdateResult updateDoc(StrView updateHandlerPath, StrView documentId, Value arguments);
 
 
 	///Calls show handler.
@@ -399,7 +399,7 @@ public:
 	 *
 	 * @exception RequestError if function returns any other status then 200 or 201
 	 */
-	Value showDoc(const StrViewA &showHandlerPath, const StrViewA &documentId, const Value &arguments, natural flags = 0);
+	Value showDoc(const StrView &showHandlerPath, const StrView &documentId, const Value &arguments, natural flags = 0);
 
 
 	///Uploads attachment with specified document
@@ -411,7 +411,7 @@ public:
 	 * @note The returned object should not be stored for long way, because it blocks whole Couchdb instance
 	 * until the upload is finished
 	 */
-	Upload uploadAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType);
+	Upload uploadAttachment(const Value &document, const StrView &attachmentName, const StrView &contentType);
 
 	///Uploads attachment with specified document
 	/**
@@ -422,7 +422,7 @@ public:
 	 * @param attachmentData content of attachment
 	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	String uploadAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData);
+	String uploadAttachment(const Value &document, const StrView &attachmentName, const AttachmentDataRef &attachmentData);
 
 	///Downloads attachment
 	/**
@@ -430,14 +430,14 @@ public:
 	 * @param attachmentName name of attachment to retrieve
 	 * @param etag if not empty, function puts string as "if-none-match" header.
 	 */
-	Download downloadAttachment(const Value &document, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
+	Download downloadAttachment(const Value &document, const StrView &attachmentName,  const StrView &etag=StrView());
 	///Downloads attachment
 	/**
 	 * @param document document. The document don't need to be complete, only _id and _rev must be there.
 	 * @param attachmentName name of attachment to retrieve
 	 * @param etag if not empty, function puts string as "if-none-match" header.
 	 */
-	Download downloadAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
+	Download downloadAttachment(const Document &document, const StrView &attachmentName,  const StrView &etag=StrView());
 
 	///Downloads latest attachments
 	/** Allows to easily download the latest attachment by given docId an dattachmentName
@@ -447,9 +447,9 @@ public:
 	 * @param etag (optional) etag, if not empty, then it is put to the header and result can be notModified
 	 * @return download object
 	 */
-	Download downloadAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
-	Download downloadAttachment(const String docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA()) {
-		return downloadAttachment((StrViewA)docId,attachmentName, etag);
+	Download downloadAttachment(const StrView &docId, const StrView &attachmentName,  const StrView &etag=StrView());
+	Download downloadAttachment(const String docId, const StrView &attachmentName,  const StrView &etag=StrView()) {
+		return downloadAttachment((StrView)docId,attachmentName, etag);
 	}
 
 
@@ -547,7 +547,7 @@ protected:
 
 
 
-	Value jsonPUTPOST(HttpClient::Method method, const StrViewA &path, Value data, Value *headers, natural flags);
+	Value jsonPUTPOST(HttpClient::Method method, const StrView &path, Value data, Value *headers, natural flags);
 
 
 	friend class ChangesSink;
@@ -578,13 +578,13 @@ protected:
 		virtual const char *getResourceName() const;
 	};
 
-	PUrlBuilder getUrlBuilder(StrViewA resourcePath);
+	PUrlBuilder getUrlBuilder(StrView resourcePath);
 
 	UrlBldPool urlBldPool;
 
 	Queryable queryable;
 
-	Download downloadAttachmentCont(PUrlBuilder urlline, const StrViewA &etag);
+	Download downloadAttachmentCont(PUrlBuilder urlline, const StrView &etag);
 
 public:
 

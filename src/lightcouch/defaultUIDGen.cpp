@@ -28,7 +28,7 @@ DefaultUIDGen::DefaultUIDGen() {
 
 }
 
-StrViewA DefaultUIDGen::operator ()(AutoArray<char>& buffer, StrViewA prefix) {
+StrView DefaultUIDGen::operator ()(AutoArray<char>& buffer, StrView prefix) {
 
 	Synchronized<FastLock> _(lock);
 	time_t now;
@@ -38,7 +38,7 @@ StrViewA DefaultUIDGen::operator ()(AutoArray<char>& buffer, StrViewA prefix) {
 	return generateUID(buffer,prefix, now, counter,&rgn, 20);
 }
 
-StrViewA DefaultUIDGen::generateUID(AutoArray<char>& buffer, StrViewA prefix,
+StrView DefaultUIDGen::generateUID(AutoArray<char>& buffer, StrView prefix,
 		natural timeparam, natural counterparam, Rand* randomGen,
 		natural totalCount) {
 
@@ -51,7 +51,7 @@ StrViewA DefaultUIDGen::generateUID(AutoArray<char>& buffer, StrViewA prefix,
 	out("%{06}1%%{04}2") << timeparam << counterparam;
 
 	if (randomGen) {
-		while (buffer.length() < totalCount+prefix.length) {
+		while (buffer.length() < totalCount+prefix.length()) {
 			out("%1") << (randomGen->getNext() % 62);
 		}
 	}
@@ -63,7 +63,7 @@ DefaultUIDGen &DefaultUIDGen::getInstance() {
 	return Singleton<DefaultUIDGen>::getInstance();
 }
 
-String DefaultUIDGen::operator()(StrViewA prefix) {
+String DefaultUIDGen::operator()(StrView prefix) {
 	AutoArray<char> buffer;
 	return this->operator ()(buffer,prefix);
 }

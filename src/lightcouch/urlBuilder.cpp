@@ -31,7 +31,7 @@ void LightCouch::UrlBuilder::init(ConstStrA basicUrl, ConstStrA dbname, ConstStr
 	curSep = '/';
 }
 
-UrlBuilder &LightCouch::UrlBuilder::add(StrViewA path) {
+UrlBuilder &LightCouch::UrlBuilder::add(StrView path) {
 	ConstStrA cpath = ~path;
 	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rd(cpath.getFwIter());
 	buffer.write(curSep);
@@ -39,7 +39,7 @@ UrlBuilder &LightCouch::UrlBuilder::add(StrViewA path) {
 	return *this;
 }
 
-UrlBuilder &LightCouch::UrlBuilder::add(StrViewA key, StrViewA value) {
+UrlBuilder &LightCouch::UrlBuilder::add(StrView key, StrView value) {
 	ConstStrA ckey = ~key;
 	ConstStrA cvalue = ~value;
 	if (curSep == '/') curSep = '?'; else curSep = '&';
@@ -52,7 +52,7 @@ UrlBuilder &LightCouch::UrlBuilder::add(StrViewA key, StrViewA value) {
 	return *this;
 }
 
-UrlBuilder &LightCouch::UrlBuilder::addJson(StrViewA key, Value value) {
+UrlBuilder &LightCouch::UrlBuilder::addJson(StrView key, Value value) {
 	ConstStrA ckey = ~key;
 	if (curSep == '/') curSep = '?'; else curSep = '&';
 	ConvertReadIter<UrlEncodeConvert, ConstStrA::Iterator> rdkey(ckey.getFwIter());

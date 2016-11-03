@@ -37,7 +37,7 @@ static void prepareQueryServer(QueryServer &qserver) {
 
 	class ByName: public AbstractViewMapOnly<1> {
 		virtual void map(const Document &doc, IEmitFn &emit) override {
-			emit( {doc["name"]}, {doc["age"],doc["height"]});
+			emit(Value({doc["name"]}), {doc["age"],doc["height"]});
 		}
 	};
 	qserver.regView("testview/by_name", new ByName);
@@ -192,7 +192,7 @@ static void couchLoadData(PrintTextA &print) {
 	Set<String> uuidmap;
 
 	for (natural i = 0; i < savedDocs.length(); i++) {
-		StrViewA uuid = savedDocs[i]["_id"].getString();
+		StrView uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
 	print("%1") << uuidmap.size();

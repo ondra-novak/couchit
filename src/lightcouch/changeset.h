@@ -84,11 +84,11 @@ public:
 
 
 	///Retrieves revision of the committed document
-	String getCommitRev(const StrViewA &docId) const;
+	String getCommitRev(const StrView &docId) const;
 
 	///Revets changes made in document docId
 	/** Removes document from the changeset */
-	void revert(const StrViewA &docId);
+	void revert(const StrView &docId);
 
 	///Preview all changes in a local view
 	/** Function just only sends all changes to a local view, without making the
@@ -111,8 +111,8 @@ public:
 protected:
 
 
-	std::map<StrViewA, std::pair<Value,Value> > scheduledDocs;
-	std::map<StrViewA, Value> commitedDocs;
+	std::map<StrView, std::pair<Value,Value> > scheduledDocs;
+	std::map<StrView, Value> commitedDocs;
 
 	CouchDB &db;
 

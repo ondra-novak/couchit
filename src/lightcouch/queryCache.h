@@ -72,10 +72,10 @@ public:
 	};
 
 	///search for url in the cache
-	CachedItem  find(StrViewA url);
+	CachedItem  find(StrView url);
 
 	///set content to cache (override if exists)
-	void set(StrViewA url, const CachedItem &item);
+	void set(StrView url, const CachedItem &item);
 
 	///clear the cache
 	void clear();

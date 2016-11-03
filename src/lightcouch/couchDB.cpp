@@ -50,8 +50,8 @@ CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
 	if (cfg.iotimeout != null) this->iotimeout = cfg.iotimeout;
 }
 
-StrViewA CouchDB::fldTimestamp("~timestamp");
-StrViewA CouchDB::fldPrevRevision("~prevRev");
+StrView CouchDB::fldTimestamp("~timestamp");
+StrView CouchDB::fldPrevRevision("~prevRev");
 natural CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
@@ -68,11 +68,11 @@ CouchDB::CouchDB(const Config& cfg)
 }
 
 
-static bool isRelativePath(const StrViewA &path) {
+static bool isRelativePath(const StrView &path) {
 	return path.substr(0,7) != "http://" && path.substr(0,8) != "https://";
 }
 
-Value CouchDB::requestGET(const StrViewA &path, Value *headers, natural flags) {
+Value CouchDB::requestGET(const StrView &path, Value *headers, natural flags) {
 
 	if (isRelativePath(path)) return requestGET(*getUrlBuilder(path),headers,flags);
 
@@ -93,7 +93,7 @@ Value CouchDB::requestGET(const StrViewA &path, Value *headers, natural flags) {
 		usecache = false;
 	}
 
-	StrViewA cacheKey = path.substr(prefixLen);
+	StrView cacheKey = path.substr(prefixLen);
 
 	//there will be stored cached item
 	Optional<QueryCache::CachedItem> cachedItem;
@@ -165,7 +165,7 @@ Value CouchDB::requestGET(const StrViewA &path, Value *headers, natural flags) {
 	}
 }
 
-Value CouchDB::requestDELETE(const StrViewA &path, Value *headers, natural flags) {
+Value CouchDB::requestDELETE(const StrView &path, Value *headers, natural flags) {
 
 	if (isRelativePath(path)) return requestDELETE(*getUrlBuilder(path),headers,flags);
 
@@ -209,7 +209,7 @@ Value CouchDB::requestDELETE(const StrViewA &path, Value *headers, natural flags
 	}
 }
 
-Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StrViewA &path, Value data, Value *headers, natural flags) {
+Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StrView &path, Value data, Value *headers, natural flags) {
 
 	if (isRelativePath(path)) return jsonPUTPOST(method,*getUrlBuilder(path),data,headers,flags);
 
@@ -263,10 +263,10 @@ Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StrViewA &path, Valu
 }
 
 
-Value CouchDB::requestPUT(const StrViewA &path, const Value &postData, Value *headers, natural flags) {
+Value CouchDB::requestPUT(const StrView &path, const Value &postData, Value *headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPUT,path,postData,headers,flags);
 }
-Value CouchDB::requestPOST(const StrViewA &path, const Value &postData, Value *headers, natural flags) {
+Value CouchDB::requestPOST(const StrView &path, const Value &postData, Value *headers, natural flags) {
 	return jsonPUTPOST(HttpClient::mPOST,path,postData,headers,flags);
 }
 
@@ -323,27 +323,27 @@ Query CouchDB::createQuery(natural viewFlags) {
 	return createQuery(v);
 }
 
-Value CouchDB::retrieveLocalDocument(const StrViewA &localId, natural flags) {
+Value CouchDB::retrieveLocalDocument(const StrView &localId, natural flags) {
 	PUrlBuilder url = getUrlBuilder("_local");
 	url->add(localId);
 	return requestGET(*url,nullptr, flags & (flgDisableCache|flgRefreshCache));
 }
 
-StrViewA CouchDB::genUID() {
-	return uidGen(uidBuffer,StrViewA());
+StrView CouchDB::genUID() {
+	return uidGen(uidBuffer,StrView());
 }
 
-StrViewA CouchDB::genUID(StrViewA prefix) {
+StrView CouchDB::genUID(StrView prefix) {
 	return uidGen(uidBuffer,prefix);
 }
 
-Value CouchDB::retrieveDocument(const StrViewA &docId, const StrViewA & revId, natural flags) {
+Value CouchDB::retrieveDocument(const StrView &docId, const StrView & revId, natural flags) {
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(docId).add("rev",revId);
 	return requestGET(*url,nullptr, flags & (flgDisableCache|flgRefreshCache));
 }
 
-Value CouchDB::retrieveDocument(const StrViewA &docId, natural flags) {
+Value CouchDB::retrieveDocument(const StrView &docId, natural flags) {
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(docId);
 
@@ -359,12 +359,12 @@ Value CouchDB::retrieveDocument(const StrViewA &docId, natural flags) {
 
 }
 
-CouchDB::UpdateResult CouchDB::updateDoc(StrViewA updateHandlerPath, StrViewA documentId,
+CouchDB::UpdateResult CouchDB::updateDoc(StrView updateHandlerPath, StrView documentId,
 		Value arguments) {
 	PUrlBuilder url = getUrlBuilder(updateHandlerPath);
 	url->add(documentId);
 	for (auto &&v:arguments) {
-		StrViewA key = v.getKey();
+		StrView key = v.getKey();
 		String vstr = v.toString();
 		url->add(key,vstr);
 	}
@@ -374,13 +374,13 @@ CouchDB::UpdateResult CouchDB::updateDoc(StrViewA updateHandlerPath, StrViewA do
 
 }
 
-Value CouchDB::showDoc(const StrViewA &showHandlerPath, const StrViewA &documentId,
+Value CouchDB::showDoc(const StrView &showHandlerPath, const StrView &documentId,
 		const Value &arguments, natural flags) {
 
 	PUrlBuilder url = getUrlBuilder(showHandlerPath);
 	url->add(documentId);
 	for (auto &&v:arguments) {
-		StrViewA key = v.getKey();
+		StrView key = v.getKey();
 		String vstr = v.toString();
 		url->add(key,vstr);
 	}
@@ -390,10 +390,10 @@ Value CouchDB::showDoc(const StrViewA &showHandlerPath, const StrViewA &document
 }
 
 
-Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType) {
+Upload CouchDB::uploadAttachment(const Value &document, const StrView &attachmentName, const StrView &contentType) {
 
-	StrViewA documentId = document["_id"].getString();
-	StrViewA revId = document["_rev"].getString();
+	StrView documentId = document["_id"].getString();
+	StrView revId = document["_rev"].getString();
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(documentId);
 	url->add(attachmentName);
@@ -438,7 +438,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachme
 
 					}
 					http.close();
-					StrViewA url(*urlline);
+					StrView url(*urlline);
 					throw RequestError(THISLOCATION,~url,http.getStatus(), http.getStatusMessage(), errorVal);
 				} else {
 					Value v = Value::parse(responseData);
@@ -479,7 +479,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachme
 
 }
 
-String CouchDB::uploadAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData) {
+String CouchDB::uploadAttachment(const Value &document, const StrView &attachmentName, const AttachmentDataRef &attachmentData) {
 
 	Upload upld = uploadAttachment(document,attachmentName,attachmentData.contentType);
 	upld.write(attachmentData.data(), attachmentData.length());
@@ -489,23 +489,23 @@ String CouchDB::uploadAttachment(const Value &document, const StrViewA &attachme
 
 Value CouchDB::genUIDValue() {
 	Synchronized<FastLock> _(lock);
-	return StrViewA(genUID());
+	return StrView(genUID());
 }
 
-Value CouchDB::genUIDValue(StrViewA prefix) {
+Value CouchDB::genUIDValue(StrView prefix) {
 	Synchronized<FastLock> _(lock);
-	return StrViewA(genUID(prefix));
+	return StrView(genUID(prefix));
 }
 
 
 Document CouchDB::newDocument() {
 	Synchronized<FastLock> _(lock);
-	return Document(genUID(),StrViewA());
+	return Document(genUID(),StrView());
 }
 
-Document CouchDB::newDocument(const StrViewA &prefix) {
+Document CouchDB::newDocument(const StrView &prefix) {
 	Synchronized<FastLock> _(lock);
-	return Document(genUID(StrViewA(prefix)),StrViewA());
+	return Document(genUID(StrView(prefix)),StrView());
 }
 
 template<typename Fn>
@@ -565,7 +565,7 @@ public:
 	}
 };
 
-static const StrViewA _designSlash("_design/");
+static const StrView _designSlash("_design/");
 
 
 
@@ -735,13 +735,13 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		}
 		for (auto &&itm: flt.args) {
 			if (!sink.filterArgs[itm.getKey()].defined()) {
-				url->add(StrViewA(itm.getKey()),StrViewA(itm.toString()));
+				url->add(StrView(itm.getKey()),StrView(itm.toString()));
 			}
 		}
 	}
 	for (auto &&v : sink.filterArgs) {
 			String val = v.toString();
-			StrViewA key = v.getKey();
+			StrView key = v.getKey();
 			url->add(key,val);
 	}
 
@@ -852,7 +852,7 @@ protected:
 };
 
 
-Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StrViewA &etag) {
+Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StrView &etag) {
 
 	lock.lock();
 	try {
@@ -890,10 +890,10 @@ Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StrViewA &et
 
 }
 
-Download CouchDB::downloadAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag) {
+Download CouchDB::downloadAttachment(const Document &document, const StrView &attachmentName,  const StrView &etag) {
 
-	StrViewA documentId = document["_id"].getString();
-	StrViewA revId = document["_rev"].getString();
+	StrView documentId = document["_id"].getString();
+	StrView revId = document["_rev"].getString();
 
 	if (revId.empty()) return downloadAttachment(documentId, attachmentName, etag);
 
@@ -907,12 +907,12 @@ Download CouchDB::downloadAttachment(const Document &document, const StrViewA &a
 
 }
 
-Download CouchDB::downloadAttachment(const Value &document, const StrViewA &attachmentName,  const StrViewA &etag) {
+Download CouchDB::downloadAttachment(const Value &document, const StrView &attachmentName,  const StrView &etag) {
 
-	if (document.type() == json::string) return downloadAttachment((StrViewA)document.getString(), attachmentName, etag);
+	if (document.type() == json::string) return downloadAttachment((StrView)document.getString(), attachmentName, etag);
 
-	StrViewA documentId = document["_id"].getString();
-	StrViewA revId = document["_rev"].getString();
+	StrView documentId = document["_id"].getString();
+	StrView revId = document["_rev"].getString();
 
 	if (revId.empty()) return downloadAttachment(documentId, attachmentName, etag);
 
@@ -925,7 +925,7 @@ Download CouchDB::downloadAttachment(const Value &document, const StrViewA &atta
 
 }
 
-Download CouchDB::downloadAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag) {
+Download CouchDB::downloadAttachment(const StrView &docId, const StrView &attachmentName,  const StrView &etag) {
 
 	PUrlBuilder url = getUrlBuilder("");
 	url->add(docId);
@@ -983,11 +983,11 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 							url->addJson(~startKey,start);
 							url->addJson(~endKey,end);
 							if (r.docIdFromGetKey) {
-								StrViewA startDocId = start.getKey();
+								StrView startDocId = start.getKey();
 								if (!startDocId.empty()) {
 									url->add(~startKeyDocId, startDocId);
 								}
-								StrViewA endDocId = end.getKey();
+								StrView endDocId = end.getKey();
 								if (!endDocId.empty()) {
 									url->add(~endKeyDocId, endDocId);
 								}
@@ -1047,10 +1047,10 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 	if (r.view.args.type() == json::object) {
 		for(auto &&item: r.view.args) {
-			url->add(StrViewA(item.getKey()),StrViewA(item.toString()));
+			url->add(StrView(item.getKey()),StrView(item.toString()));
 		}
 	} else if (r.view.args.defined()) {
-		url->add("args",StrViewA(r.view.args.toString()));
+		url->add("args",StrView(r.view.args.toString()));
 	}
 
 	Value result;
@@ -1076,8 +1076,8 @@ const char* CouchDB::UrlBldPool::getResourceName() const {
 	return "Url buffer";
 }
 
-CouchDB::PUrlBuilder CouchDB::getUrlBuilder(StrViewA resourcePath) {
-	if (database.empty() && resourcePath.substr(0,1) != StrViewA("/"))
+CouchDB::PUrlBuilder CouchDB::getUrlBuilder(StrView resourcePath) {
+	if (database.empty() && resourcePath.substr(0,1) != StrView("/"))
 		throw ErrorMessageException(THISLOCATION,"No database selected");
 
 	PUrlBuilder b(urlBldPool);

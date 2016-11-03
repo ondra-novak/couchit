@@ -100,7 +100,7 @@ static void couchLoadData(PrintTextA &print) {
 	Set<String> uuidmap;
 
 	for (natural i = 0; i < savedDocs.length(); i++) {
-		StrViewA uuid = savedDocs[i]["_id"].getString();
+		StrView uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
 	print("%1") << uuidmap.size();
@@ -310,7 +310,7 @@ static void couchChangeSetOneShot(PrintTextA &a) {
 	a("%1") << (count > 10);
 }
 
-static void loadSomeDataThread(StrViewA locId) {
+static void loadSomeDataThread(StrView locId) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -327,7 +327,7 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	StrViewA uid = db.genUID();
+	StrView uid = db.genUID();
 
 	Thread thr;
 	thr.start(ThreadFunction::create(&loadSomeDataThread,uid));
