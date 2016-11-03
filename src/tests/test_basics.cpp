@@ -90,7 +90,7 @@ static void couchLoadData(PrintTextA &print) {
 		doc("name",item[0])
 			("age",item[1])
 			("height",item[2])
-			("_id",convStr(ToString<natural>(id,16)));
+			("_id",UIntToStr(id,16));
 		id+=14823;
 		savedDocs.add(doc);
 		chset.update(doc);

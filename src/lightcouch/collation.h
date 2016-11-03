@@ -18,7 +18,7 @@ namespace LightCouch {
 
 using namespace LightSpeed;
 
-CompareResult compareStringsUnicode(ConstStrA str1, ConstStrA str2);
+CompareResult compareStringsUnicode(StrView str1, StrView str2);
 CompareResult compareJson(const Value &left, const Value &right);
 
 struct JsonIsLess {

@@ -680,14 +680,14 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		url->add("since", sink.seqNumber.toString());
 	}
 	if (sink.outlimit != naturalNull) {
-		url->add("limit",StrView(ToString<natural>(sink.outlimit)));
+		url->add("limit",ToString<natural>(sink.outlimit));
 	}
 	if (sink.timeout > 0) {
 		url->add("feed","longpoll");
 		if (sink.timeout == naturalNull) {
 			url->add("heartbeat","true");
 		} else {
-			url->add("timeout",convStr(ToString<natural>(sink.timeout)));
+			url->add("timeout",ToString<natural>(sink.timeout));
 		}
 	}
 	if (sink.filter != null) {
@@ -879,8 +879,8 @@ Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StrView &eta
 			HttpClient::HeaderValue etag = http.getHeader(HttpClient::fldETag);
 			natural llen = naturalNull;
 			if (len.defined) parseUnsignedNumber(len.getFwIter(), llen, 10);
-			if (status == 304) return Download(new EmptyDownload,ctx,etag,llen,true);
-			else return Download(new StreamDownload(in.getStream(),lock,http),ctx,etag,llen,false);
+			if (status == 304) return Download(new EmptyDownload,convStr(ctx),convStr(etag),llen,true);
+			else return Download(new StreamDownload(in.getStream(),lock,http),convStr(ctx),convStr(etag),llen,false);
 		}
 	} catch (...) {
 		lock.unlock();
@@ -980,27 +980,27 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		case qmKeyRange: {
 							Value start = r.keys[0];
 							Value end = r.keys[1];
-							url->addJson(~startKey,start);
-							url->addJson(~endKey,end);
+							url->addJson(startKey,start);
+							url->addJson(endKey,end);
 							if (r.docIdFromGetKey) {
 								StrView startDocId = start.getKey();
 								if (!startDocId.empty()) {
-									url->add(~startKeyDocId, startDocId);
+									url->add(startKeyDocId, startDocId);
 								}
 								StrView endDocId = end.getKey();
 								if (!endDocId.empty()) {
-									url->add(~endKeyDocId, endDocId);
+									url->add(endKeyDocId, endDocId);
 								}
 							}
 						}
 						break;
 		case qmKeyPrefix:
-					url->addJson(~startKey,addToArray(r.keys[0],Query::minKey));
-					url->addJson(~endKey,addToArray(r.keys[0],Query::maxKey));
+					url->addJson(startKey,addToArray(r.keys[0],Query::minKey));
+					url->addJson(endKey,addToArray(r.keys[0],Query::maxKey));
 				break;
 		case qmStringPrefix:
-				url->addJson(~startKey,addSuffix(r.keys[0],Query::minString));
-				url->addJson(~endKey,addSuffix(r.keys[0],Query::maxString));
+				url->addJson(startKey,addSuffix(r.keys[0],Query::minString));
+				url->addJson(endKey,addSuffix(r.keys[0],Query::maxString));
 				break;
 		}
 
@@ -1013,7 +1013,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 			if (r.mode == qmKeyList) {
 				url->add("group",level?"true":"false");
 			} else {
-				url->add("groupLevel",~ToString<natural>(level));
+				url->add("groupLevel",ToString<natural>(level));
 			}
 		}
 			break;
@@ -1021,7 +1021,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		url->add("group","true");
 		break;
 	case rmGroupLevel:
-		url->add("group_level",~ToString<natural>(r.groupLevel));
+		url->add("group_level",ToString<natural>(r.groupLevel));
 		break;
 	case rmNoReduce:
 		url->add("reduce","false");
@@ -1030,8 +1030,8 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		break;
 	}
 
-	if (r.offset) url->add("skip",~ToString<natural>(r.offset));
-	if (r.limit != naturalNull) url->add("limit",~ToString<natural>(r.limit));
+	if (r.offset) url->add("skip",ToString<natural>(r.offset));
+	if (r.limit != naturalNull) url->add("limit",ToString<natural>(r.limit));
 	if (r.nosort) url->add("sorted","false");
 	if (r.view.flags & View::includeDocs) {
 		url->add("include_docs","true");
@@ -1081,7 +1081,7 @@ CouchDB::PUrlBuilder CouchDB::getUrlBuilder(StrView resourcePath) {
 		throw ErrorMessageException(THISLOCATION,"No database selected");
 
 	PUrlBuilder b(urlBldPool);
-	b->init(~baseUrl,~database,~resourcePath);
+	b->init(baseUrl,database,resourcePath);
 	return b;
 }
 

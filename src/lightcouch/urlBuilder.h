@@ -16,7 +16,7 @@ using namespace LightSpeed;
 class UrlBuilder {
 public:
 
-	void init(ConstStrA basicUrl, ConstStrA dbname, ConstStrA resourcePath);
+	void init(StrView basicUrl, StrView dbname, StrView resourcePath);
 	void init();
 	UrlBuilder &add(StrView path);
 	UrlBuilder &add(StrView key, StrView value);

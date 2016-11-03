@@ -14,7 +14,7 @@
 namespace LightCouch {
 
 
-void LightCouch::UrlBuilder::init(ConstStrA basicUrl, ConstStrA dbname, ConstStrA resourcePath) {
+void LightCouch::UrlBuilder::init(StrView basicUrl, StrView dbname, StrView resourcePath) {
 	buffer.clear();
 	if (resourcePath.empty()) {
 		buffer.blockWrite(basicUrl,true);

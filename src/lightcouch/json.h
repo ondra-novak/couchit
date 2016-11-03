@@ -12,6 +12,7 @@
 #include <lightspeed/base/containers/flatArray.h>
 #include <lightspeed/base/containers/stringBase.h>
 #include <lightspeed/base/text/textOut.h>
+#include <lightspeed/base/text/toString.h>
 
 namespace LightCouch {
 
@@ -50,6 +51,7 @@ public:
 	explicit operator std::string () const {
 		return std::string(Super::data, Super::length);
 	}
+//	operator json::String() const {return json::String(*this);}
 	const char *data() const {return Super::data;}
 	LightSpeed::natural length() const {return Super::length;}
 };
@@ -94,9 +96,15 @@ static inline Value addSuffix(Value v,const String &suffix) {
 		}
 	}
 
+class UIntToStr: public LightSpeed::ToString<LightSpeed::natural>, public json::StringView<char> {
+public:
+	typedef LightSpeed::ToString<LightSpeed::natural> Super;
+	UIntToStr(LightSpeed::natural x, LightSpeed::natural base=10, bool up = false)
+		:LightSpeed::ToString<LightSpeed::natural>(x,base,up)
+		 ,json::StringView<char>(this->refdata, this->len) {}
+};
 
 }
-
 
 
 

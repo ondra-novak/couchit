@@ -19,6 +19,8 @@
 
 #include "changeset.h"
 #include "lightspeed/mt/thread.h"
+
+#include "lightspeed/base/text/textParser.tcc"
 using LightSpeed::HashMD5;
 using LightSpeed::HttpStatusException;
 using LightSpeed::NamedEnumDef;
