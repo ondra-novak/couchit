@@ -170,5 +170,9 @@ Changeset& Changeset::preview(LocalView& view) {
 
 }
 
+String Changeset::getCommitRev(const Document& doc) const {
+	return getCommitRev(doc.getID());
+}
+
 } /* namespace assetex */
 

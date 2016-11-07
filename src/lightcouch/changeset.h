@@ -86,6 +86,8 @@ public:
 	///Retrieves revision of the committed document
 	String getCommitRev(const StrView &docId) const;
 
+	String getCommitRev(const Document &doc) const;
+
 	///Revets changes made in document docId
 	/** Removes document from the changeset */
 	void revert(const StrView &docId);
