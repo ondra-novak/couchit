@@ -8,6 +8,8 @@
 #ifndef LIGHTCOUCH_MINIHTTP_CHUNKED_H_
 #define LIGHTCOUCH_MINIHTTP_CHUNKED_H_
 
+#include "buffered.h"
+
 namespace LightCouch {
 
 ///
@@ -57,7 +59,7 @@ protected:
 		snprintf(printbuff,19,"%lX\r\n", chunkUsed);
 		std::size_t sz = printbuff[19] = 0;
 		outFn(printbuff,sz);
-		outFn(chunk,chinkUsed);
+		outFn(chunk,chunkUsed);
 		outFn(printBuff+sz-2,2);
 	}
 };
@@ -87,19 +89,19 @@ template<typename InFn>
 class ChunkedRead {
 public:
 
-	ChunkedRead(const InFn &fn):inFn(fn),curChunk(0),pos(0),bufferSize(0),chunkError(false) {}
+	ChunkedRead(const InFn &fn):rd(fn),curChunk(0),chunkError(false) {}
 
 	int operator()() {
 
 		if (curChunk) {
 			curChunk--;
-			return readNext();
+			return rd();
 		} else {
-			curChunk = readNext();
+			curChunk = readChunkHeader();
 			if (curChunk == 0) return -1;
 			else {
 				curChunk--;
-				return readNext();
+				return rd();
 			}
 		}
 
@@ -116,34 +118,17 @@ public:
 
 protected:
 
-	InFn inFn;
+	BufferedRead<InFn> rd;
 
 	std::size_t curChunk;
-	unsigned char *curBuffer;
-	std::size_t pos;
-	std::size_t bufferSize;
 	bool chunkError;
-
-	int readNext() {
-		if (pos < bufferSize) {
-			return curBuffer[pos++];
-		} else {
-			curBuffer = inFn(pos,&bufferSize);
-			if (curBuffer) {
-				pos = 0;
-				return curBuffer[pos++];
-			} else {
-				return -1;
-			}
-		}
-	}
 
 	std::size_t readChunkHeader() {
 
 		std::size_t acc = 0;
-		int c = readNext();
-		if (c == '\r') c = readNext();
-		if (c == '\n') c = readNext();
+		int c = rd();
+		if (c == '\r') c = rd();
+		if (c == '\n') c = rd();
 		while (c != '\r') {
 			acc<<=4;
 			if (c>='0' && c<='9') acc += (c-48);
@@ -154,7 +139,7 @@ protected:
 				return 0;
 			}
 		}
-		c = readNext();
+		c = rd();
 		if (c != '\n') {
 			chunkError = true;
 			return 0;

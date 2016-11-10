@@ -14,7 +14,7 @@
 
 namespace LightCouch {
 
-class IInputStream: public json::RefCntObj {
+class IInputStream: public virtual json::RefCntObj {
 public:
 
 	virtual unsigned char *read(std::size_t processed, std::size_t *readready) = 0;
@@ -22,7 +22,7 @@ public:
 };
 
 
-class IOutputStream: public json::RefCntObj {
+class IOutputStream: public virtual json::RefCntObj {
 public:
 
 	virtual void write(const unsigned char *buffer, std::size_t size) = 0;
