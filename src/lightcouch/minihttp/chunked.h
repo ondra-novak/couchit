@@ -25,6 +25,9 @@ class ChunkedWrite {
 public:
 
 	ChunkedWrite(const OutFn &fn):outFn(fn),chunkUsed(0) {}
+	~ChunkedWrite() {
+		flush();
+	}
 
 	void operator()(int b) {
 		if (b == -1) {
@@ -73,13 +76,37 @@ protected:
 	void sendChunk() {
 		sendChunk(chunk,chunkUsed);
 	}
-	void sendChunk(unsigned char *data, std::size_t datasz) {
-		char printbuff[20];
-		snprintf(printbuff,19,"%lX\r\n", datasz);
-		std::size_t sz = printbuff[19] = 0;
-		outFn(printbuff,sz);
+
+
+	char *writeHex(char *buff, std::size_t num) {
+		if (num) {
+			char *c = writeHex(buff, num>>4);
+			std::size_t rem = num % 0xF;
+			*c = rem<10?rem+'0':rem+'A'-10;
+			return c+1;
+		} else {
+			return buff;
+		}
+	}
+
+	std::size_t writeChunkSize(char *buff, std::size_t num) {
+		char *end = buff+1;
+		if (num == 0) {
+			buff[0] = '0';
+		} else {
+			end = writeHex(buff,num);
+		}
+		end[0] = '\r';
+		end[1] = '\n';
+		return end-buff+2;
+	}
+
+	void sendChunk(const unsigned char *data, std::size_t datasz) {
+		char printbuff[50];
+		std::size_t sz = writeChunkSize(printbuff,datasz);
+		outFn(reinterpret_cast<unsigned char *>(printbuff),sz);
 		outFn(data,datasz);
-		outFn(printBuff+sz-2,2);
+		outFn(reinterpret_cast<unsigned char *>(printbuff)+sz-2,2);
 
 	}
 };
@@ -118,7 +145,8 @@ public:
 			return rd();
 		} else {
 			curChunk = readChunkHeader();
-			if (curChunk == 0) return -1;
+			if (curChunk == 0)
+				return -1;
 			else {
 				curChunk--;
 				return rd();
@@ -193,6 +221,7 @@ protected:
 				chunkError = true;
 				return 0;
 			}
+			c=rd();
 		}
 		c = rd();
 		if (c != '\n') {

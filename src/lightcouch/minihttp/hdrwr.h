@@ -22,10 +22,23 @@ public:
 
 	void serialize(const json::Value &v) {
 
+
+		json::String method = v["_method"];
+		json::String uri = v["_uri"];
+		json::String version = v["_version"];
+
+		writeString(method);
+		out(' ');
+		writeString(uri);
+		out(' ');
+		writeString(version);
+		writeNL();
+
 		for (auto &&c:v) {
 
-			json::StringView<char> key = v.getKey();
-			json::String val = v.toString();
+			json::StringView<char> key = c.getKey();
+			if (key.empty() || key[0] == '_') continue;
+			json::String val = c.toString();
 
 			writeString(key);
 			writeSep();

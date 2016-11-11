@@ -8,6 +8,7 @@
 #ifndef LIGHTCOUCH_MINIHTTP_BUFFERED_H_
 #define LIGHTCOUCH_MINIHTTP_BUFFERED_H_
 
+#include <cstring>
 
 ///
 /**
@@ -22,6 +23,9 @@ class BufferedWrite {
 public:
 
 	BufferedWrite(const OutFn &fn):outFn(fn),bufferUsed(0) {}
+	~BufferedWrite() {
+		flush();
+	}
 
 	void operator()(int b) {
 		if (b == -1) {
@@ -100,7 +104,7 @@ protected:
 
 	InFn inFn;
 
-	unsigned char *curBuffer;
+	const unsigned char *curBuffer;
 	std::size_t pos;
 	std::size_t bufferSize;
 
@@ -158,7 +162,7 @@ public:
 	typedef BufferedRead<InFn> Super;
 
 
-	BufferedReadWLimit(const InFn &fn):Super(fn) {}
+	BufferedReadWLimit(const InFn &fn):Super(fn),limit(-1) {}
 
 	int operator()() {
 		if (limit) {
@@ -180,6 +184,13 @@ public:
 			return ready?0:b;
 		}
 	}
+
+	void setLimit(std::size_t limit) {
+		this->limit = limit;
+	}
+
+protected:
+	std::size_t limit;
 };
 
 
