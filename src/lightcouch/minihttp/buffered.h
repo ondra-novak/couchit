@@ -17,7 +17,7 @@
  * void OutFn(const void *buffer, std::size_t size)
  * @endcode
  */
-template<typename OutFn, std::size_t buffSize = 65536>
+template<typename OutFn, std::size_t buffSize = 4096>
 class BufferedWrite {
 public:
 
@@ -31,6 +31,23 @@ public:
 			if (bufferUsed == buffSize) flush();
 		}
 	}
+
+	void operator()(const unsigned char *data, std::size_t sz) {
+		if (sz == 0) {
+			close();
+		} else if (sz < (buffSize - bufferUsed)) {
+			std::memcpy(buffer+bufferUsed,data,sz);
+			bufferUsed+=sz;
+		} else if (sz < buffSize) {
+			flush();
+			std::memcpy(buffer,data,sz);
+			bufferUsed+=sz	;
+		} else {
+			flush();
+			outFn(data,sz);
+		}
+	}
+
 
 	void close() {
 		flush();
@@ -70,6 +87,15 @@ public:
 		return readNext();
 	}
 
+	const unsigned char *operator()(std::size_t procesed, std::size_t *ready) {
+		if (pos < bufferSize) {
+			inFn(pos,0);
+			pos = bufferSize = 0;
+		}
+		return inFn(procesed,ready);
+	}
+
+
 protected:
 
 	InFn inFn;
@@ -89,6 +115,69 @@ protected:
 			} else {
 				return -1;
 			}
+		}
+	}
+};
+
+template<typename OutFn, std::size_t buffSize = 65536>
+class BufferedWriteWLimit: public BufferedWrite<OutFn> {
+public:
+
+
+		typedef BufferedWrite<OutFn> Super;
+	BufferedWriteWLimit(const OutFn &fn):Super(fn),limit(-1) {}
+
+	void operator()(int b) {
+		if (limit) {
+			Super::operator()(b);
+			limit--;
+		}
+	}
+
+	void operator()(const unsigned char *data, std::size_t sz) {
+		std::size_t limsz = std::min(limit,sz);
+		if (limsz) {
+			Super::operator ()(data,limsz);
+			limit -= limsz;
+		}
+	}
+
+	void setLimit(std::size_t limit) {
+		this->limit = limit;
+	}
+
+
+protected:
+	std::size_t limit;
+
+};
+
+template<typename InFn>
+class BufferedReadWLimit: public BufferedRead<InFn> {
+public:
+	typedef BufferedRead<InFn> Super;
+
+
+	BufferedReadWLimit(const InFn &fn):Super(fn) {}
+
+	int operator()() {
+		if (limit) {
+			limit--;
+			return Super::operator ()();
+		} else {
+			return -1;
+		}
+	}
+
+	const unsigned char *operator()(std::size_t processed, std::size_t *ready) {
+		limit -= std::min(limit,processed);
+		if (limit) {
+			const unsigned char *b = Super::operator()(processed,ready);
+			if (ready && *ready > limit) *ready = limit;
+			return b;
+		} else {
+			const unsigned char *b = Super::operator()(processed,0);
+			return ready?0:b;
 		}
 	}
 };

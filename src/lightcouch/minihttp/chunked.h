@@ -35,6 +35,22 @@ public:
 		}
 	}
 
+	void operator()(const unsigned char *data, std::size_t sz) {
+		if (sz == 0) {
+			close();
+		} else if (sz < (chunkSize- chunkUsed)) {
+			std::memcpy(chunk+chunkUsed,data,sz);
+			chunkUsed+=sz;
+		} else if (sz < chunkSize) {
+			flush();
+			std::memcpy(chunk,data,sz);
+			chunkUsed+=sz	;
+		} else {
+			flush();
+			sendChunk(data,sz);
+		}
+	}
+
 	void close() {
 		flush();
 		sendChunk();
@@ -55,12 +71,16 @@ protected:
 	std::size_t chunkUsed;
 
 	void sendChunk() {
+		sendChunk(chunk,chunkUsed);
+	}
+	void sendChunk(unsigned char *data, std::size_t datasz) {
 		char printbuff[20];
-		snprintf(printbuff,19,"%lX\r\n", chunkUsed);
+		snprintf(printbuff,19,"%lX\r\n", datasz);
 		std::size_t sz = printbuff[19] = 0;
 		outFn(printbuff,sz);
-		outFn(chunk,chunkUsed);
+		outFn(data,datasz);
 		outFn(printBuff+sz-2,2);
+
 	}
 };
 
@@ -106,6 +126,41 @@ public:
 		}
 
 	}
+
+	const unsigned char *operator()(std::size_t processed, std::size_t *ready) {
+
+		const unsigned char *buff;
+		if (ready) {
+			*ready = 0;
+			if (processed >= curChunk) {
+				rd(curChunk,0);
+				curChunk = readChunkHeader();
+				if (curChunk == 0) {
+					buff = 0;
+				} else {
+					buff = rd(0,ready);
+				}
+			} else {
+				buff = rd(processed,ready);
+				curChunk-=processed;
+			}
+			if (*ready > curChunk) *ready = curChunk;
+			return buff;
+		} else {
+			if (processed == 0) {
+				return rd(0,0);
+			}
+			if (processed >= curChunk) {
+				buff = rd(curChunk,0);
+				curChunk = 0;
+			} else {
+				buff = rd(processed,0);
+				curChunk -= processed;
+			}
+			return buff;
+		}
+	}
+
 
 	///Returns true, if error in chunk has encoutered
 	/**
