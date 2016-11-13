@@ -6,6 +6,7 @@
 #include "../lightcouch/minihttp/hdrrd.h"
 #include "../lightcouch/minihttp/hdrwr.h"
 #include "../lightcouch/minihttp/chunked.h"
+#include "../lightcouch/minihttp/httpclient.h"
 
 
 namespace LightCouch {
@@ -95,8 +96,9 @@ defineTest test_httpcReadChunked("couchdb.minihttp.readChunked", "Wikipedia in\r
 	res.reserve(2000);
 	{
 	ChunkedRead<decltype(infn)> chunks(infn);
+	BufferedRead<ChunkedRead<decltype(infn)> > buffered(chunks);
 	do {
-		int i = chunks();
+		int i = buffered();
 		if (i == -1) break;
 		res.push_back((char)i);
 	} while (true);
@@ -109,7 +111,7 @@ defineTest test_httpcReadChunked("couchdb.minihttp.readChunked", "Wikipedia in\r
 		ChunkedRead<decltype(infn)> chunks(infn);
 		std::size_t rd;
 		const unsigned char *c = chunks(0,&rd);
-		while (c != 0) {
+		while (c != 0 && rd != 0) {
 			if (rd > 4) rd = 4;
 			res2.append(reinterpret_cast<const char *>(c), rd);
 			c = chunks(rd,&rd);
@@ -121,15 +123,17 @@ defineTest test_httpcReadChunked("couchdb.minihttp.readChunked", "Wikipedia in\r
 });
 
 defineTest test_writeChunked("couchdb.minihttp.writeChunked",
-		"15\r\nThis is long string \r\n15\r\nwritten in chunks...\r\n2\r\n..\r\n0\r\n\r\n",
+		"14\r\nThis is long string \r\n14\r\nwritten in chunks...\r\n2\r\n..\r\n0\r\n\r\n",
 		[](PrintTextA &out) {
 
 	StrView source = "This is long string written in chunks.....";
 	std::string res;
 	res.reserve(1000);
 
-	auto outfn = [&](const unsigned char *data, std::size_t length) {
+	auto outfn = [&](const unsigned char *data, std::size_t length, std::size_t *written) {
 		res.append(reinterpret_cast<const char *>(data),length);
+		if (written) *written = length;
+		return true;
 	};
 	ChunkedWrite<decltype(outfn),20> chunks(outfn);
 
@@ -140,26 +144,95 @@ defineTest test_writeChunked("couchdb.minihttp.writeChunked",
 
 });
 defineTest test_writeChunked2("couchdb.minihttp.writeChunked2",
-		"5\r\nThis \r\n14\r\nis long string writ\r\n4B\r\nten in chunks..... And because it should be long enough, make it longer\r\n0\r\n\r\n",
+		"5\r\nThis \r\n13\r\nis long string writ\r\n47\r\nten in chunks..... And because it should be long enough, make it longer\r\n0\r\n\r\n",
 		[](PrintTextA &out) {
 
 	StrView source = "This is long string written in chunks..... And because it should be long enough, make it longer";
 	std::string res;
 	res.reserve(1000);
 
-	auto outfn = [&](const unsigned char *data, std::size_t length) {
+	auto outfn = [&](const unsigned char *data, std::size_t length, std::size_t *written) {
 		res.append(reinterpret_cast<const char *>(data),length);
+		if (written) *written = length;
+		return true;
 	};
 	ChunkedWrite<decltype(outfn),20> chunks(outfn);
 
 	const unsigned char *data = reinterpret_cast<const unsigned char *>(source.data());
-	chunks(data,1);
-	chunks(data+1,4);
-	chunks(data+5,19);
-	chunks(data+24,source.length()-24);
-	chunks(0,0);
+	chunks(data,1,0);
+	chunks(data+1,4,0);
+	chunks(data+5,19,0);
+	chunks(data+24,source.length()-24,0);
+	chunks(0,0,0);
 
 	out("%1") << StrView(res);
+
+});
+defineTest test_simpleGetRequest("couchdb.minihttp.getRequest","TestClient",
+		[](PrintTextA &out) {
+
+	HttpClient client("TestClient");
+	client.open("http://httpbin.org/get","GET",false);
+	int status = client.send();
+	if (status == 200) {
+		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
+		out("%1") << v["headers"]["User-Agent"].getString();
+	} else {
+		out("Status: %1") << status;
+	}
+
+
+});
+defineTest test_simplePostRequest("couchdb.minihttp.postRequest",
+		"\"[10,20,30,\\\"ahoj\\\",\\\"nazdar\\\",\\\"cau\\\",[1,2,3]]\"",
+		[](PrintTextA &out) {
+
+	HttpClient client("TestClient");
+	client.open("http://httpbin.org/post","POST",false);
+	json::Value req({10,20,30,"ahoj","nazdar","cau",{1,2,3}});
+	req.serialize(BufferedWrite<OutputStream>(client.beginBody()));
+	int status = client.send();
+	if (status == 200) {
+		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
+		out("%1") << StrView(v["data"].stringify());
+	} else {
+		out("Status: %1") << status;
+	}
+
+
+});
+
+defineTest test_postRequestFromString("couchdb.minihttp.postRequestFromString",
+		"\"[10,20,30,\\\"ahoj\\\",\\\"nazdar\\\",\\\"cau\\\",[1,2,3]]\"",
+		[](PrintTextA &out) {
+
+	HttpClient client("TestClient");
+	client.open("http://httpbin.org/post","POST",false);
+	json::Value req({10,20,30,"ahoj","nazdar","cau",{1,2,3}});
+	json::String strReq = req.stringify();
+	int status = client.send(strReq);
+	if (status == 200) {
+		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
+		out("%1") << StrView(v["data"].stringify());
+	} else {
+		out("Status: %1") << status;
+	}
+
+
+});
+defineTest test_getAuth("couchdb.minihttp.getAuth","user",
+		[](PrintTextA &out) {
+
+	HttpClient client("TestClient");
+	client.open("http://user:passwd@httpbin.org/basic-auth/user/passwd","GET",false);
+	int status = client.send();
+	if (status == 200) {
+		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
+		out("%1") << v["user"].getString();
+	} else {
+		out("Status: %1") << status;
+	}
+
 
 });
 

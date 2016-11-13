@@ -24,64 +24,67 @@ template<typename OutFn, std::size_t chunkSize = 65536>
 class ChunkedWrite {
 public:
 
-	ChunkedWrite(const OutFn &fn):outFn(fn),chunkUsed(0) {}
+	ChunkedWrite(const OutFn &fn):outFn(fn),chunkUsed(0),noError(true) {}
 	~ChunkedWrite() {
 		flush();
 	}
 
-	void operator()(int b) {
-		if (b == -1) {
-			close();
-		} else {
-			chunk[chunkUsed++] = b;
-			if (chunkUsed == chunkSize) flush();
+	bool operator()(int c) {
+		if (c == -1) return operator()(0,0,0);
+		else {
+			unsigned char z = (char)c;
+			return operator()(&z,1,0);
 		}
 	}
 
-	void operator()(const unsigned char *data, std::size_t sz) {
+	bool operator()(const unsigned char *data, std::size_t sz, std::size_t *wrt) {
 		if (sz == 0) {
 			close();
-		} else if (sz < (chunkSize- chunkUsed)) {
+		} else if (sz <= (chunkSize- chunkUsed)) {
 			std::memcpy(chunk+chunkUsed,data,sz);
 			chunkUsed+=sz;
-		} else if (sz < chunkSize) {
-			flush();
+		} else if (sz <= chunkSize) {
+			if (!flush()) return false;
 			std::memcpy(chunk,data,sz);
 			chunkUsed+=sz	;
 		} else {
-			flush();
-			sendChunk(data,sz);
+			return flush() && sendChunk(data,sz);
 		}
+		if (wrt) *wrt = sz;
+		return noError;
 	}
 
-	void close() {
-		flush();
-		sendChunk();
+	bool close() {
+		return flush() && sendChunk(chunk,0);
 	}
 
-	void flush() {
+	bool flush() {
 		if (chunkUsed) {
-			sendChunk();
+			std::size_t end = chunkUsed;
 			chunkUsed = 0;
+			return sendChunk(chunk,end);
+		} else {
+			return true;
 		}
 	}
 
+	bool isError() const {
+		return !noError;
+	}
 
 
 protected:
 	OutFn outFn;
 	unsigned char chunk[chunkSize];
 	std::size_t chunkUsed;
+	bool noError;
 
-	void sendChunk() {
-		sendChunk(chunk,chunkUsed);
-	}
 
 
 	char *writeHex(char *buff, std::size_t num) {
 		if (num) {
 			char *c = writeHex(buff, num>>4);
-			std::size_t rem = num % 0xF;
+			std::size_t rem = num & 0xF;
 			*c = rem<10?rem+'0':rem+'A'-10;
 			return c+1;
 		} else {
@@ -101,12 +104,13 @@ protected:
 		return end-buff+2;
 	}
 
-	void sendChunk(const unsigned char *data, std::size_t datasz) {
+	bool sendChunk(const unsigned char *data, std::size_t datasz) {
 		char printbuff[50];
 		std::size_t sz = writeChunkSize(printbuff,datasz);
-		outFn(reinterpret_cast<unsigned char *>(printbuff),sz);
-		outFn(data,datasz);
-		outFn(reinterpret_cast<unsigned char *>(printbuff)+sz-2,2);
+		noError =  outFn(reinterpret_cast<unsigned char *>(printbuff),sz,0)
+				&& outFn(data,datasz,0)
+				&& outFn(reinterpret_cast<unsigned char *>(printbuff)+sz-2,2,0);
+		return noError;
 
 	}
 };
@@ -134,58 +138,74 @@ protected:
  */
 template<typename InFn>
 class ChunkedRead {
+	enum State {
+		skipWhite,
+		readNum,
+		readCR,
+		readLF,
+		readFinish
+	};
+
 public:
 
-	ChunkedRead(const InFn &fn):rd(fn),curChunk(0),chunkError(false) {}
-
-	int operator()() {
-
-		if (curChunk) {
-			curChunk--;
-			return rd();
-		} else {
-			curChunk = readChunkHeader();
-			if (curChunk == 0)
-				return -1;
-			else {
-				curChunk--;
-				return rd();
-			}
-		}
-
-	}
+	ChunkedRead(const InFn &fn):inFn(fn),curChunk(0),state(skipWhite),eof(false),chunkError(false) {}
 
 	const unsigned char *operator()(std::size_t processed, std::size_t *ready) {
 
 		const unsigned char *buff;
+		//we need to prepare next data?
 		if (ready) {
+			//set zero first
 			*ready = 0;
-			if (processed >= curChunk) {
-				rd(curChunk,0);
-				curChunk = readChunkHeader();
+			//eof reported
+			if (eof) {
+				//set fake buffer ptr (*ready is set to 0 = eof)
+				buff = reinterpret_cast<const unsigned char *>(ready);
+
+			//read whole chunk
+			} else if (processed >= curChunk) {
+				//accept the remaining bytes
+				inFn(curChunk,0);
+				//read chunk header
+				readChunkHeader();
+				//we have empty chunk
 				if (curChunk == 0) {
-					buff = 0;
+					//set fake buffer ptr (*ready is set to 0 = eof)
+					buff = reinterpret_cast<const unsigned char *>(ready);
+					//set eof
+					eof = true;
 				} else {
-					buff = rd(0,ready);
+					//otherwise prepare output
+					buff = inFn(0,ready);
 				}
 			} else {
-				buff = rd(processed,ready);
+				//chunk is not finished
+				//prepare next data
+				buff = inFn(processed,ready);
+				//decrease remaining bytes
 				curChunk-=processed;
 			}
+			//limit ready bytes by chunk size
 			if (*ready > curChunk) *ready = curChunk;
+			//return buffer
 			return buff;
 		} else {
-			if (processed == 0) {
-				return rd(0,0);
-			}
-			if (processed >= curChunk) {
-				buff = rd(curChunk,0);
-				curChunk = 0;
+			//we dont need to prepare data
+			//first test, whether processed is equal to chunk
+			if (processed >= curChunk && !eof) {
+				//accept chunk
+				inFn(curChunk,0);
+				//read chunk header asynchonously
+				//it means, that function must read header without blocking
+				//it return true if header is ready
+				if (!readChunkHeaderNonBlock()) return 0;
+				//return data state
+				else return inFn(0,0);
 			} else {
-				buff = rd(processed,0);
-				curChunk -= processed;
+				curChunk-=processed;
+				//report processed bytes
+				return inFn(processed,0);
 			}
-			return buff;
 		}
 	}
 
@@ -201,34 +221,129 @@ public:
 
 protected:
 
-	BufferedRead<InFn> rd;
-
+	InFn inFn;
 	std::size_t curChunk;
+	State state;
+	bool eof;
 	bool chunkError;
 
-	std::size_t readChunkHeader() {
+	bool setChunkError() {
+		chunkError = true;
+		state = readFinish;
+		curChunk = 0;
+		return true;
+	}
 
-		std::size_t acc = 0;
-		int c = rd();
-		if (c == '\r') c = rd();
-		if (c == '\n') c = rd();
-		while (c != '\r') {
-			acc<<=4;
-			if (c>='0' && c<='9') acc += (c-48);
-			else if (c>='A' && c<='F') acc+=(c-'A'+10);
-			else if (c>='a' && c<='f') acc+=(c-'a'+10);
-			else {
-				chunkError = true;
-				return 0;
+	bool readChunkHeaderImpl() {
+		//we need to read chunk header with respect to currently available characters
+
+		//pointer to buffer
+		const unsigned char *buff;
+
+		do {
+			//ready bytes
+			std::size_t rd;
+			//processed bytes (first initialized to 0
+			std::size_t processed = 0;
+			//read bytes (may block if processed == previous rd)
+			buff = inFn(processed,&rd);
+			//if null returned, then unexpected eof
+			if (buff == 0 || rd == 0) return setChunkError();
+
+			do {
+				//depend on state
+				switch(state) {
+				//we are skipping whites
+				case skipWhite:
+					//until all bytes processed
+					while (processed < rd) {
+						//read byte
+						unsigned char b = buff[processed];
+						//if hex digit
+						if (isxdigit(b)) {
+							//change state
+							state = readNum;
+							curChunk = 0;
+							//break;
+							break;
+						//if it is not space and not hex
+						} else if (!isspace(buff[processed])) {
+							return setChunkError();
+						} else {
+							//process next byte
+							++processed;
+						}
+					}
+					break;
+				case readNum:
+					//until all bytes processed
+					while (processed < rd) {
+						//read byte
+						unsigned char b = buff[processed];
+						//convert hex digit to number
+						if (b >= '0' && b <='9') {
+							curChunk = (curChunk << 4) + (b - '0');
+						} else if (b >= 'A' && b <='F') {
+							curChunk = (curChunk << 4) + (b - 'A' + 10);
+						} else if (b >= 'a' && b <='f') {
+							curChunk = (curChunk << 4) + (b - 'a' + 10);
+						} else {
+							//nonhex character - advance to next state
+							state = readCR;
+							break;
+						}
+						//count processed characters
+						++processed;
+					}
+					break;
+				case readCR:
+					//only /r is expected
+					if (buff[processed] != '\r') return setChunkError();
+					//advance next state
+					state = readLF;
+					//processed
+					++processed;
+					break;
+				case readLF:
+					//only /n is expected
+					if (buff[processed] != '\n') return setChunkError();
+					state = readFinish;
+					//processed
+					++processed;
+
+					break;
+				case readFinish:
+					inFn(processed,0);
+					return true;
+				}
+
 			}
-			c=rd();
+			//still left bytes to process? continue
+			while (processed < rd);
+		buff = inFn(processed,0);
 		}
-		c = rd();
-		if (c != '\n') {
-			chunkError = true;
-			return 0;
+		while (buff != 0);
+
+		return false;
+	}
+
+	bool readChunkHeaderNonBlock() {
+		if (inFn(0,0)) {
+			readChunkHeaderImpl();
+			if (state == readFinish) {
+				state = skipWhite;
+				return true;
+			}
 		}
-		return acc;
+		return false;
+
+	}
+
+	void readChunkHeader() {
+		while (state != readFinish) {
+			readChunkHeaderImpl();
+		}
+		state = skipWhite;
 	}
 
 };

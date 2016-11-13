@@ -15,6 +15,8 @@
 #include <lightspeed/base/types.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <unistd.h>
+
 #include "../json.h"
 namespace LightCouch {
 
@@ -49,7 +51,7 @@ NetworkConnection* LightCouch::NetworkConnection::connect(const StrView &addr_dd
 			return 0;
 	}
 
-	int socket = ::socket(res->ai_family,res->ai_socktype,res->ai_family);
+	int socket = ::socket(res->ai_family,res->ai_socktype,res->ai_protocol);
 	if (socket == -1) {
 		freeaddrinfo(res);
 		return 0;
@@ -69,6 +71,7 @@ LightCouch::NetworkConnection::NetworkConnection(int socket)
 	:socket(socket)
 	,buffUsed(0)
 	,rdPos(0)
+	,eofFound(false)
 	,lastSendError(0)
 	,lastRecvError(0)
 	,timeout(false)
@@ -78,65 +81,83 @@ LightCouch::NetworkConnection::NetworkConnection(int socket)
 
 }
 
-unsigned char* LightCouch::NetworkConnection::read(std::size_t processed, std::size_t* readready) {
-	if (lastRecvError != 0) {
-		return 0;
-	}
-	std::size_t remain = buffUsed - rdPos ;
-	if (remain <= processed) rdPos = buffUsed = 0;
-	else rdPos+=processed;
+NetworkConnection::~NetworkConnection() {
+	::close(socket);
+}
 
-	if (rdPos < buffUsed) {
-
-		if (readready) *readready = buffUsed - rdPos;
-		return inputBuff+rdPos;
-
+int NetworkConnection::readToBuff() {
+	int rc = recv(socket,inputBuff,3000,0);
+	if (rc > 0) {
+		buffUsed = rc;
+		rdPos = 0;
+		eofFound = false;
+		return 1;
+	} else if (rc == 0) {
+		eofFound = true;
+		return 1;
 	} else {
-
-		if (readready) {
-			do {
-				int rc = recv(socket,inputBuff,3000,0);
-				if (rc == 0) {
-					*readready = 0;
-					return 0;
-				} else if (rc < 0) {
-					int err = errno;
-					if (err == EAGAIN || err == EWOULDBLOCK) {
-						if (!waitForInputInternal(timeoutTime)) {
-							timeout = true;
-							*readready = 0;
-							return 0;
-						}
-					} else if (err != EINTR) {
-						lastRecvError = err;
-						*readready = 0;
-						return 0;
-					}
-				} else {
-					buffUsed = rc;
-					rdPos = 0;
-					*readready = rc;
-					return inputBuff;
-				}
-			} while(true);
-		} else if (processed) {
-			return 0;
+		int err = errno;
+		if (err != EWOULDBLOCK && err != EINTR && err != EAGAIN) {
+			lastRecvError = err;
+			eofFound = true;
+			return -1;
 		} else {
-			int rc = recv(socket,inputBuff,3000,0);
-			if (rc >= 0) {
-				buffUsed = rc;
-				rdPos = 0;
-				return inputBuff;
-			} else {
-				int err = errno;
-				if (err != EWOULDBLOCK || err != EINTR || err != EAGAIN)
-					lastRecvError = err;
-				return 0;
-			}
+			return 0;
 		}
 
+
 	}
 
+}
+
+const unsigned char* NetworkConnection::read(std::size_t processed, std::size_t* readready) {
+	//calculate remain space
+	std::size_t remain = buffUsed - rdPos ;
+	//if processed remain space, reset position and used counters
+	if (remain <= processed) rdPos = buffUsed = 0;
+	//otherwise advance the position
+	else rdPos+=processed;
+
+	//caller request the bytes
+	if (readready) {
+		//if there are bytes or eof
+		if (rdPos < buffUsed || eofFound) {
+			//set available ready bytes
+			*readready = buffUsed - rdPos;
+			//return pointer to buffer
+			return inputBuff+rdPos;
+		} else {
+			int x;
+			//no more bytes available - repeatedly read to the buffer
+			while ((x = readToBuff()) == 0) {
+				//when it fails, perform waiting
+				if (!waitForInput(timeoutTime)) {
+					//in case of timeout report error
+					timeout = true;
+					return 0;
+				}
+			}
+			if (x < 0) {
+				//error - set readready to 0
+				*readready = 0;
+				//return nullptr
+				return 0;
+			} else {
+				//set readready (in case of error or eof it will be set to zero
+				*readready = buffUsed;
+				//return pointer to buffer
+				return inputBuff;
+			}
+		}
+	} else {
+		if (rdPos < buffUsed || eofFound) {
+			return inputBuff+rdPos;
+		} else {
+			int x = readToBuff();
+			if (x<=0) return 0;
+			else return inputBuff;
+		}
+	}
 
 
 }
@@ -163,18 +184,35 @@ bool NetworkConnection::waitForOutput(int  timeout_in_ms) {
 	} while (true);
 }
 
-void LightCouch::NetworkConnection::write(const unsigned char* buffer, std::size_t size) {
-	if (lastSendError) return;
-	do {
+bool LightCouch::NetworkConnection::write(const unsigned char* buffer, std::size_t size, std::size_t *written) {
+	if (lastSendError) return false;
+	if (written) {
 		int sent = send(socket,buffer,size,0);
 		if (sent < 0) {
-			lastSendError = errno;
-			break;
+			int err = errno;
+			if (err != EWOULDBLOCK || err != EINTR || err != EAGAIN) {
+				lastSendError = err;
+				return false;
+			}
+			*written = 0;
 		} else {
-			buffer+=sent;
-			size-=sent;
+			*written = sent;
 		}
-	} while (size);
+		return true;
+	} else {
+		do {
+			std::size_t written;
+			if (!write(buffer,size,&written)) return false;
+			buffer+=written;
+			size-=written;
+			if (size && !waitForOutput(timeoutTime)) {
+				timeout = true;
+				return false;
+			}
+		} while (size);
+		timeout = false;
+		return true;
+	}
 }
 
 bool NetworkConnection::waitForInputInternal(int timeout_in_ms) {

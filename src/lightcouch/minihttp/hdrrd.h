@@ -40,9 +40,13 @@ inline json::Value LightCouch::HeaderRead<Fn>::parseHeaders() {
 
 	using namespace LightSpeed;
 	json::Object collect;
+	bool stline = false;
 	do {
-		StrView line = readLine();
-		if (line.empty()) break;
+		StrView line = crop(readLine());
+		if (line.empty()) {
+			if (stline) break;
+			else continue;
+		}
 
 		natural pos = line.find(':');
 		if (pos != naturalNull) {
@@ -51,7 +55,8 @@ inline json::Value LightCouch::HeaderRead<Fn>::parseHeaders() {
 			StrView cfield = crop(field);
 			StrView cvalue = crop(value);
 			collect.set(cfield,cvalue);
-		} else if (line.substr(0,6) == "HTTP/1") {
+		} else if (line.substr(0,6) == "HTTP/1" && !stline) {
+				stline = true;
 				String strline(line);
 				Value starr = strline.split(" ",3);
 				int pos = 0;
@@ -89,7 +94,7 @@ inline StrView HeaderRead<Fn>::readLine() {
 		if (StrView(l.tail(2)) == StrView("\r\n")) return l.crop(0,2);
 		i = input();
 	}
-	return StrView();
+	return StrView("EOF");
 }
 
 template<typename Fn>

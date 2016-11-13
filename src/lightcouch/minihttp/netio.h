@@ -40,11 +40,13 @@ public:
 		return timeout;
 	}
 
+	~NetworkConnection();
+
 protected:
 
 	NetworkConnection(int socket);
-	virtual unsigned char *read(std::size_t processed, std::size_t *readready);
-	virtual void write(const unsigned char *buffer, std::size_t size);
+	virtual const unsigned char *read(std::size_t processed, std::size_t *readready);
+	virtual bool write(const unsigned char *buffer, std::size_t size, std::size_t *written);
 
 	bool waitForInputInternal(int timeout_in_ms);
 	void setNonBlock();
@@ -54,10 +56,14 @@ protected:
 	unsigned char inputBuff[3000];
 	std::size_t buffUsed;
 	std::size_t rdPos;
+	bool eofFound;
 	int lastSendError;
 	int lastRecvError;
 	bool timeout;
 	int timeoutTime;
+
+	int readToBuff();
+
 };
 
 typedef json::RefCntPtr<NetworkConnection> PNetworkConection;

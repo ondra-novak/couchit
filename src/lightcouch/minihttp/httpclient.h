@@ -7,6 +7,9 @@
 
 #ifndef LIGHTCOUCH_MINIHTTP_HTTPCLIENT_H_
 #define LIGHTCOUCH_MINIHTTP_HTTPCLIENT_H_
+#include "../json.h"
+#include "abstractio.h"
+#include "netio.h"
 
 #pragma once
 
@@ -108,11 +111,18 @@ public:
 	 * @retval true, data arrived
 	 * @retval false timeout happened
 	 */
-	/
 	bool waitForData(unsigned int timeout);
 
+	///Discards response data to allow to reuse connection
+	/** You have to call this function to finish response. This is not
+	 * made automatically.
+	 */
 	void discardResponse();
 
+
+	//status < 0 = -errno
+	//status 0-99 = this object error
+	//status 100+ = http status
 
 
 
@@ -122,8 +132,29 @@ public:
 protected:
 	PNetworkConection conn;
 	json::String curTarget;
+	json::String userAgent;
+	json::String curPath;
+	json::String auth;
+	json::String reqMethod;
+	json::Value customHeaders;
+	json::Value responseHeaders;
+	bool keepAlive;
+	int curStatus;
+	bool headersSent;
+
+	void initRequest(bool haveBody, std::size_t contentLength);
+	int readResponse();
 
 
+	json::RefCntPtr<IInputStream> responseData;
+
+	static bool everythingRead(IInputStream *stream);
+	bool handleSendError();
+
+
+	virtual void connectTarget();
+	virtual json::String crackURL(StrView urlWithoutProtocol);
+	virtual json::String custromPotocol(StrView url);
 
 };
 

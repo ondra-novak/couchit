@@ -36,32 +36,36 @@ public:
 		}
 	}
 
-	void operator()(const unsigned char *data, std::size_t sz) {
+	bool operator()(const unsigned char *data, std::size_t sz) {
 		if (sz == 0) {
 			close();
 		} else if (sz < (buffSize - bufferUsed)) {
 			std::memcpy(buffer+bufferUsed,data,sz);
 			bufferUsed+=sz;
 		} else if (sz < buffSize) {
-			flush();
+			if (!flush()) return false;
 			std::memcpy(buffer,data,sz);
 			bufferUsed+=sz	;
 		} else {
-			flush();
-			outFn(data,sz);
+			if (!flush()) return false;
+			return outFn(data,sz);
 		}
+		return true;
 	}
 
 
 	void close() {
 		flush();
-		outFn(0,0);
+		outFn(0,0,0);
 	}
 
-	void flush() {
+	bool flush() {
 		if (bufferUsed) {
-			outFn(buffer,bufferUsed);
+			std::size_t x = bufferUsed;
 			bufferUsed = 0;
+			return outFn(buffer,x,0);
+		} else {
+			return true;
 		}
 	}
 
@@ -86,6 +90,15 @@ class BufferedRead {
 public:
 
 	BufferedRead(const InFn &fn):inFn(fn),pos(0),bufferSize(0) {}
+	~BufferedRead() {
+		commit();
+	}
+
+
+	void commit() {
+		inFn(pos,0);
+		pos = bufferSize = 0;
+	}
 
 	int operator()() {
 		return readNext();
@@ -93,8 +106,7 @@ public:
 
 	const unsigned char *operator()(std::size_t procesed, std::size_t *ready) {
 		if (pos < bufferSize) {
-			inFn(pos,0);
-			pos = bufferSize = 0;
+			commit();
 		}
 		return inFn(procesed,ready);
 	}
@@ -113,7 +125,7 @@ protected:
 			return curBuffer[pos++];
 		} else {
 			curBuffer = inFn(pos,&bufferSize);
-			if (curBuffer) {
+			if (curBuffer && bufferSize) {
 				pos = 0;
 				return curBuffer[pos++];
 			} else {
