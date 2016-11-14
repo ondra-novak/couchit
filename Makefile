@@ -28,8 +28,7 @@ selectpath=$(abspath $(firstword $(foreach dir,$(1),$(wildcard $(dir)$(2)))))
 
 LIBLIGHTSPEED=$(call selectpath,$(SEARCHPATHS),lightspeed)
 NEEDLIBS:=$(LIBLIGHTSPEED)
-LIBJSONRPCSERVER=$(call selectpath,$(SEARCHPATHS),jsonrpcserver)
-NEEDLIBS+=$(LIBJSONRPCSERVER)
+
  
  
 include $(LIBLIGHTSPEED)/building/build_$(BUILDTYPE).mk

@@ -35,20 +35,12 @@
 #include "queryCache.h"
 
 #include "document.h"
+#include "minihttp/buffered.h"
 
 using LightSpeed::lockCompareExchange;
 namespace LightCouch {
 
 
-
-CouchDB::HttpConfig::HttpConfig(const Config &cfg) {
-	this->keepAlive = true;
-	this->useHTTP10 = false;
-	this->userAgent = "LightCouch/1.0 (+https://github.com/ondra-novak/lightcouch)";
-	this->httpsProvider = cfg.httpsProvider;
-	this->proxyProvider = cfg.proxyProvider;
-	if (cfg.iotimeout != null) this->iotimeout = cfg.iotimeout;
-}
 
 StrView CouchDB::fldTimestamp("~timestamp");
 StrView CouchDB::fldPrevRevision("~prevRev");
@@ -61,7 +53,7 @@ CouchDB::CouchDB(const Config& cfg)
 	:baseUrl(cfg.baseUrl)
 	,cache(cfg.cache)
 	,uidGen(cfg.uidgen == null?DefaultUIDGen::getInstance():*cfg.uidgen)
-	,httpConfig(cfg),http(httpConfig)
+	,http("LightCouch mini http")
 	,queryable(*this)
 {
 	if (!cfg.databaseName.empty()) use(cfg.databaseName);
@@ -75,10 +67,6 @@ static bool isRelativePath(const StrView &path) {
 Value CouchDB::requestGET(const StrView &path, Value *headers, natural flags) {
 
 	if (isRelativePath(path)) return requestGET(*getUrlBuilder(path),headers,flags);
-
-	if (headers != nullptr && headers->type() != json::object) {
-		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
-	}
 
 	Synchronized<FastLock> _(lock);
 
@@ -102,160 +90,126 @@ Value CouchDB::requestGET(const StrView &path, Value *headers, natural flags) {
 		cachedItem = cache->find(cacheKey);
 	}
 
-	http.open(HttpClient::mGET, path);
+	http.open(path,"GET",true);
 	bool redirectRetry = false;
-	SeqFileInput response(NULL);
+
+	int status;
+
     do {
     	redirectRetry = false;
-		http.setHeader(HttpClient::fldAccept,"application/json");
+    	Object hdr(headers?*headers:Value());
+		hdr("Accept","application/json");
 		if (cachedItem != nil && cachedItem->isDefined()) {
-			http.setHeader(HttpClient::fldIfNoneMatch, convStr(cachedItem->etag));
+			hdr("If-None-Match", cachedItem->etag);
 		}
-		if (headers!= nullptr)
-			headers->forEach([this](Value v){
-				this->http.setHeader(convStr(v.getKey()),convStr(v.getString()));
-				return true;
-			});
 
-		response = http.send();
-		if (http.getStatus() == 304 && cachedItem != null) {
+		status = http.setHeaders(hdr).send();
+		if (status == 304 && cachedItem != null) {
 			http.close();
 			return cachedItem->value;
 		}
-		if (http.getStatus() == 301 || http.getStatus() == 302 || http.getStatus() == 303 || http.getStatus() == 307) {
-			HttpClient::HeaderValue val = http.getHeader(http.fldLocation);
-			if (!val.defined) throw RequestError(THISLOCATION,path,http.getStatus(),http.getStatusMessage(), Value("Redirect without Location"));
+		if (status == 301 || status == 302 || status == 303 || status == 307) {
+			json::Value val = http.getHeaders()["Location"];
+			if (!val.defined()) {
+				http.abort();
+				throw RequestError(THISLOCATION,path,http.getStatus(),StrView(http.getStatusMessage()), Value("Redirect without Location"));
+			}
 			http.close();
-			http.open(HttpClient::mGET, val);
+			http.open(val.getString(), "GET",true);
 			redirectRetry = true;
 		}
     }
 	while (redirectRetry);
 
-    auto readStreamFn = [&response](){return response.getNext();};
 
-	if (http.getStatus()/100 != 2) {
-
-		Value errorVal;
-		try{
-			errorVal = Value::parse(readStreamFn);
-		} catch (...) {
-
-		}
-		http.close();
-		throw RequestError(THISLOCATION,path,http.getStatus(), http.getStatusMessage(), errorVal);
+	if (status/100 != 2) {
+		handleUnexpectedStatus(path);
+		throw;
 	} else {
-		Value v = Value::parse(readStreamFn);
+		Value v = parseResponse();
 		if (usecache) {
-			BredyHttpSrv::HeaderValue fld = http.getHeader(HttpClient::fldETag);
-			if (fld.defined) {
-				cache->set(cacheKey, QueryCache::CachedItem(convStr(fld), v));
+			Value fld = http.getHeaders()["ETag"];
+			if (fld.defined()) {
+				cache->set(cacheKey, QueryCache::CachedItem(fld.getString(), v));
 			}
 		}
 		if (flags & flgStoreHeaders && headers != nullptr) {
-			Object obj;
-			http.enumHeaders([&](StrView key, StrView value) {
-				obj(key,value);
-				return false;
-			});
-			*headers = obj;
+			*headers = http.getHeaders();
 		}
 		http.close();
 		return v;
 	}
 }
+
+void CouchDB::handleUnexpectedStatus(StrView path) {
+
+	Value errorVal;
+	try{
+		errorVal = Value::parse(BufferedRead<InputStream>(http.getResponse()));
+	} catch (...) {
+
+	}
+	http.close();
+	throw RequestError(THISLOCATION,path,http.getStatus(), StrView(http.getStatusMessage()), errorVal);
+}
+
+Value CouchDB::parseResponse() {
+	return Value::parse(BufferedRead<InputStream>(http.getResponse()));
+}
+
 
 Value CouchDB::requestDELETE(const StrView &path, Value *headers, natural flags) {
 
 	if (isRelativePath(path)) return requestDELETE(*getUrlBuilder(path),headers,flags);
 
-	if (headers != nullptr && headers->type() != json::object) {
-		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
-	}
-
 	Synchronized<FastLock> _(lock);
-	http.open(HttpClient::mDELETE, path);
-	http.setHeader(HttpClient::fldAccept,"application/json");
-	if (headers) headers->forEach([this](Value v){
-		this->http.setHeader(convStr(v.getKey()),convStr(v.getString()));
-		return true;
-	});
+	http.open(path,"DELETE",true);
+	Object hdr(headers?*headers:Value());
+	hdr("Accept","application/json");
 
-
-	SeqFileInput response = http.send();
-    auto readStreamFn = [&response](){return response.getNext();};
-	if (http.getStatus()/100 != 2) {
-
-		Value errorVal;
-		try{
-			errorVal = Value::parse(readStreamFn);
-		} catch (...) {
-
-		}
-		http.close();
-		throw RequestError(THISLOCATION,path,http.getStatus(), http.getStatusMessage(), errorVal);
+	int status = http.setHeaders(hdr).send();
+	if (status/100 != 2) {
+		handleUnexpectedStatus(path);
+		throw;
 	} else {
-		Value v = Value::parse(readStreamFn);
+		Value v = parseResponse();
 		if (flags & flgStoreHeaders && headers != nullptr) {
-			Object obj;
-			http.enumHeaders([&](StrView key, StrView value) {
-				obj(key, value);
-				return false;
-			});
-			*headers = obj;
+			*headers = http.getHeaders();
 		}
 		http.close();
 		return v;
 	}
 }
 
-Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StrView &path, Value data, Value *headers, natural flags) {
+Value CouchDB::jsonPUTPOST(bool postMethod, const StrView &path, Value data, Value *headers, natural flags) {
 
-	if (isRelativePath(path)) return jsonPUTPOST(method,*getUrlBuilder(path),data,headers,flags);
-
-	if (headers != nullptr && headers->type() != json::object) {
-		throw InvalidParamException(THISLOCATION,4,"Argument headers must be either null or an JSON object");
-	}
+	if (isRelativePath(path)) return jsonPUTPOST(postMethod,*getUrlBuilder(path),data,headers,flags);
 
 
 	Synchronized<FastLock> _(lock);
-	http.open(method, path);
-	http.setHeader(HttpClient::fldAccept,"application/json");
-	http.setHeader(HttpClient::fldContentType,"application/json");
-	if (headers != nullptr)
-		headers->forEach([this](Value v){
-		this->http.setHeader(convStr(v.getKey()),convStr(v.getString()));
-		return true;
-	});
+	http.open(path,postMethod?"POST":"PUT",true);
+	Object hdr(headers?*headers:Value());
+	hdr("Accept","application/json");
+	hdr("Content-Type","application/json");
+	http.setHeaders(hdr);
 
-	SeqFileOutput out = http.beginBody(HttpClient::psoDefault);
-	if (data.type() != json::undefined) {
-		data.serialize([&out](char c) {out.write(c);});
-	}
-	SeqFileInput response = http.send();
-
-    auto readStreamFn = [&response](){return response.getNext();};
-
-
-	if (http.getStatus()/100 != 2) {
-
-		Value errorVal;
-		try{
-			errorVal = Value::parse(readStreamFn);
-		} catch (...) {
-
+	{
+		OutputStream out = http.beginBody();
+		if (data.type() != json::undefined) {
+			data.serialize(BufferedWrite<OutputStream>(out));
 		}
-		http.close();
-		throw RequestError(THISLOCATION,path,http.getStatus(), http.getStatusMessage(), errorVal);
+	}
+	int status =  http.send();
+
+
+
+	if (status/100 != 2) {
+		handleUnexpectedStatus(path);
+		throw;
 	} else {
-		Value v = Value::parse(readStreamFn);
+		Value v = parseResponse();
 		if (flags & flgStoreHeaders && headers != nullptr) {
-			Object obj;
-			http.enumHeaders([&](StrView key, StrView value) {
-				obj(key, value);
-				return false;
-			});
-			*headers = obj;
+			*headers = http.getHeaders();
 		}
 		http.close();
 		return v;
@@ -264,10 +218,10 @@ Value CouchDB::jsonPUTPOST(HttpClient::Method method, const StrView &path, Value
 
 
 Value CouchDB::requestPUT(const StrView &path, const Value &postData, Value *headers, natural flags) {
-	return jsonPUTPOST(HttpClient::mPUT,path,postData,headers,flags);
+	return jsonPUTPOST(false,path,postData,headers,flags);
 }
 Value CouchDB::requestPOST(const StrView &path, const Value &postData, Value *headers, natural flags) {
-	return jsonPUTPOST(HttpClient::mPOST,path,postData,headers,flags);
+	return jsonPUTPOST(true,path,postData,headers,flags);
 }
 
 
@@ -407,7 +361,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrView &attachmen
 		UploadClass(FastLock &lock, HttpClient &http, const PUrlBuilder &urlline)
 			:lock(lock)
 			,http(http)
-			,out(http.beginBody(HttpClient::psoDefault))
+			,out(http.beginBody())
 			,urlline(urlline)
 			,finished(false) {
 		}
@@ -418,7 +372,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrView &attachmen
 		}
 
 		virtual void operator()(const void *buffer, std::size_t size) {
-			out.blockWrite(buffer,size,true);
+			out(reinterpret_cast<const unsigned char *>(buffer),size,0);
 		}
 
 		String finish() {
@@ -426,22 +380,22 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrView &attachmen
 				if (finished) return response;
 				finished = true;
 
-				SeqFileInput in = http.send();
-				auto responseData = [&in](){return in.getNext();};
-				if (http.getStatus() != 201) {
+				out = OutputStream(nullptr);
+				int status = http.send();
+				if (status != 201) {
 
 
 					Value errorVal;
 					try{
-						errorVal = Value::parse(responseData);
+						errorVal = Value::parse(BufferedRead<InputStream>(http.getResponse()));
 					} catch (...) {
 
 					}
 					http.close();
 					StrView url(*urlline);
-					throw RequestError(THISLOCATION,url,http.getStatus(), http.getStatusMessage(), errorVal);
+					throw RequestError(THISLOCATION,url,status, StrView(http.getStatusMessage()), errorVal);
 				} else {
-					Value v = Value::parse(responseData);
+					Value v = Value::parse(BufferedRead<InputStream>(http.getResponse()));
 					http.close();
 					response = v["rev"];
 					lock.unlock();
@@ -456,7 +410,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrView &attachmen
 	protected:
 		FastLock &lock;
 		HttpClient &http;
-		SeqFileOutput out;
+		OutputStream out;
 		Value response;
 		PUrlBuilder urlline;
 		bool finished;
@@ -465,9 +419,9 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrView &attachmen
 
 	try {
 		//open request
-		http.open(HttpClient::mPUT, (*url));
+		http.open((*url),"PUT",true);
 		//send header
-		http.setHeader(HttpClient::fldContentType,contentType);
+		http.setHeaders(Object("Content-Type",contentType));
 		//create upload object
 		return Upload(new UploadClass(lock,http,url));
 	} catch (...) {
@@ -749,7 +703,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		throw CanceledException(THISLOCATION);
 	}
 
-	class WHandle: public INetworkResource::WaitHandler {
+/*	class WHandle: public INetworkResource::WaitHandler {
 	public:
 		atomic &cancelState;
 
@@ -772,49 +726,45 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 
 		WHandle(atomic &cancelState):cancelState(cancelState),limitTm(100000) {}
 		mutable Timeout limitTm;
-	};
+	};*/
 
 	Synchronized<FastLock> _(lock);
-	WHandle whandle(sink.cancelState);
-	http.open(HttpClient::mGET,*url);
-	http.setHeader(HttpClient::fldAccept,"application/json");
-	SeqFileInput in = http.send();
+//	WHandle whandle(sink.cancelState);
+	http.open(*url,"GET",true);
+	http.setHeaders(Object("Accept","application/json"));
+	int status = http.send();
 
-	auto response = [&](){return in.getNext();};
 
 	Value v;
-	if (http.getStatus()/100 != 2) {
-
-		Value errorVal;
-		try{
-			errorVal = Value::parse(response);
-		} catch (...) {
-
-		}
-		http.close();
-		throw RequestError(THISLOCATION,ConstStrA(*url),http.getStatus(), http.getStatusMessage(), errorVal);
+	if (status/100 != 2) {
+		handleUnexpectedStatus(*url);
 	} else {
 
-
-		PNetworkStream conn = http.getConnection();
-
-		if (sink.timeout)
-			conn->setWaitHandler(&whandle);
+		InputStream stream = http.getResponse();
+		auto slowReader = [&](std::size_t processed, std::size_t *readready) -> const unsigned char *{
+			const unsigned char *resp = stream(processed,0);
+			while (resp == 0) {
+				if (lockCompareExchange(sink.cancelState,1,0)) {
+					throw CanceledException(THISLOCATION);
+				}
+				http.waitForData(200);
+				resp =  stream(0,0);
+			}
+			return stream(0,readready);
+		};
 
 		try {
 
-			v = Value::parse(response);
+			v = Value::parse(BufferedRead<decltype(slowReader)>(slowReader));
 
 		} catch (...) {
 			//any exception
 			//terminate connection
-			http.closeConnection();
+			http.abort();
 			//throw it
 			throw;
 		}
 
-		if (sink.timeout)
-			conn->setWaitHandler(0);
 		http.close();
 	}
 
@@ -832,21 +782,36 @@ ChangesSink CouchDB::createChangesSink() {
 class EmptyDownload: public Download::Source {
 public:
 	virtual natural operator()(void *, std::size_t ) {return 0;}
+	virtual const unsigned char *operator()(std::size_t 	, std::size_t *ready) {
+		if (ready) {
+			*ready = 0;
+		}
+		return reinterpret_cast<const unsigned  char *>(this);
+	}
 };
 
 class StreamDownload: public Download::Source {
 public:
-	StreamDownload(const PInputStream &stream, FastLock &lock, HttpClient &http):stream(stream),lock(lock),http(http) {}
-	virtual natural operator()(void *buffer, std::size_t size) {
-		return stream->read(buffer,size);
+	StreamDownload(const InputStream &stream, FastLock &lock, HttpClient &http):stream(stream),lock(lock),http(http) {}
+	virtual std::size_t operator()(void *buffer, std::size_t size) {
+		std::size_t rd;
+		const unsigned char *c = stream(0,&rd);
+		if (size > rd) size = rd;
+		std::memcpy(buffer,c,size);
+		stream(size,0);
+		return size;
 	}
+	virtual const unsigned char *operator()(std::size_t processed, std::size_t *ready) {
+		return stream(processed,ready);
+	}
+
 	~StreamDownload() {
 		http.close();
 		lock.unlock();
 	}
 
 protected:
-	PInputStream stream;
+	InputStream stream;
 	FastLock &lock;
 	HttpClient &http;
 };
@@ -856,31 +821,23 @@ Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StrView &eta
 
 	lock.lock();
 	try {
-		http.open(HttpClient::mGET, *urlline);
-		if (!etag.empty()) http.setHeader(http.fldIfNoneMatch,etag);
-		SeqFileInput in = http.send();
+		http.open(*urlline, "GET", true);
+		if (!etag.empty()) http.setHeaders(Object("If-None-Match",etag));
+		int status = http.send();
 
-		auto readStreamFn = [&in](){return in.getNext();};
-
-		natural status = http.getStatus();
 		if (status != 200 && status != 304) {
 
-			Value errorVal;
-			try{
-				errorVal = Value::parse(readStreamFn);
-			} catch (...) {
-
-			}
-			http.close();
-			throw RequestError(THISLOCATION,ConstStrA(*urlline),http.getStatus(), http.getStatusMessage(), errorVal);
+			handleUnexpectedStatus(*urlline);
+			throw;
 		} else {
-			HttpClient::HeaderValue ctx = http.getHeader(HttpClient::fldContentType);
-			HttpClient::HeaderValue len = http.getHeader(HttpClient::fldContentLength);
-			HttpClient::HeaderValue etag = http.getHeader(HttpClient::fldETag);
+			Value hdrs = http.getHeaders();
+			Value ctx = hdrs["Content-Type"];
+			Value len = hdrs["Content-Length"];
+			Value etag = hdrs["ETag"];
 			natural llen = naturalNull;
-			if (len.defined) parseUnsignedNumber(len.getFwIter(), llen, 10);
-			if (status == 304) return Download(new EmptyDownload,convStr(ctx),convStr(etag),llen,true);
-			else return Download(new StreamDownload(in.getStream(),lock,http),convStr(ctx),convStr(etag),llen,false);
+			if (len.defined()) llen = len.getUInt();
+			if (status == 304) return Download(new EmptyDownload,ctx.getString(),etag.getString(),llen,true);
+			else return Download(new StreamDownload(http.getResponse(),lock,http),ctx.getString(),etag.getString(),llen,false);
 		}
 	} catch (...) {
 		lock.unlock();

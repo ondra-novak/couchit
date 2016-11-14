@@ -170,9 +170,9 @@ bool LightCouch::HttpClient::waitForData(unsigned int timeout) {
 void LightCouch::HttpClient::discardResponse() {
 	if (responseData != nullptr) {
 		std::size_t p = 0;
-		while (!everythingRead(responseData)) {
+		responseData->read(0,&p);
+		while (p != 0) {
 			responseData->read(p,&p);
-			if (p == 0) break;
 		}
 	}
 }
@@ -323,6 +323,22 @@ json::String HttpClient::crackURL(StrView urlWithoutProtocol) {
 		curPath = path;
 	}
 	return newTarget;
+}
+
+void HttpClient::close() {
+	discardResponse();
+}
+
+void HttpClient::abort() {
+	conn = nullptr;
+}
+
+int HttpClient::getStatus() {
+	return responseHeaders["_status"].getUInt();
+}
+
+json::String HttpClient::getStatusMessage() {
+	return responseHeaders["_message"];
 }
 
 json::String HttpClient::custromPotocol(StrView) {

@@ -120,6 +120,14 @@ public:
 	void discardResponse();
 
 
+	void close();
+
+	void abort();
+
+	int getStatus();
+
+	json::String getStatusMessage();
+
 	//status < 0 = -errno
 	//status 0-99 = this object error
 	//status 100+ = http status

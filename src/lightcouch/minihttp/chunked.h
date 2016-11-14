@@ -222,7 +222,7 @@ public:
 protected:
 
 	InFn inFn;
-	std::size_t curChunk;
+	std::size_t curChunk,accChunk;
 	State state;
 	bool eof;
 	bool chunkError;
@@ -263,7 +263,7 @@ protected:
 						if (isxdigit(b)) {
 							//change state
 							state = readNum;
-							curChunk = 0;
+							accChunk = 0;
 							//break;
 							break;
 						//if it is not space and not hex
@@ -282,11 +282,11 @@ protected:
 						unsigned char b = buff[processed];
 						//convert hex digit to number
 						if (b >= '0' && b <='9') {
-							curChunk = (curChunk << 4) + (b - '0');
+							accChunk = (accChunk << 4) + (b - '0');
 						} else if (b >= 'A' && b <='F') {
-							curChunk = (curChunk << 4) + (b - 'A' + 10);
+							accChunk = (accChunk << 4) + (b - 'A' + 10);
 						} else if (b >= 'a' && b <='f') {
-							curChunk = (curChunk << 4) + (b - 'a' + 10);
+							accChunk = (accChunk << 4) + (b - 'a' + 10);
 						} else {
 							//nonhex character - advance to next state
 							state = readCR;
@@ -313,6 +313,7 @@ protected:
 
 					break;
 				case readFinish:
+					curChunk = accChunk;
 					inFn(processed,0);
 					return true;
 				}

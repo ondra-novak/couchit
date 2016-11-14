@@ -117,7 +117,8 @@ public:
 	class Source: public RefCntObj {
 	public:
 		virtual ~Source() {}
-		virtual natural operator()(void *buffer, std::size_t size) = 0;
+		virtual std::size_t operator()(void *buffer, std::size_t size) = 0;
+		virtual const unsigned char *operator()(std::size_t processed, std::size_t *ready) = 0;
 	};
 
 	///Reads data from the stream

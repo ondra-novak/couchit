@@ -9,7 +9,6 @@
 #define ASSETEX_SRC_COUCHDB_H_BREDY_5205456032
 
 #include <functional>
-#include <httpclient/httpClient.h>
 #include <lightspeed/base/containers/resourcePool.h>
 #include <lightspeed/base/streams/netio.h>
 
@@ -22,6 +21,7 @@
 
 #include "lightspeed/base/actions/message.h"
 
+#include "../lightcouch/minihttp/httpclient.h"
 #include "attachment.h"
 #include "iqueryable.h"
 #include "urlBuilder.h"
@@ -517,12 +517,6 @@ public:
 
 
 
-
-	struct HttpConfig: BredyHttpClient::ClientConfig {
-		HttpConfig(const Config &cfg);
-	};
-
-
 protected:
 
 	mutable FastLock lock;
@@ -542,12 +536,11 @@ protected:
 
 	String lastConnectError;
 
-	HttpConfig httpConfig;
 	HttpClient http;
 
 
 
-	Value jsonPUTPOST(HttpClient::Method method, const StrView &path, Value data, Value *headers, natural flags);
+	Value jsonPUTPOST(bool methodPost, const StrView &path, Value data, Value *headers, natural flags);
 
 
 	friend class ChangesSink;
@@ -585,6 +578,9 @@ protected:
 	Queryable queryable;
 
 	Download downloadAttachmentCont(PUrlBuilder urlline, const StrView &etag);
+
+	void handleUnexpectedStatus(StrView path);
+	Value parseResponse();
 
 public:
 

@@ -189,11 +189,15 @@ public:
 		limit -= std::min(limit,processed);
 		if (limit) {
 			const unsigned char *b = Super::operator()(processed,ready);
-			if (ready && *ready > limit) *ready = limit;
+			if (ready && *ready > limit) {
+				*ready = limit;
+			}
 			return b;
 		} else {
-			const unsigned char *b = Super::operator()(processed,0);
-			return ready?0:b;
+			if (ready) {
+				*ready = 0;
+			}
+			return reinterpret_cast<const unsigned char *>(this);
 		}
 	}
 
