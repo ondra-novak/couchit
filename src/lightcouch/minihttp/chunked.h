@@ -194,13 +194,21 @@ public:
 			//first test, whether processed is equal to chunk
 			if (processed >= curChunk && !eof) {
 				//accept chunk
-				inFn(curChunk,0);
-				//read chunk header asynchonously
-				//it means, that function must read header without blocking
-				//it return true if header is ready
-				if (!readChunkHeaderNonBlock()) return 0;
-				//return data state
-				else return inFn(0,0);
+				const unsigned char *p = inFn(curChunk,0);
+				//finish cur-chunk
+				curChunk = 0;
+
+				if (p != 0) {
+					readChunkHeaderImpl();
+					if (state == readFinish) {
+						state = skipWhite;
+						if (curChunk == 0) {
+							eof = true;
+						}
+						return inFn(0,0);
+					}
+				}
+				return nullptr;
 			} else {
 				curChunk-=processed;
 				//report processed bytes
