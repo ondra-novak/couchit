@@ -50,7 +50,7 @@ void Changes::rewind() {
 }
 
 ChangesSink::ChangesSink(CouchDB& couchdb)
-	:couchdb(couchdb), outlimit(naturalNull),timeout(0)
+	:couchdb(couchdb), outlimit(naturalNull),timeout(0),canceled(false)
 {
 }
 
@@ -91,8 +91,17 @@ ChangesSink& ChangesSink::setFilterFlags(natural flags) {
 }
 
 void ChangesSink::cancelWait() {
-	if (!cancelFunction) cancelFunction = NetworkConnection::createCancelFunction();
+	initCancelFunction();
+	canceled = true;
 	cancelFunction();
+}
+
+void ChangesSink::initCancelFunction() {
+	if (!cancelFunction) {
+		Synchronized<MicroLock> _(cancelFnInitLock);
+		if (!cancelFunction)
+			cancelFunction = NetworkConnection::createCancelFunction();
+	}
 }
 
 }

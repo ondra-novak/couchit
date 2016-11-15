@@ -700,6 +700,10 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	}
 
 
+	if (sink.timeout) {
+		sink.initCancelFunction();
+	}
+
 	Synchronized<FastLock> _(lock);
 
 	if (!sink.cancelFunction) {
@@ -708,13 +712,20 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 
 	http.open(*url,"GET",true);
 	http.setTimeout(70000);
-	http.setCancelFunction(sink.cancelFunction);
+	if (sink.timeout) {
+		http.setCancelFunction(sink.cancelFunction);
+	}
 	http.setHeaders(Object("Accept","application/json"));
+
 	int status = http.send();
 
 
 	Value v;
 	if (status/100 != 2) {
+		if (sink.canceled) {
+			sink.canceled = false;
+			throw CanceledException(THISLOCATION);
+		}
 		handleUnexpectedStatus(*url);
 	} else {
 
@@ -724,15 +735,28 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 			v = Value::parse(BufferedRead<InputStream>(stream));
 
 		} catch (...) {
+
+			if (sink.timeout) {
+				http.setCancelFunction(CancelFunction());
+			}
 			//any exception
 			//terminate connection
 			http.abort();
+			if (sink.canceled) {
+				sink.canceled = false;
+				throw CanceledException(THISLOCATION);
+			}
 			//throw it
 			throw;
 		}
 
 		http.close();
+
+		if (sink.timeout) {
+			http.setCancelFunction(CancelFunction());
+		}
 	}
+
 
 
 	Value results=v["results"];

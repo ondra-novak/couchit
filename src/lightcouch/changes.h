@@ -10,6 +10,8 @@
 
 #include <lightspeed/base/containers/constStr.h>
 #include <lightspeed/base/containers/optional.h>
+#include <lightspeed/mt/microlock.h>
+
 #include "minihttp/cancelFunction.h"
 
 
@@ -234,6 +236,10 @@ protected:
 	Object filterArgs;
 
 	CancelFunction cancelFunction;
+	MicroLock cancelFnInitLock;
+	bool canceled;
+
+	void initCancelFunction();
 
 	friend class CouchDB;
 
