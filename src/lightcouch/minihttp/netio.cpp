@@ -20,6 +20,34 @@
 #include "../json.h"
 namespace LightCouch {
 
+class LinuxCancel: public ICancelWait {
+public:
+
+	LinuxCancel() {
+		int fds[2];
+		pipe2(fds,O_NONBLOCK|O_CLOEXEC);
+		fdrecv = fds[0];
+		fdsend = fds[1];
+	}
+
+	~LinuxCancel() {
+		close(fdsend);
+		close(fdrecv);
+	}
+
+	int getRecvFd() const {return fdrecv;}
+	void cancelWait() {
+		unsigned char b = 1;
+		(void)::write(fdsend,&b,1);
+	}
+
+
+
+protected:
+	int fdsend;
+	int fdrecv;
+
+};
 
 NetworkConnection* LightCouch::NetworkConnection::connect(const StrView &addr_ddot_port, int defaultPort) {
 
@@ -83,6 +111,14 @@ LightCouch::NetworkConnection::NetworkConnection(int socket)
 
 NetworkConnection::~NetworkConnection() {
 	::close(socket);
+}
+
+ICancelWait* NetworkConnection::createCancelFunction() {
+	return new LinuxCancel;
+}
+
+void NetworkConnection::setCancelFunction(const CancelFunction& fn) {
+	this->cancelFunction = fn;
 }
 
 int NetworkConnection::readToBuff() {
@@ -163,12 +199,19 @@ const unsigned char* NetworkConnection::read(std::size_t processed, std::size_t*
 }
 
 bool NetworkConnection::waitForOutput(int  timeout_in_ms) {
-	struct pollfd poll_list[1];
+	struct pollfd poll_list[2];
+	int cnt = 1;
 	poll_list[0].fd = socket;
 	poll_list[0].events = POLLOUT;
+	LinuxCancel *lc = dynamic_cast<LinuxCancel *>(static_cast<ICancelWait *>(cancelFunction.impl));
+	if (lc != nullptr) {
+		poll_list[1].fd = lc->getRecvFd();
+		poll_list[1].events = POLLIN;
+		cnt++;
+	}
 	do {
 
-		int r = poll(poll_list,1,timeout_in_ms);
+		int r = poll(poll_list,cnt,timeout_in_ms);
 		if (r < 0) {
 			int err = errno;
 			if (err != EINTR) {
@@ -178,7 +221,13 @@ bool NetworkConnection::waitForOutput(int  timeout_in_ms) {
 		} else if (r == 0) {
 			return false;
 		} else {
-			return true;
+			if (poll_list[0].revents & POLLOUT) {
+				return true;
+			} else {
+				char b;
+				(void)::read(lc->getRecvFd(),&b,1);
+				return false;
+			}
 		}
 
 	} while (true);
@@ -216,12 +265,18 @@ bool LightCouch::NetworkConnection::write(const unsigned char* buffer, std::size
 }
 
 bool NetworkConnection::waitForInputInternal(int timeout_in_ms) {
-	struct pollfd poll_list[1];
+	struct pollfd poll_list[2];
 	poll_list[0].fd = socket;
-	poll_list[0].events = POLLIN|POLLPRI|POLLRDHUP;
+	poll_list[0].events = POLLIN|POLLRDHUP;
+	int cnt = 1;
+	LinuxCancel *lc = dynamic_cast<LinuxCancel *>(static_cast<ICancelWait *>(cancelFunction.impl));
+	if (lc != nullptr) {
+		poll_list[1].fd = lc->getRecvFd();
+		poll_list[1].events = POLLIN;
+		cnt++;
+	}
 	do {
-
-		int r = poll(poll_list,1,timeout_in_ms);
+		int r = poll(poll_list,cnt,timeout_in_ms);
 		if (r < 0) {
 			int err = errno;
 			if (err != EINTR) {
@@ -231,7 +286,13 @@ bool NetworkConnection::waitForInputInternal(int timeout_in_ms) {
 		} else if (r == 0) {
 			return false;
 		} else {
-			return true;
+			if (poll_list[0].revents & (POLLIN|POLLRDHUP)) {
+				return true;
+			} else {
+				char b;
+				(void)::read(lc->getRecvFd(),&b,1);
+				return false;
+			}
 		}
 
 	} while (true);
@@ -240,6 +301,8 @@ bool NetworkConnection::waitForInputInternal(int timeout_in_ms) {
 void NetworkConnection::setNonBlock() {
 	fcntl(socket, F_SETFL, fcntl(socket, F_GETFL, 0) | O_NONBLOCK);
 }
+
+
 
 }
 

@@ -22,6 +22,9 @@ public:
 
 	static NetworkConnection *connect(const StrView &addr_ddot_port, int defaultPort);
 
+	static ICancelWait *createCancelFunction();
+
+
 	bool waitForInput(int  timeout_in_ms) {
 		if (rdPos < buffUsed) return true;
 		return waitForInputInternal(timeout_in_ms);
@@ -40,7 +43,16 @@ public:
 		return timeout;
 	}
 
+	bool hasErrors() const {
+		return timeout||lastRecvError||lastSendError;
+	}
+
+
+	void setCancelFunction(const CancelFunction &fn);
+
 	~NetworkConnection();
+
+
 
 protected:
 
@@ -61,6 +73,8 @@ protected:
 	int lastRecvError;
 	bool timeout;
 	int timeoutTime;
+
+	CancelFunction cancelFunction;
 
 	int readToBuff();
 
