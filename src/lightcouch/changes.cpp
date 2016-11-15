@@ -51,7 +51,6 @@ void Changes::rewind() {
 
 ChangesSink::ChangesSink(CouchDB& couchdb)
 	:couchdb(couchdb), outlimit(naturalNull),timeout(0)
-	,cancelState(0)
 {
 }
 
@@ -92,7 +91,8 @@ ChangesSink& ChangesSink::setFilterFlags(natural flags) {
 }
 
 void ChangesSink::cancelWait() {
-	lockCompareExchange(cancelState,0,1);
+	if (!cancelFunction) cancelFunction = NetworkConnection::createCancelFunction();
+	cancelFunction();
 }
 
 }

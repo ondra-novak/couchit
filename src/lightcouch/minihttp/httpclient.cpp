@@ -181,10 +181,12 @@ void HttpClient::initRequest(bool haveBody, std::size_t contentLength) {
 
 	if (conn == nullptr) {
 		connectTarget();
-	}
-	if (conn == nullptr) {
-		curStatus = 0;
-		return;
+		if (conn == nullptr) {
+			curStatus = 0;
+			return;
+		} else {
+			initConnection();
+		}
 	}
 
 	json::Object hdr(customHeaders);
@@ -343,6 +345,29 @@ json::String HttpClient::getStatusMessage() {
 
 json::String HttpClient::custromPotocol(StrView) {
 	return json::String();
+}
+
+void HttpClient::setCancelFunction(const CancelFunction& cancelFn) {
+	cancelFunction = cancelFn;
+	if (conn != nullptr) {
+		conn->setCancelFunction(cancelFn);
+	}
+}
+
+CancelFunction HttpClient::initCancelFunction() {
+	return NetworkConnection::createCancelFunction();
+}
+
+
+void HttpClient::setTimeout(std::uintptr_t timeoutInMS) {
+	curTimeout = timeoutInMS;
+	if (conn!= nullptr) {
+		conn->setTimeout(timeoutInMS);
+	}
+}
+void HttpClient::initConnection() {
+	conn->setTimeout(curTimeout);
+	conn->setCancelFunction(cancelFunction);
 }
 
 }

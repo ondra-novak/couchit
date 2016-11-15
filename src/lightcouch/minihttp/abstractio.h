@@ -76,11 +76,7 @@ public:
 };
 
 
-class ICancelWait: public json::RefCntObj {
-public:
-	virtual ~ICancelWait() {}
-	virtual void cancelWait() = 0;
-};
+
 
 class InputStream {
 public:
@@ -102,29 +98,6 @@ protected:
 	json::RefCntPtr<IOutputStream> impl;
 };
 
-class CancelFunction {
-public:
-	CancelFunction() {}
-	CancelFunction(ICancelWait *impl):impl(impl) {}
-
-	void operator()() {
-		if (impl != nullptr) impl->cancelWait();
-	}
-	bool operator!() const {
-		return impl == nullptr;
-	}
-
-	operator bool() const {
-		return impl != nullptr;
-	}
-
-	operator ICancelWait *() const {
-		return impl;
-	}
-protected:
-	json::RefCntPtr<ICancelWait> impl;
-
-};
 }
 
 

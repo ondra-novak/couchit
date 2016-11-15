@@ -699,38 +699,16 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 			url->add(key,val);
 	}
 
-	if (lockCompareExchange(sink.cancelState,1,0)) {
-		throw CanceledException(THISLOCATION);
-	}
-
-/*	class WHandle: public INetworkResource::WaitHandler {
-	public:
-		atomic &cancelState;
-
-		virtual natural wait(const INetworkResource *resource, natural waitFor, natural ) const {
-			for(;;) {
-				if (lockCompareExchange(cancelState,1,0)) {
-					throw CanceledException(THISLOCATION);
-				}
-				if (limitTm.expired())
-					return 0;
-				//each 200 ms check exit flag.
-				//TODO Find better solution later
-				natural r = INetworkResource::WaitHandler::wait(resource,waitFor,200);
-				if (r) {
-					limitTm = Timeout(100000);
-					return r;
-				}
-			}
-		}
-
-		WHandle(atomic &cancelState):cancelState(cancelState),limitTm(100000) {}
-		mutable Timeout limitTm;
-	};*/
 
 	Synchronized<FastLock> _(lock);
-//	WHandle whandle(sink.cancelState);
+
+	if (!sink.cancelFunction) {
+		sink.cancelFunction = http.initCancelFunction();
+	}
+
 	http.open(*url,"GET",true);
+	http.setTimeout(70000);
+	http.setCancelFunction(sink.cancelFunction);
 	http.setHeaders(Object("Accept","application/json"));
 	int status = http.send();
 
@@ -741,21 +719,9 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	} else {
 
 		InputStream stream = http.getResponse();
-		auto slowReader = [&](std::size_t processed, std::size_t *readready) -> const unsigned char *{
-			const unsigned char *resp = stream(processed,0);
-			while (resp == 0) {
-				if (lockCompareExchange(sink.cancelState,1,0)) {
-					throw CanceledException(THISLOCATION);
-				}
-				http.waitForData(200);
-				resp =  stream(0,0);
-			}
-			return stream(0,readready);
-		};
-
 		try {
 
-			v = Value::parse(BufferedRead<decltype(slowReader)>(slowReader));
+			v = Value::parse(BufferedRead<InputStream>(stream));
 
 		} catch (...) {
 			//any exception
@@ -774,6 +740,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 
 	return results;
 }
+
 
 ChangesSink CouchDB::createChangesSink() {
 	return ChangesSink(*this);

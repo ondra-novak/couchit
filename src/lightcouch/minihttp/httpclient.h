@@ -37,6 +37,15 @@ public:
 	 */
 	HttpClient &open(StrView url, StrView method, bool keepAlive = true);
 
+	///Sets cancel function for the current request
+	void setCancelFunction(const CancelFunction &cancelFn);
+
+	///Sets i/o timeout
+	void setTimeout(std::uintptr_t timeoutInMS);
+
+	///Constructs CancelFunction object
+	static CancelFunction initCancelFunction();
+
 	///Sets request header
 	/**
 	 * @param headers header as json-object
@@ -146,9 +155,11 @@ protected:
 	json::String reqMethod;
 	json::Value customHeaders;
 	json::Value responseHeaders;
+	uintptr_t curTimeout;
 	bool keepAlive;
 	int curStatus;
 	bool headersSent;
+	CancelFunction cancelFunction;
 
 	void initRequest(bool haveBody, std::size_t contentLength);
 	int readResponse();
@@ -163,6 +174,8 @@ protected:
 	virtual void connectTarget();
 	virtual json::String crackURL(StrView urlWithoutProtocol);
 	virtual json::String custromPotocol(StrView url);
+
+	void initConnection();
 
 };
 

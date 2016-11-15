@@ -10,9 +10,11 @@
 
 #include <lightspeed/base/containers/constStr.h>
 #include <lightspeed/base/containers/optional.h>
+#include "minihttp/cancelFunction.h"
 
 
 #include "view.h"
+
 
 
 namespace LightCouch {
@@ -231,7 +233,7 @@ protected:
 	Optional<Filter> filter;
 	Object filterArgs;
 
-	atomic cancelState;
+	CancelFunction cancelFunction;
 
 	friend class CouchDB;
 

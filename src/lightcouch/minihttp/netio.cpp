@@ -18,6 +18,8 @@
 #include <unistd.h>
 
 #include "../json.h"
+
+using LightSpeed::atomic;
 namespace LightCouch {
 
 class LinuxCancel: public ICancelWait {
@@ -35,7 +37,18 @@ public:
 		close(fdrecv);
 	}
 
-	int getRecvFd() const {return fdrecv;}
+	int getRecvFd() const {
+		return fdrecv;
+	}
+
+	void clear() {
+		char b;
+		int res;
+		do {
+			res = ::read(fdrecv,&b,1);
+		} while (res == 1);
+	}
+
 	void cancelWait() {
 		unsigned char b = 1;
 		(void)::write(fdsend,&b,1);
@@ -121,6 +134,10 @@ void NetworkConnection::setCancelFunction(const CancelFunction& fn) {
 	this->cancelFunction = fn;
 }
 
+void NetworkConnection::setTimeout(std::uintptr_t timeout) {
+	timeoutTime = timeout;
+}
+
 int NetworkConnection::readToBuff() {
 	int rc = recv(socket,inputBuff,3000,0);
 	if (rc > 0) {
@@ -203,7 +220,7 @@ bool NetworkConnection::waitForOutput(int  timeout_in_ms) {
 	int cnt = 1;
 	poll_list[0].fd = socket;
 	poll_list[0].events = POLLOUT;
-	LinuxCancel *lc = dynamic_cast<LinuxCancel *>(static_cast<ICancelWait *>(cancelFunction.impl));
+	LinuxCancel *lc = dynamic_cast<LinuxCancel *>(static_cast<ICancelWait *>(cancelFunction));
 	if (lc != nullptr) {
 		poll_list[1].fd = lc->getRecvFd();
 		poll_list[1].events = POLLIN;
@@ -224,8 +241,7 @@ bool NetworkConnection::waitForOutput(int  timeout_in_ms) {
 			if (poll_list[0].revents & POLLOUT) {
 				return true;
 			} else {
-				char b;
-				(void)::read(lc->getRecvFd(),&b,1);
+				if (lc != nullptr) lc->clear();
 				return false;
 			}
 		}
@@ -269,7 +285,7 @@ bool NetworkConnection::waitForInputInternal(int timeout_in_ms) {
 	poll_list[0].fd = socket;
 	poll_list[0].events = POLLIN|POLLRDHUP;
 	int cnt = 1;
-	LinuxCancel *lc = dynamic_cast<LinuxCancel *>(static_cast<ICancelWait *>(cancelFunction.impl));
+	LinuxCancel *lc = dynamic_cast<LinuxCancel *>(static_cast<ICancelWait *>(cancelFunction));
 	if (lc != nullptr) {
 		poll_list[1].fd = lc->getRecvFd();
 		poll_list[1].events = POLLIN;
@@ -289,8 +305,7 @@ bool NetworkConnection::waitForInputInternal(int timeout_in_ms) {
 			if (poll_list[0].revents & (POLLIN|POLLRDHUP)) {
 				return true;
 			} else {
-				char b;
-				(void)::read(lc->getRecvFd(),&b,1);
+				if (lc != nullptr) lc->clear();
 				return false;
 			}
 		}

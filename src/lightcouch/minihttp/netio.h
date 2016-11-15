@@ -9,13 +9,17 @@
 #define LIGHTCOUCH_MINIHTTP_NETIO_H_
 
 #include <immujson/refcnt.h>
-#include "abstractio.h"
+#include <stdint.h>
 
+#include "abstractio.h"
+#include "cancelFunction.h"
 
 
 namespace LightCouch {
 
 class StrView;
+
+
 
 class NetworkConnection: public IInputStream, public IOutputStream {
 public:
@@ -50,6 +54,8 @@ public:
 
 	void setCancelFunction(const CancelFunction &fn);
 
+	void setTimeout(uintptr_t timeout);
+
 	~NetworkConnection();
 
 
@@ -72,7 +78,7 @@ protected:
 	int lastSendError;
 	int lastRecvError;
 	bool timeout;
-	int timeoutTime;
+	uintptr_t timeoutTime;
 
 	CancelFunction cancelFunction;
 
