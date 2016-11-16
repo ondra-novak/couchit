@@ -11,6 +11,7 @@
 #include <lightspeed/base/iter/iterConvBytes.h>
 #include <lightspeed/base/types.h>
 #include <lightspeed/utils/base64.h>
+#include <lightspeed/base/containers/autoArray.tcc>
 
 #include "chunked.h"
 #include "hdrrd.h"

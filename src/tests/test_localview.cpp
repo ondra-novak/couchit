@@ -26,7 +26,7 @@ static const char *strdata="[[\"Kermit Byrd\",76,184],[\"Odette Hahn\",44,181],"
 
 class LocalViewByName: public LocalView {
 public:
-	virtual void map(const Value &doc) override {
+	virtual void map(const Document &doc) override {
 		Value k ({doc["name"]});
 		Value v ({doc["age"] ,doc["height"]});
 		emit(k,v);
@@ -37,7 +37,7 @@ public:
 
 class LocalViewAgeByGroup: public LocalView {
 public:
-	virtual void map(const Value &doc) override {
+	virtual void map(const Document &doc) override {
 		emit({doc["age"].getUInt()/10 * 10 ,doc["age"]},doc["name"]);
 	}
 
@@ -45,21 +45,20 @@ public:
 
 class LocalViewByAge: public LocalView {
 public:
-	virtual void map(const Value &doc) override {
+	virtual void map(const Document &doc) override {
 		emit(doc["age"],doc["name"]);
 	}
 };
 
 class LocalView_age_group_height: public LocalView {
 public:
-	virtual void map(const Value &doc) override {
+	virtual void map(const Document &doc) override {
 		emit({doc["age"].getUInt()/10 * 10 ,doc["age"]},doc["height"]);
 	}
-	virtual Value reduce(const ConstStringT<KeyAndDocId>  &, const ConstStringT<Value> &values, bool rereduce) const override {
-		if (rereduce) throwUnsupportedFeature(THISLOCATION,this,"rereduce not implemented");
+	virtual Value reduce(const RowsWithKeys &rwk) const override {
 		natural sum = 0;
-		natural count = values.length();
-		for(natural i = 0; i<count;i++) sum+=values[i].getUInt();
+		natural count = rwk.length();
+		for(natural i = 0; i<count;i++) sum+=rwk[i].value.getUInt();
 		return Object("sum",sum)("count",count);
 	}
 };

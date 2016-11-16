@@ -43,7 +43,7 @@ void LocalView::updateDocLk(const Value& doc) {
 	}
 }
 
-void LocalView::map(const Value&)  {
+void LocalView::map(const Document &)  {
 	emit();
 }
 
@@ -122,7 +122,11 @@ Value LocalView::getDocument(const StrView &docId) const {
 }
 
 
-Value LocalView::reduce(const ConstStringT<KeyAndDocId>&,const ConstStringT<Value>&, bool ) const {
+Value LocalView::reduce(const RowsWithKeys &) const {
+	return Value();
+}
+
+Value LocalView::rereduce(const ReducedRows &) const {
 	return Value();
 }
 
@@ -213,16 +217,12 @@ Query LocalView::createQuery(natural viewFlags, PostProcessFn fn) const {
 
 Value LocalView::runReduce(const Value &rows) const {
 
-	AutoArray<KeyAndDocId, SmallAlloc<256> > keylist;
-	AutoArray<Value, SmallAlloc<256> > values;
-	keylist.reserve(rows.size());
+	AutoArray<RowWithKey, SmallAlloc<256> > values;
 	values.reserve(rows.size());
-	rows.forEach([&](const Value &v) {
-		keylist.add(KeyAndDocId(v["key"],v["id"].getString()));
-		values.add(v["value"]);
-		return true;
-	});
-	return reduce(keylist,values,false);
+	for(auto &&v : rows) {
+		values.add(RowWithKey(v["key"],v["id"].getString(),v["value"]));
+	}
+	return reduce(values);
 
 }
 
@@ -442,6 +442,8 @@ Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 
 
 }
+
+
 
 
 } /* namespace LightCouch */

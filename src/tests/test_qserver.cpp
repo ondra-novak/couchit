@@ -61,7 +61,7 @@ static void prepareQueryServer(QueryServer &qserver) {
 		virtual void map(const Document &doc, IEmitFn &emit) override {
 			emit({doc["age"].getUInt()/10*10,doc["age"]}, doc["height"]);
 		}
-		virtual Value reduce(const Rows &rows) override {
+		virtual Value reduce(const RowsWithKeys &rows) override {
 			natural sum = 0;
 			for (natural i = 0; i < rows.length(); i++) {
 				sum+=rows[i].value.getUInt();

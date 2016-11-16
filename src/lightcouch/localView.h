@@ -17,6 +17,9 @@
 #include "lightspeed/base/actions/promise.h"
 
 #include "lightspeed/base/containers/map.h"
+
+#include "document.h"
+#include "reducerow.h"
 namespace LightCouch {
 
 
@@ -165,7 +168,7 @@ protected:
 	 * introduce new key. Note that emitting the same key twice for the same document is not allowed (unsupported),
 	 * however, two documents are allowd to emit the same key and create duplicated keys.
 	 */
-	virtual void map(const Value &doc) ;
+	virtual void map(const Document &doc) ;
 
 	///Perform reduce operation
 	/**
@@ -173,15 +176,14 @@ protected:
 	 *
 	 * @param keys list of keys
 	 * @param values list of values
-	 * @param rereduce if true, extra reduce cycle is being executed. In this case, the array keys is empty.
 	 * @return result of reduce operation. If null pointer is return (not json's null value), reduce is
 	 * not available for this null. The default implementation return null pointer (so reduce is not available
 	 * until it is implemented)
 	 *
-	 * @note currently function is not optimized and will not store reduced subresults. Everytime the reduce
-	 * is required, the function is called again and again
 	 */
-	virtual Value reduce(const ConstStringT<KeyAndDocId>  &keys, const ConstStringT<Value> &values, bool rereduce) const;
+	virtual Value reduce(const RowsWithKeys &items) const;
+
+	virtual Value rereduce(const ReducedRows &items) const;
 
 
 
