@@ -193,13 +193,34 @@ Value CouchDB::jsonPUTPOST(bool postMethod, const StrView &path, Value data, Val
 	hdr("Content-Type","application/json");
 	http.setHeaders(hdr);
 
-	{
-		OutputStream out = http.beginBody();
-		if (data.type() != json::undefined) {
-			data.serialize(BufferedWrite<OutputStream>(out));
+	int status;
+	if (data.type() == json::undefined) {
+		status = http.send(StrView());
+	} else {
+		bool hdrSent = false;
+		byte buffer[4096];
+		int bpos = 0;
+		OutputStream outstr(nullptr);
+
+
+		data.serialize([&](int i) {
+			buffer[bpos++] = (byte)i;
+			if (bpos == sizeof(buffer)) {
+				if (!hdrSent) {
+					outstr = http.beginBody();
+					hdrSent = true;
+				}
+				outstr(buffer,bpos,0);
+				bpos = 0;
+			}
+		});
+		if (bpos && hdrSent) {
+			outstr(buffer,bpos);
 		}
+		outstr = nullptr;
+		status = http.send(buffer,bpos);
 	}
-	int status =  http.send();
+
 
 
 

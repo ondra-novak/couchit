@@ -19,12 +19,12 @@ namespace LightCouch {
 
 
 LightCouch::HttpClient::HttpClient()
-	:userAgent("LightCouch mini-http client")
+	:userAgent("LightCouch mini-http client"),curTimeout(70000)
 {
 }
 
 LightCouch::HttpClient::HttpClient(StrView userAgent)
-	:userAgent(userAgent)
+	:userAgent(userAgent),curTimeout(70000)
 {
 }
 
@@ -41,7 +41,7 @@ HttpClient& LightCouch::HttpClient::open(StrView url, StrView method, bool keepA
 		newTarget = custromPotocol(url);
 	}
 	//ask to different target - close current connection
-	if (newTarget != curTarget
+	if (newTarget != curTarget || (conn!= nullptr &&  conn->hasErrors())
 			|| (responseData != nullptr && !everythingRead(responseData)))
 		conn = nullptr;
 	curTarget = newTarget;
@@ -63,8 +63,8 @@ bool HttpClient::handleSendError() {
 	if (conn == nullptr)
 		return true;
 	if (conn->getLastSendError()) {
-		conn = nullptr;
 		curStatus =  -conn->getLastSendError();
+		conn = nullptr;
 		return true;
 	}
 	if (conn->isTimeout()) {
