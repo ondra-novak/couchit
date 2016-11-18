@@ -16,15 +16,64 @@
 #include "lightspeed/base/containers/autoArray.tcc"
 #include "lightspeed/base/actions/promise.tcc"
 #include "json.h"
+#include "queryServerIfc.h"
 
 namespace LightCouch {
 
-LocalView::LocalView():queryable(*this) {
+
+template<typename T>
+class IterRange {
+public:
+	IterRange(std::pair<T,T> &&range):range(std::move(range)) {}
+	IterRange(T &&lower, T &&upper):range(std::move(lower),std::move(upper)) {}
+	const T &begin() const {return range.first;}
+	const T &end() const {return range.second;}
+
+protected:
+	std::pair<T,T> range;
+};
+
+template<typename T>
+IterRange<T> iterRange(std::pair<T,T> &&range) {return IterRange<T>(std::move(range));}
+template<typename T>
+IterRange<T> iterRange(T &&lower, T &&upper) {return IterRange<T>(std::move(lower),std::move(upper));}
+
+class AllDocView: public AbstractViewMapOnly<0> {
+public:
+	virtual void map(const Document &, IEmitFn &emit) override {
+		emit();
+	}
+};
+
+static AllDocView allDocView;
+
+LocalView::LocalView():queryable(*this),includeDocs(false),linkedView(&allDocView){
+
+}
+
+
+
+LocalView::LocalView(natural flags)
+	:queryable(*this)
+	,includeDocs((flags & View::includeDocs) != 0)
+	,linkedView(&allDocView)
+{
+
+}
+
+LocalView::LocalView(AbstractViewBase *view, natural flags)
+	:queryable(*this)
+	,includeDocs((flags & View::includeDocs) != 0)
+	,linkedView(view)
+{
 
 }
 
 
 LocalView::~LocalView() {
+	if (linkedView != 0 && linkedView != &allDocView) {
+		delete linkedView;
+	}
 }
 
 
@@ -33,7 +82,7 @@ void LocalView::updateDoc(const Value& doc) {
 	updateDocLk(doc);
 }
 void LocalView::updateDocLk(const Value& doc) {
-	StrView docId = doc["_id"].getString();
+	String docId = doc["_id"].getString();
 	eraseDocLk(docId);
 	Value delFlag = doc["_deleted"];
 	if (!delFlag.defined() || delFlag.getBool() == false) {
@@ -43,30 +92,70 @@ void LocalView::updateDocLk(const Value& doc) {
 	}
 }
 
-void LocalView::map(const Document &)  {
-	emit();
+class LocalView::Emitor: public IEmitFn {
+public:
+	Emitor(LocalView &owner):owner(owner) {}
+	virtual void operator()() {
+		owner.emit();
+	}
+	virtual void operator()(const Value &key) {
+		owner.emit(key);
+	}
+	virtual void operator()(const Value &key, const Value &value) {
+		owner.emit(key,value);
+	}
+
+protected:
+	LocalView &owner;
+
+};
+
+void LocalView::map(const Document &doc)  {
+	Emitor e(*this);
+	linkedView->map(doc,e);
+
 }
 
 
 void LocalView::emit(const Value& key, const Value& value) {
-	addDocLk(curDoc, key, value);
+	addDocLk(curDoc["_id"],curDoc, key, value);
 }
 
 void LocalView::emit(const Value& key) {
-	addDocLk(curDoc, key,nullptr);
+	addDocLk(curDoc["_id"],curDoc, key,nullptr);
 }
 
 void LocalView::emit() {
-	addDocLk(curDoc,nullptr, nullptr);
+	addDocLk(curDoc["_id"],curDoc,nullptr, nullptr);
 }
 
-void LocalView::eraseDocLk(const StrView &docId) {
-	DocToKey::ListIter list = docToKeyMap.find(docId);
-	while (list.hasItems()) {
-		const Value &k = list.getNext();
-		keyToValueMap.erase(KeyAndDocId(k,docId));
+void LocalView::loadFromQuery(const Query& q) {
+	Exclusive _(lock);
+
+	Result res(q.exec());
+	for (auto &&v : res) {
+		Row rw(v);
+		addDocLk(rw.id,rw.doc,rw.key,rw.value);
 	}
-	docToKeyMap.erase(docId);
+}
+
+void LocalView::clear() {
+	Exclusive _(lock);
+	keyToValueMap.clear();
+	docToKeyMap.clear();
+}
+
+bool LocalView::empty() const {
+	Shared _(lock);
+	return keyToValueMap.empty();
+}
+
+void LocalView::eraseDocLk(const String &docId) {
+	auto range = iterRange(docToKeyMap.equal_range(docId));
+	for (auto &v : range) {
+		keyToValueMap.erase(KeyAndDocId(v.second,docId));
+	}
+	docToKeyMap.erase(range.begin(), range.end());
 }
 
 void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
@@ -85,19 +174,14 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 			//process through the map function
 			updateDocLk(doc);
 		} else {
-			//otherwise if there is no document
-			if (!doc.defined()) {
-				//create fake one to store docId
-				doc = Object("_id",row.id);
-			}
 			//add this document
-			addDocLk(doc,row.key,row.value);
+			addDocLk(row.id,doc,row.key,row.value);
 		}
 	}
 
 }
 
-void LocalView::eraseDoc(const StrView &docId) {
+void LocalView::eraseDoc(const String &docId) {
 
 	Exclusive _(lock);
 	eraseDocLk(docId);
@@ -108,36 +192,35 @@ void LocalView::addDoc(const Value& doc, const Value& key,
 		const Value& value) {
 
 	Exclusive _(lock);
-	addDocLk(doc, key, value);
+	addDocLk(doc["_id"],doc, key, value);
 }
 
-Value LocalView::getDocument(const StrView &docId) const {
+Value LocalView::getDocument(const String &docId) const {
 	Shared _(lock);
-	DocToKey::ListIter iter = docToKeyMap.find(docId);
-	if (iter.hasItems()) {
-		const ValueAndDoc *v = keyToValueMap.find(KeyAndDocId(iter.getNext(),docId));
-		if (v) return v->doc;
+	auto it = docToKeyMap.find(docId);
+	if (it == docToKeyMap.end()) return Value();
+	auto it2 = keyToValueMap.find(KeyAndDocId(it->second, docId));
+	if (it2 == keyToValueMap.end()) return Value();
+	return it2->second.doc;
+}
+
+
+Value LocalView::reduce(const RowsWithKeys &r) const {
+	return linkedView->reduce(r);
+}
+
+Value LocalView::rereduce(const ReducedRows &r) const {
+	return linkedView->rereduce(r);
+}
+
+void LocalView::addDocLk(const String &docId, const Value &doc, const Value& key, const Value& value) {
+
+	auto r = keyToValueMap.insert(std::pair<KeyAndDocId, ValueAndDoc>(
+			KeyAndDocId(key,docId), ValueAndDoc(value,includeDocs?doc:Value())));
+	if (r.second) {
+		docToKeyMap.insert(std::pair<String,Value>(docId,key));
 	}
-	return 0;
-}
 
-
-Value LocalView::reduce(const RowsWithKeys &) const {
-	return Value();
-}
-
-Value LocalView::rereduce(const ReducedRows &) const {
-	return Value();
-}
-
-void LocalView::addDocLk(const Value &doc, const Value& key, const Value& value) {
-
-	StrView docId = doc["_id"].getString();
-	bool exist= false;
-	keyToValueMap.insert(KeyAndDocId(key,docId),ValueAndDoc(value,doc),&exist);
-	if (!exist) {
-		docToKeyMap.insert(docId,key);
-	}
 }
 
 
@@ -155,54 +238,49 @@ Value LocalView::searchKeys(const Value &keys, natural groupLevel) const {
 
 	Shared _(lock);
 
-	Array rows;
-	bool grouped = groupLevel > 0 && groupLevel < naturalNull;
-
-	keys.forEach([&](Value k) {
-
-		Value subrows = searchOneKey(k);
-		if (grouped) {
-			Value r = runReduce(subrows);
-			if (r.type() == json::undefined) grouped = false;
-			else {
-				subrows = Object("key", k)
-					    		("value", r);
-			}
-		}
-
-		subrows.forEach([&rows](Value v) {rows.add(v);return true;});
-		return true;
-	});
+	AutoArray<RowWithKey, SmallAlloc<128> > group;
 
 	if (groupLevel == 0) {
-		 Value r = runReduce(rows);
-		 if (r.type() == json::undefined) {
-			 rows.clear();
-			 rows.add(Object("key",nullptr)
-			 	 	 	 	    ("value",r));
-		 }
+		for (auto &&key : keys) {
+			for (auto &kv : iterRange(keyToValueMap.lower_bound(KeyAndDocId(key, Query::minString)),
+						   keyToValueMap.upper_bound(KeyAndDocId(key, Query::maxString)))) {
 
+				group.add(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
+			}
+		}
+		return Object("rows",Array().add(
+					Object("key",nullptr)
+			      	  ("value",reduce(group))
+				));
+	} else if (groupLevel != naturalNull) {
+		Array rows;
+		for (auto &&key : keys) {
+			for (auto &kv : iterRange(keyToValueMap.lower_bound(KeyAndDocId(key, Query::minString)),
+						   keyToValueMap.upper_bound(KeyAndDocId(key, Query::maxString)))) {
+
+				group.add(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
+			}
+			rows.add(Object("key",key)
+						("value",reduce(group)));
+			group.clear();
+		}
+		return Object("rows",rows);
+	} else {
+		Array rows;
+		for (auto &&key : keys) {
+			for (auto &kv : iterRange(keyToValueMap.lower_bound(KeyAndDocId(key, Query::minString)),
+						   keyToValueMap.upper_bound(KeyAndDocId(key, Query::maxString)))) {
+
+				rows.add(Object("key",kv.first.key)
+							("value",kv.second.value)
+							("id",kv.first.docId)
+							("doc",kv.second.doc));
+			}
+		}
+		return Object("rows",rows)
+		 	 ("total_rows",keyToValueMap.size());
 	}
-	return Object("rows",rows)
-				("total_rows",keyToValueMap.length());
 
-}
-
-Value LocalView::searchOneKey(const Value &key) const {
-
-	KeyToValue::Iterator iter = keyToValueMap.seek(KeyAndDocId(key, StrView()));
-	Array res;
-
-	while (iter.hasItems()) {
-		const KeyToValue::KeyValue &kv = iter.getNext();
-		if (compareJson(key, kv.key.key) != cmpResultEqual) break;
-
-		res.add(Object("id",kv.key.docId)
-				    ("key",kv.key.key)
-					("value",kv.value.value)
-					("doc",kv.value.doc));
-	}
-	return res;
 }
 
 Query LocalView::createQuery(natural viewFlags) const {
@@ -215,16 +293,6 @@ Query LocalView::createQuery(natural viewFlags, PostProcessFn fn) const {
 	return Query(v, queryable);
 }
 
-Value LocalView::runReduce(const Value &rows) const {
-
-	AutoArray<RowWithKey, SmallAlloc<256> > values;
-	values.reserve(rows.size());
-	for(auto &&v : rows) {
-		values.add(RowWithKey(v["key"],v["id"].getString(),v["value"]));
-	}
-	return reduce(values);
-
-}
 
 static bool canGroupKeys(const Value &subj, const Value &sliced) {
 	if (!sliced.defined()) return false;
@@ -258,107 +326,142 @@ static Value sliceKey(const Value &key, natural groupLevel) {
 
 }
 
+template<typename T>
+class ReversedIterator: public T {
+public:
+	ReversedIterator(T &&iter):T(std::move(iter)) {
+	}
+	ReversedIterator(const T &iter):T(iter) {}
+	ReversedIterator &operator++() {
+		T::operator--();return *this;
+	}
+	ReversedIterator operator++(int x) {
+		return ReversedIterator<T>(T::operator--(x));
+	}
+	ReversedIterator &operator--() {
+		T::operator++();return *this;
+	}
+	ReversedIterator operator--(int x) {
+		return ReversedIterator<T>(T::operator++(x));
+	}
+	auto operator *() -> decltype(T::operator *()) const {
+		T x = *this;
+		--x;
+		return *x;
+	}
+};
+
+template<typename T>
+ReversedIterator<T> reversedIterator(T &&iter) {
+	return ReversedIterator<T>(std::move(iter));
+}
+
+template<typename R>
+Value LocalView::searchRange2(R &&range, natural groupLevel, natural offset, natural limit) const {
+
+	natural totalLimit = limit+offset<offset?naturalNull:limit+offset;
+
+	natural p = 0;
+	Array rows;
+
+
+	//no grouping - perform standard iteration
+	if (groupLevel == naturalNull) {
+		//process range
+		for (auto &&kv : range) {
+			//if reached totalLimit, exit iteration
+			if (p >= totalLimit) break;
+			//if reached offset, start to add items to the result
+			if (p >= offset) {
+				//add item
+				rows.add(Object("id",kv.first.docId)
+					    ("key",kv.first.key)
+						("value",kv.second.value)
+						("doc",kv.second.doc));
+			}
+			//count processed rows
+			++p;
+		}
+		//finished - generate result
+		return Object("rows",rows)
+				("total_rows",keyToValueMap.size());
+	} else {
+		//grouping active, prepare empty group
+		AutoArray<RowWithKey, SmallAlloc<32> > group;
+		//prepare grouping key
+		Value grKey;
+		//iterator rows
+		for (auto &&kv : range) {
+			//stop iterate when limit reached
+			if (p >= totalLimit) break;
+			//whether keys cannot be grouped
+			if (!canGroupKeys(kv.first.key, grKey)) {
+				//skip empty groups
+				if (!group.empty()) {
+					//skip if offset is not reached
+					if (p >= offset) {
+						//add row after running reduce
+						rows.add(Object("key",grKey)
+								("value",reduce(group)));
+					}
+					//clear the group
+					group.clear();
+					//increase emited results
+					++p;
+				}
+				//update group key
+				grKey = sliceKey(kv.first.key, groupLevel);
+			}
+			//add item to group
+			group.add(RowWithKey(kv.first.docId,kv.first.key, kv.second.value));
+		}
+		//finalize last group
+		//when we are in limit, when group is not empty and when offset was reached
+		if (p < totalLimit && !group.empty() && p >= offset) {
+			rows.add(Object("key",grKey)
+					("value",reduce(group)));
+		}
+		//finalise result
+		return Object("rows",rows);
+	}
+}
+
+
 Value LocalView::searchRange(const Value &startKey, const Value &endKey,
 natural groupLevel, bool descending, natural offset, natural limit,
-const StrView &offsetDoc,
 bool excludeEnd) const {
 
 	Shared _(lock);
 
-	KeyAndDocId startK(startKey,offsetDoc);
-	KeyAndDocId endK(endKey,excludeEnd?StrView():StrView("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF"));
+	String startDoc = startKey.getKey();
+	String endDoc = endKey.getKey();
+	if (endDoc.empty() && !excludeEnd) endDoc = Query::maxString;
 
-	KeyAndDocId *seekPos;
-	KeyAndDocId *stopPos;
-	Direction::Type dir;
+	KeyAndDocId start(startKey,startDoc);
+	KeyAndDocId end(endKey,endDoc);
+	if (start > end) {
+		return Object("rows",json::array)
+				("total_rows",keyToValueMap.size());
+	}
 
 	if (descending) {
-		seekPos = &endK;
-		stopPos = &startK;
-		dir = Direction::backward;
+		return searchRange2(
+			iterRange(reversedIterator(
+							keyToValueMap.upper_bound(end)),
+					  reversedIterator(
+							keyToValueMap.lower_bound(start))),
+			groupLevel,
+			offset,
+			limit);
 	} else {
-		seekPos = &startK;
-		stopPos = &endK;
-		dir = Direction::forward;
+		return searchRange2(
+			iterRange(keyToValueMap.lower_bound(start),
+						keyToValueMap.upper_bound(end)),
+			groupLevel,
+			offset,
+			limit
+		);
 	}
-
-
-
-
-
-	Optional<KeyToValue::Iterator> iter;
-	if (seekPos->key.defined()) {
-		iter = keyToValueMap.seek(*seekPos,0,dir);
-	} else {
-		if (descending) iter = keyToValueMap.getBkIter();
-		else iter = keyToValueMap.getFwIter();
-	}
-
-	Optional<KeyToValue::Iterator> iend;
-	if (stopPos->key.defined()) {
-		bool found;
-		iend = keyToValueMap.seek(*stopPos,&found,dir);
-	}
-	natural whLimit = naturalNull - offset < limit? offset+limit:naturalNull;
-
-	Array rows;
-	Value grows;
-
-
-	while (iter->hasItems() && (iend == null || iend.value() != iter.value()) && whLimit > 0) {
-
-		const KeyToValue::KeyValue &kv = iter->getNext();
-
-		if (offset == 0)
-			rows.add(Object("id",kv.key.docId)
-				    ("key",kv.key.key)
-					("value",kv.value.value)
-					("doc",kv.value.doc));
-		else
-			offset--;
-
-		whLimit --;
-
-	}
-
-	if (groupLevel != naturalNull) {
-		if (groupLevel == 0) {
-			grows = {Object("key",nullptr)("value",runReduce(rows))};
-		} else {
-			Array res;
-			Array collect;
-			Value lastKey;
-
-
-			for (auto &&val : rows) {
-
-				Value key = val["key"];
-				if (!canGroupKeys(key, lastKey)) {
-
-					if (lastKey.defined()) {
-						Value z = runReduce(collect);
-						res.add(Object("key",lastKey)("value", z));
-					}
-					lastKey = sliceKey(key, groupLevel);
-					collect.clear();
-
-				}
-				collect.add(val);
-			}
-
-			if (!collect.empty()) {
-				Value z = runReduce(collect);
-				res.add(Object("key",lastKey)("value", z));
-			}
-
-			grows = res;
-		}
-	} else {
-		grows = rows;
-	}
-
-	return Object("rows",grows)
-			("total_rows",keyToValueMap.length());
 
 
 }
@@ -415,24 +518,24 @@ Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 	if (reduce == false) groupLevel = naturalNull;
 	switch (r.mode) {
 	case qmAllItems:
-		result = lview.searchRange(Query::minKey,Query::maxKey,groupLevel,descend,r.offset,r.limit,StrView(),false);
+		result = lview.searchRange(Query::minKey,Query::maxKey,groupLevel,descend,r.offset,r.limit,false);
 		break;
 	case qmKeyList:
 		result = lview.searchKeys(r.keys,groupLevel);
 		break;
 	case qmKeyRange:
-		result = lview.searchRange(r.keys[0],r.keys[1],groupLevel,descend,r.offset,r.limit,r.keys[0].getKey(),r.exclude_end);
+		result = lview.searchRange(r.keys[0],r.keys[1],groupLevel,descend,r.offset,r.limit,r.exclude_end);
 		break;
 	case qmKeyPrefix: {
 			result = lview.searchRange(addToArray(r.keys[0],Query::minKey),
 						addToArray(r.keys[0],Query::maxKey)
-					,groupLevel,descend,r.offset,r.limit,StrView(),false);
+					,groupLevel,descend,r.offset,r.limit,false);
 		}
 		break;
 	case qmStringPrefix: {
 		result = lview.searchRange(addSuffix(r.keys[0],Query::minString),
 				addSuffix(r.keys[0],Query::maxString)
-				,groupLevel,descend,r.offset,r.limit,StrView(),false);
+				,groupLevel,descend,r.offset,r.limit,false);
 		}
 
 	}

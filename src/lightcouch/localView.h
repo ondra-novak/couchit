@@ -16,7 +16,7 @@
 
 #include "lightspeed/base/actions/promise.h"
 
-#include "lightspeed/base/containers/map.h"
+#include "btree/btree_map.h"
 
 #include "document.h"
 #include "reducerow.h"
@@ -24,21 +24,42 @@ namespace LightCouch {
 
 
 
+class AbstractViewBase;
+
+
 ///View with similar features created in memory
 /** This view works very similar as classical CouchDB's view. However it is
- * created whole in memory of the application's memory; there is no communication with the CouchDB. The view
- * can be either created as an snapshot of a view on the CouchDB server, or it can be brand new
+ * created whole in the application's memory; there is no communication with the CouchDB. The view
+ * can be either created as an snapshot of a remote view on the CouchDB server, or it can be brand new
  * view which is created only for the application itself. The view can be synchronized from _changes interface, even
  * asynchronously ( - using extra thread, because the object is MT safe!).
  *
- * Because the view is not backed in permanent memory (disk), the application need to recreate it during its startup.
- * This can take a lot of time. However, you can create a view on CouchDB server, which will be loaded on
+ * Because the view is not backed in the permanent memory (disk), the application need to recreate it during its startup.
+ * This can take a lot of time. However, you can create a view on CouchDB server, which is loaded on
  * every start in order to recreate the LocalView
  *
  */
 class LocalView {
 public:
+
+	///Construct the localView
+	/**
+	 * Construct the view. Because no map/reduce functions are given, the view
+	 * can be used as snapshot of other view which is loaded from the query
+	 */
 	LocalView();
+	///Construct and sets options
+	/**
+	 * @param flags some options.
+	 *
+	 * - View::includeDocs - the view will store whole documents. If this
+	 *     flag is not set, only ID's are stored
+	 */
+	explicit LocalView(natural flags);
+
+
+	LocalView(AbstractViewBase *view, natural flags);
+
 	virtual ~LocalView();
 
 
@@ -69,11 +90,14 @@ public:
 	 */
 	void loadFromView(CouchDB &db, const View &view, bool runMapFn );
 
+
+	void loadFromQuery(const Query &q);
+
 	///Directly erases the document from the view
 	/**
 	 * @param docId documentId to erase
 	 */
-	void eraseDoc(const StrView &docId);
+	void eraseDoc(const String &docId);
 	///Directly adds the document
 	/**
 	 *
@@ -93,7 +117,7 @@ public:
 	 *
 	 * @note the document must be included in the view.
 	 */
-	Value getDocument(const StrView &docId) const;
+	Value getDocument(const String &docId) const;
 
 
 	typedef View::Postprocessing PostProcessFn;
@@ -137,15 +161,20 @@ public:
 	Query createQuery(natural viewFlags, PostProcessFn fn) const;
 
 
+	void clear();
+
+	bool empty() const;
 protected:
+
+
 
 
 	struct KeyAndDocId: public Comparable<KeyAndDocId> {
 		Value key;
-		StrView docId;
+		String docId;
 
 		KeyAndDocId() {}
-		KeyAndDocId(const Value &key,const StrView &docId):key(key),docId(docId) {}
+		KeyAndDocId(const Value &key,const String &docId):key(key),docId(docId) {}
 
 		CompareResult compare(const KeyAndDocId &other) const;
 
@@ -155,6 +184,7 @@ protected:
 		Value value;
 		Value doc;
 
+		ValueAndDoc() {}
 		ValueAndDoc(const Value &value,const Value &doc):value(value),doc(doc) {}
 	};
 
@@ -222,10 +252,10 @@ protected:
 
 	///Contains for each document set of keys
 	/** It is used to easy find keys to erase during update */
-	typedef MultiMap<StrView, Value> DocToKey;
+	typedef btree::btree_multimap<String, Value> DocToKey;
 	///Contains keys mapped to documents
 	/** Key contains the key itself and documentId to easyly handle duplicated keys */
-	typedef Map<KeyAndDocId, ValueAndDoc> KeyToValue;
+	typedef btree::btree_map<KeyAndDocId, ValueAndDoc> KeyToValue;
 
 	///Contains map where documendID is key and view's key is value
 	/** This helps to search all keys for selected document. The documentID string can
@@ -240,24 +270,29 @@ protected:
 	///Current document being currently processed
 	Value curDoc;
 
+
 	mutable Queryable queryable;
+	bool includeDocs;
+
+	AbstractViewBase *linkedView;
 
 
-
-	void eraseDocLk(const StrView &docId);
-	void addDocLk(const Value &doc, const Value &key, const Value &value);
+	void eraseDocLk(const String &docId);
+	void addDocLk(const String &docId,const Value &doc, const Value &key, const Value &value);
 	void updateDocLk(const Value &doc);
 
 
 	Value searchKeys(const Value &keys, natural groupLevel) const;
-	Value searchOneKey(const Value &key) const;
 	Value searchRange(const Value &startKey, const Value &endKey,
 			natural groupLevel, bool descending, natural offset, natural limit,
-			const StrView & offsetDoc,
 			bool excludeEnd) const;
 
 
-	Value runReduce(const Value &rows) const;
+
+	template<typename R>
+	Value searchRange2(R &&range, natural groupLevel, natural offset, natural limit) const;
+
+	class Emitor;
 
 };
 

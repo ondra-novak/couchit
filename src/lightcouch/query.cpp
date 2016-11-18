@@ -123,7 +123,7 @@ Query& Query::range(const Value& from, const StrView& fromDoc,
 	return *this;
 }
 
-Value Query::exec() {
+Value Query::exec() const {
 	return qao.executeQuery(request);
 }
 

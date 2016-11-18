@@ -95,7 +95,7 @@ public:
 	 */
 	Query &nocache();
 
-	Value exec();
+	Value exec() const;
 
 
 
