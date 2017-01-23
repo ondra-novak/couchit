@@ -8,7 +8,7 @@
 
 #include "changeset.h"
 #include "couchDB.h"
-#include <immujson/json.h>
+#include <imtjson/json.h>
 #include <lightspeed/base/containers/convertString.h>
 #include <lightspeed/base/containers/stack.tcc>
 #include <lightspeed/base/exceptions/throws.tcc>
@@ -301,7 +301,14 @@ Query CouchDB::createQuery(natural viewFlags) {
 Value CouchDB::retrieveLocalDocument(const StrView &localId, natural flags) {
 	PUrlBuilder url = getUrlBuilder("_local");
 	url->add(localId);
-	return requestGET(*url,nullptr, flags & (flgDisableCache|flgRefreshCache));
+	try {
+		return requestGET(*url,nullptr, flags & (flgDisableCache|flgRefreshCache));
+	} catch (const RequestError &e) {
+		if (e.getStatus() == 404 && (flags & flgCreateNew)) {
+			return Object("_id",String({"_local/",localId}));
+		}
+		else throw;
+	}
 }
 
 StrView CouchDB::genUID() {
@@ -330,7 +337,14 @@ Value CouchDB::retrieveDocument(const StrView &docId, natural flags) {
 	if (flags & flgRevisions) url->add("revs","true");
 	if (flags & flgRevisionsInfo) url->add("revs_info","true");
 
-	return requestGET(*url,nullptr,flags & (flgDisableCache|flgRefreshCache));
+	try {
+		return requestGET(*url,nullptr,flags & (flgDisableCache|flgRefreshCache));
+	} catch (const RequestError &e) {
+		if (e.getStatus() == 404 && (flags & flgCreateNew)) {
+			return Object("_id",docId);
+		}
+		else throw;
+	}
 
 }
 
@@ -1063,6 +1077,13 @@ Value CouchDB::bulkUpload(const Value docs, bool all_or_nothing) {
 		wholeRequest.set("all_or_nothing",true);
 
 	return requestPOST(*b,wholeRequest,0,0);
+}
+
+void CouchDB::updateDocument(Document& doc) {
+	Changeset chset = createChangeset();
+	chset.update(doc);
+	chset.commit(false);
+	doc.set("_rev", chset.getCommitRev(doc));
 }
 
 

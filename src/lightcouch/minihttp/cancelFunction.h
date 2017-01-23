@@ -7,7 +7,7 @@
 
 #ifndef LIGHTCOUCH_MINIHTTP_CANCELFUNCTION_H_
 #define LIGHTCOUCH_MINIHTTP_CANCELFUNCTION_H_
-#include <immujson/refcnt.h>
+#include <imtjson/refcnt.h>
 
 namespace LightCouch {
 

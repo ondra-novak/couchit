@@ -114,9 +114,8 @@ public:
 	static const natural flgConflicts = 0x200;
 	///Retrieve all deleted conflicts
 	static const natural flgDeletedConflicts = 0x400;
-
-	static const natural flgTryAgainCounterMask = 0xF800;
-	static const natural flgTryAgainCounterStep = 0x0800;
+	///create new document when requesting document doesn't exists
+	static const natural flgCreateNew = 0x1000;
 
 
 
@@ -515,6 +514,14 @@ public:
 	 */
 	bool uploadDesignDocument(const char *content, natural contentLen, DesignDocUpdateRule updateRule = ddurOverwrite);
 
+
+	///Updates single document
+	/**
+	 * @param doc document to update. It must have the fields "_id" and "_rev" set. The function updates the field "_rev" with new revisionId.
+	 * @exception UpdateException Update is not possible (exception contains one item)
+	 * @exception RequestException Other error
+	 */
+	void updateDocument(Document &doc);
 
 
 protected:

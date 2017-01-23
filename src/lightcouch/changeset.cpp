@@ -22,7 +22,6 @@ Changeset::Changeset(CouchDB &db):db(db) {
 }
 
 Changeset& Changeset::update(const Document &document) {
-	if (!document.dirty()) return *this;
 	Value doc = document;
 	Value id = doc["_id"];
 	if (!id.defined())
@@ -157,7 +156,7 @@ String Changeset::getCommitRev(const StrView& docId) const {
 	auto f = commitedDocs.find(docId);
 	if (f == commitedDocs.end()) return String();
 	else {
-		return f->second["_rev"];
+		return f->second["rev"];
 	}
 }
 

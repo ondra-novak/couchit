@@ -11,7 +11,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <immujson/json.h>
+#include <imtjson/json.h>
 #include <lightspeed/base/types.h>
 #include <netdb.h>
 #include <sys/socket.h>

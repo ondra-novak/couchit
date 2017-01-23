@@ -8,7 +8,7 @@
 #ifndef LIGHTCOUCH_MINIHTTP_ABSTRACTIO_H_
 #define LIGHTCOUCH_MINIHTTP_ABSTRACTIO_H_
 
-#include <immujson/refcnt.h>
+#include <imtjson/refcnt.h>
 
 #pragma once
 

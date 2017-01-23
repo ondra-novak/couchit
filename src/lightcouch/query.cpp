@@ -1,6 +1,6 @@
 #include "query.h"
 
-#include <immujson/abstractValue.h>
+#include <imtjson/abstractValue.h>
 namespace LightCouch {
 
 const StrView maxStrView("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");

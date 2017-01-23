@@ -8,7 +8,7 @@
 #ifndef LIGHTCOUCH_MINIHTTP_NETIO_H_
 #define LIGHTCOUCH_MINIHTTP_NETIO_H_
 
-#include <immujson/refcnt.h>
+#include <imtjson/refcnt.h>
 #include <stdint.h>
 
 #include "abstractio.h"

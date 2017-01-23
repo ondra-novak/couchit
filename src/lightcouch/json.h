@@ -8,7 +8,7 @@
 #ifndef LIGHTCOUCH_JSON_H_
 #define LIGHTCOUCH_JSON_H_
 
-#include <immujson/json.h>
+#include <imtjson/json.h>
 #include <lightspeed/base/containers/flatArray.h>
 #include <lightspeed/base/containers/stringBase.h>
 #include <lightspeed/base/text/textOut.h>
