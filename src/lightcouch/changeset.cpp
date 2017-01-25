@@ -38,7 +38,7 @@ Changeset& Changeset::update(const Document &document) {
 		ctodel = ccdocs;
 	}
 
-	scheduledDocs[id.getString()] = std::make_pair(doc, ctodel);
+	scheduledDocs.push_back(ScheduledDoc(id.getString(),doc,ctodel));
 
 	return *this;
 }
@@ -49,15 +49,22 @@ Changeset& Changeset::update(const Value &document) {
 	if (!id.defined())
 		throw DocumentHasNoID(THISLOCATION, document);
 
-	scheduledDocs[id.getString()] = std::make_pair(doc, Value());
+	scheduledDocs.push_back(ScheduledDoc(id.getString(),doc,json::undefined));
 
 	return *this;
 }
 
 
+template<typename X>
+bool Changeset::docOrder(const X &a, const X &b) {
+	return a.id < b.id;
+}
 
 Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 	if (scheduledDocs.empty()) return *this;
+
+
+	std::sort(scheduledDocs.begin(),scheduledDocs.end(),docOrder<ScheduledDoc>);
 
 	///if validator is not present, do not run empty cycle.
 
@@ -67,33 +74,33 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 
 	const Validator *v  = db.getValidator();
 	for(auto &&item: scheduledDocs) {
-		Value doc = item.second.first;
-		Value conflicts = item.second.second;
+		Value doc = item.data;
 
 		if (v) {
 			Validator::Result r = v->validateDoc(doc);;
 			if (!r) throw ValidationFailedException(THISLOCATION,r);
 		}
 
+		Object adj(doc);
+
 		bool hasTm = doc[CouchDB::fldTimestamp].defined();
 		bool hasPrevRev =  doc[CouchDB::fldPrevRevision].defined();
 		if (hasTm && !now.defined()) {
-			now = Value(TimeStamp::now().asUnix());
+			adj.set(CouchDB::fldTimestamp,Value(TimeStamp::now().asUnix()));
 		}
-		if (hasTm || hasPrevRev) {
-			Object adj(doc);
-			if (hasTm) adj.set(CouchDB::fldTimestamp, now);
-			if (hasPrevRev) adj.set(CouchDB::fldPrevRevision, doc["_rev"]);
-			doc = adj;
+		if (hasPrevRev) {
+			adj.set(CouchDB::fldPrevRevision, doc["_rev"]);
 		}
 
-		docsToCommit.add(doc);
+		docsToCommit.add(adj);
 
-		for (auto &&c: item.second.second) {
+	}
+	for(auto &&item: scheduledDocs) {
+		Value conflicts = item.conflicts;
+		for (auto &&c: conflicts) {
 			docsToCommit.add(c);
 		}
 	}
-
 
 	commitedDocs.clear();
 	scheduledDocs.clear();
@@ -101,23 +108,36 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 
 	AutoArray<UpdateException::ErrorItem> errors;
 
+	auto siter = docsToCommit.begin();
+
 	for (auto &&item : out) {
+		if (siter == docsToCommit.end()) break;
 		Value rev = item["rev"];
 		Value err = item["error"];
 		String id = item["id"];
-		if (err.defined()) {
+		StrView orgId = (*siter)["_id"].getString();
+		if (orgId != id) {
+			UpdateException::ErrorItem e;
+
+			e.document = Object("_id",id)
+							   ("_rev",rev);
+			e.errorType = "internal_error";
+			e.reason = "Server's response is out of sync";
+			errors.add(e);
+		} else if (err.defined()) {
 			UpdateException::ErrorItem e;
 
 			e.errorDetails = item;
-			e.document = id;
+			e.document = *siter;
 			e.errorType = err;
 			e.reason = item["reason"];
 			errors.add(e);
+		} else if (rev.defined()) {
+			commitedDocs.push_back(CommitedDoc(orgId, rev, *siter));
 		}
-		if (rev.defined()) {
-			commitedDocs.insert(std::make_pair(StrView(id),item));
-		}
+		++siter;
 	}
+
 	if (errors.length()) throw UpdateException(THISLOCATION,errors);
 
 	return *this;
@@ -130,7 +150,16 @@ Changeset::Changeset(const Changeset& other):db(other.db) {
 
 
 void Changeset::revert(const StrView &docId) {
-	scheduledDocs.erase(docId);
+	auto iter = scheduledDocs.rbegin();
+	while (iter != scheduledDocs.rend()) {
+		if (iter->id == docId) {
+			++iter;
+			scheduledDocs.erase(iter.base());
+			break;
+		} else {
+			++iter;
+		}
+	}
 }
 
 
@@ -153,16 +182,18 @@ Changeset& Changeset::erase(const String &docId, const String &revId) {
 
 String Changeset::getCommitRev(const StrView& docId) const {
 
-	auto f = commitedDocs.find(docId);
-	if (f == commitedDocs.end()) return String();
-	else {
-		return f->second["rev"];
+
+	auto f = std::lower_bound(commitedDocs.begin(), commitedDocs.end(), CommitedDoc(docId,String(),Value()),docOrder<CommitedDoc>);
+	if (f != commitedDocs.end() && f->id == docId) {
+		return f->newRev;
+	} else {
+		return String();
 	}
 }
 
 Changeset& Changeset::preview(LocalView& view) {
 	for (auto &&item:scheduledDocs) {
-		view.updateDoc(item.second.first);
+		view.updateDoc(item.data);
 	}
 	return *this;
 
@@ -171,6 +202,23 @@ Changeset& Changeset::preview(LocalView& view) {
 
 String Changeset::getCommitRev(const Document& doc) const {
 	return getCommitRev(doc.getID());
+}
+
+std::size_t Changeset::mark() const {
+	return scheduledDocs.size();
+}
+
+void Changeset::revertToMark(std::size_t mark) {
+	if (mark < scheduledDocs.size()) {
+		scheduledDocs.resize(mark);
+	}
+}
+
+Changeset::CommitedDoc::operator Document() const {
+	Document d (doc);
+	d.setRev(newRev);
+
+	return d;
 }
 
 } /* namespace assetex */

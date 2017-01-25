@@ -86,11 +86,33 @@ public:
 	///Retrieves revision of the committed document
 	String getCommitRev(const StrView &docId) const;
 
+	///Retrieves revision of the commited document
 	String getCommitRev(const Document &doc) const;
+
+	///Retrieves updated document by id
+	/**
+	 * @param docId id of document
+	 * @return updated document. Document has updated "_rev", so it can be modified and updated again without re-downloading it.
+	 *
+	 */
+	Document getUpdatedDoc(const StrView &docId) const;
 
 	///Revets changes made in document docId
 	/** Removes document from the changeset */
 	void revert(const StrView &docId);
+
+	///Marks current state of changeset
+	/**
+	 * @return a number that represents current mark. The mark can be used to revert future changes
+	 */
+	std::size_t mark() const;
+
+	///Reverts all scheduled changes until the mark is reached.
+	/**
+	 * All changes scheduled after mark has been created will be reverted
+	 * @param mark
+	 */
+	void revertToMark(std::size_t mark);
 
 	///Preview all changes in a local view
 	/** Function just only sends all changes to a local view, without making the
@@ -110,13 +132,48 @@ public:
 	const CouchDB &getDatabase() const {return db;}
 
 
+
+
+	struct ScheduledDoc {
+		StrView id;
+		Value data;
+		Value conflicts;
+
+		ScheduledDoc(const StrView &id, const Value &data, const Value &conflicts)
+			:id(id),data(data),conflicts(conflicts) {}
+		ScheduledDoc() {}
+	};
+
+	typedef std::vector<ScheduledDoc> ScheduledDocs;
+
+
+	struct CommitedDoc {
+		StrView id;
+		String newRev;
+		Value doc;
+
+		CommitedDoc(const StrView &id, const String &newRev, const Value &doc)
+			:id(id),newRev(newRev),doc(doc) {}
+
+		operator Document() const;
+	};
+	typedef std::vector<CommitedDoc> CommitedDocs;
+
+	const CommitedDocs &getCommitedDocs() const {return commitedDocs;}
+
 protected:
 
+	ScheduledDocs scheduledDocs;
+	CommitedDocs commitedDocs;
 
-	std::map<StrView, std::pair<Value,Value> > scheduledDocs;
-	std::map<StrView, Value> commitedDocs;
 
 	CouchDB &db;
+
+	template<typename X>
+	static bool docOrder(const X &a, const X &b);
+
+
+
 
 
 };
