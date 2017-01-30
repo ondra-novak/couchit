@@ -57,7 +57,7 @@ public:
 	}
 	virtual Value reduce(const RowsWithKeys &rwk) const override {
 		natural sum = 0;
-		natural count = rwk.length();
+		natural count = rwk.length;
 		for(natural i = 0; i<count;i++) sum+=rwk[i].value.getUInt();
 		return Object("sum",sum)("count",count);
 	}

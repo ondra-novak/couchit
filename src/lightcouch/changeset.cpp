@@ -114,7 +114,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 		if (siter == docsToCommit.end()) break;
 		Value rev = item["rev"];
 		Value err = item["error"];
-		String id = item["id"];
+		String id (item["id"]);
 		StrView orgId = (*siter)["_id"].getString();
 		if (orgId != id) {
 			UpdateException::ErrorItem e;
@@ -129,11 +129,11 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 
 			e.errorDetails = item;
 			e.document = *siter;
-			e.errorType = err;
-			e.reason = item["reason"];
+			e.errorType = String(err);
+			e.reason = String(item["reason"]);
 			errors.add(e);
 		} else if (rev.defined()) {
-			commitedDocs.push_back(CommitedDoc(orgId, rev, *siter));
+			commitedDocs.push_back(CommitedDoc(orgId, String(rev), *siter));
 		}
 		++siter;
 	}

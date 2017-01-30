@@ -33,8 +33,8 @@ public:
 		:ReducedRow (value),docId(docId),key(key) {}
 };
 
-typedef ConstStringT<RowWithKey> RowsWithKeys;
-typedef ConstStringT<ReducedRow> ReducedRows;
+typedef json::StringView<RowWithKey> RowsWithKeys;
+typedef json::StringView<ReducedRow> ReducedRows;
 
 
 

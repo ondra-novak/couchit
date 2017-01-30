@@ -118,15 +118,15 @@ void LocalView::map(const Document &doc)  {
 
 
 void LocalView::emit(const Value& key, const Value& value) {
-	addDocLk(curDoc["_id"],curDoc, key, value);
+	addDocLk(String(curDoc["_id"]),curDoc, key, value);
 }
 
 void LocalView::emit(const Value& key) {
-	addDocLk(curDoc["_id"],curDoc, key,nullptr);
+	addDocLk(String(curDoc["_id"]),curDoc, key,nullptr);
 }
 
 void LocalView::emit() {
-	addDocLk(curDoc["_id"],curDoc,nullptr, nullptr);
+	addDocLk(String(curDoc["_id"]),curDoc,nullptr, nullptr);
 }
 
 void LocalView::loadFromQuery(const Query& q) {
@@ -135,7 +135,7 @@ void LocalView::loadFromQuery(const Query& q) {
 	Result res(q.exec());
 	for (auto &&v : res) {
 		Row rw(v);
-		addDocLk(rw.id,rw.doc,rw.key,rw.value);
+		addDocLk(String(rw.id),rw.doc,rw.key,rw.value);
 	}
 }
 
@@ -175,7 +175,7 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 			updateDocLk(doc);
 		} else {
 			//add this document
-			addDocLk(row.id,doc,row.key,row.value);
+			addDocLk(String(row.id),doc,row.key,row.value);
 		}
 	}
 
@@ -192,7 +192,7 @@ void LocalView::addDoc(const Value& doc, const Value& key,
 		const Value& value) {
 
 	Exclusive _(lock);
-	addDocLk(doc["_id"],doc, key, value);
+	addDocLk(String(doc["_id"]),doc, key, value);
 }
 
 Value LocalView::getDocument(const String &docId) const {
@@ -250,7 +250,7 @@ Value LocalView::searchKeys(const Value &keys, natural groupLevel) const {
 		}
 		return Object("rows",Array().add(
 					Object("key",nullptr)
-			      	  ("value",reduce(group))
+			      	  ("value",reduce(StringView<RowWithKey>(group.data(),group.length())))
 				));
 	} else if (groupLevel != naturalNull) {
 		Array rows;
@@ -261,7 +261,7 @@ Value LocalView::searchKeys(const Value &keys, natural groupLevel) const {
 				group.add(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
 			}
 			rows.add(Object("key",key)
-						("value",reduce(group)));
+						("value",reduce(StringView<RowWithKey>(group.data(),group.length()))));
 			group.clear();
 		}
 		return Object("rows",rows);
@@ -402,7 +402,7 @@ Value LocalView::searchRange2(R &&range, natural groupLevel, natural offset, nat
 					if (p >= offset) {
 						//add row after running reduce
 						rows.add(Object("key",grKey)
-								("value",reduce(group)));
+								("value",reduce(StringView<RowWithKey>(group.data(),group.length()))));
 					}
 					//clear the group
 					group.clear();
@@ -419,7 +419,7 @@ Value LocalView::searchRange2(R &&range, natural groupLevel, natural offset, nat
 		//when we are in limit, when group is not empty and when offset was reached
 		if (p < totalLimit && !group.empty() && p >= offset) {
 			rows.add(Object("key",grKey)
-					("value",reduce(group)));
+					("value",reduce(StringView<RowWithKey>(group.data(),group.length()))));
 		}
 		//finalise result
 		return Object("rows",rows);

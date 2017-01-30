@@ -63,19 +63,19 @@ static void prepareQueryServer(QueryServer &qserver) {
 		}
 		virtual Value reduce(const RowsWithKeys &rows) override {
 			natural sum = 0;
-			for (natural i = 0; i < rows.length(); i++) {
+			for (natural i = 0; i < rows.length; i++) {
 				sum+=rows[i].value.getUInt();
 			}
-			return Object("sum",sum)("count",rows.length());
+			return Object("sum",sum)("count",rows.length);
 		}
 		virtual Value rereduce(const ReducedRows &rows) override {
 			natural count = 0;
 			natural sum = 0;
-			for (natural i = 0; i < rows.length(); i++) {
+			for (natural i = 0; i < rows.length; i++) {
 				sum+=rows[i].value["sum"].getUInt();
 				count+=rows[i].value["count"].getUInt();
 			}
-			return Object("sum",sum)("count",rows.length());
+			return Object("sum",sum)("count",rows.length);
 		}
 	};
 	qserver.regView("testview/age_group_height", new ByGroupHeight);

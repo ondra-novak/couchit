@@ -185,8 +185,8 @@ protected:
 	StringW qserverPath;
 	Object ddcache;
 
-	AutoArray<RowWithKey> rowBuffer;
-	AutoArray<ReducedRow> valueBuffer;
+	std::vector<RowWithKey> rowBuffer;
+	std::vector<ReducedRow> valueBuffer;
 
 	TimeStamp appUpdateTime;
 

@@ -237,7 +237,7 @@ Value QueryServer::commandReduce(const Value& req) {
 		Value key = keyPart[0];
 		Value docId = keyPart[1];
 		Value valPart = val[1];
-		rowBuffer.add(RowWithKey(docId,key,valPart));
+		rowBuffer.push_back(RowWithKey(docId,key,valPart));
 	}
 
 	for (auto &&val: fnlist) {
@@ -262,7 +262,7 @@ Value QueryServer::commandReReduce(const Value& req) {
 	valueBuffer.clear();
 
 	for(auto &&item : values) {
-		valueBuffer.add(ReducedRow(item));
+		valueBuffer.push_back(ReducedRow(item));
 	}
 
 	for (auto &&val: fnlist) {
