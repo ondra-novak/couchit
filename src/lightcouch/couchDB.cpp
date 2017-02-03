@@ -359,7 +359,7 @@ CouchDB::UpdateResult CouchDB::updateDoc(StrView updateHandlerPath, StrView docu
 	}
 	Value h;
 	Value v = requestPUT(*url, nullptr, &h, flgStoreHeaders);
-	return UpdateResult(v,h["X-Couch-Update-NewRev"]);
+	return UpdateResult(v,String(h["X-Couch-Update-NewRev"]));
 
 }
 
@@ -412,7 +412,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrView &attachmen
 
 		String finish() {
 			try {
-				if (finished) return response;
+				if (finished) return String(response);
 				finished = true;
 
 				out = OutputStream(nullptr);
@@ -434,7 +434,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrView &attachmen
 					http.close();
 					response = v["rev"];
 					lock.unlock();
-					return response;
+					return String(response);
 				}
 			} catch (...) {
 				lock.unlock();
@@ -746,7 +746,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	}
 
 	http.open(*url,"GET",true);
-	http.setTimeout(70000);
+	http.setTimeout(120000);
 	if (sink.timeout) {
 		http.setCancelFunction(sink.cancelFunction);
 	}
