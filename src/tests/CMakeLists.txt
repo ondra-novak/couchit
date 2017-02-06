@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+add_compile_options(-std=c++11)
+file(GLOB couchity_test_SRC "*.cpp")
+add_executable (couchity_test ${couchity_test_SRC}) 
+target_link_libraries (couchity_test LINK_PUBLIC couchity)

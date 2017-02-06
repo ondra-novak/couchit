@@ -1,1 +1,0 @@
-CPP_SRCS += $(wildcard $(dir $(lastword $(MAKEFILE_LIST)))test_*.cpp) $(dir $(lastword $(MAKEFILE_LIST)))runtests.cpp 
