@@ -45,7 +45,7 @@ public:
 };
 
 ///Base class for every QueryServer's handler
-class QueryServerHandler {
+class QueryServerHandler: public json::RefCntObj {
 public:
 
 

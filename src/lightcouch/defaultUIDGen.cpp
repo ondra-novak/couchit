@@ -13,19 +13,10 @@ namespace LightCouch {
 
 
 
-DefaultUIDGen::DefaultUIDGen() {
-	SecureRandom secrand;
-	int32_t seed;
-	secrand.blockRead(&seed, sizeof(seed),true);
-	secrand.blockRead(&counter,sizeof(counter),true);
-	rgn = Rand(seed);
-	counter &= 0x7FFFFF;
 
-}
+StrViewA DefaultUIDGen::operator ()(Buffer &buffer, const StrViewA &prefix) {
 
-StrViewA DefaultUIDGen::operator ()(AutoArray<char>& buffer, StrViewA prefix) {
-
-	Synchronized<FastLock> _(lock);
+	Sync _(lock);
 	time_t now;
 	time(&now);
 
@@ -33,34 +24,42 @@ StrViewA DefaultUIDGen::operator ()(AutoArray<char>& buffer, StrViewA prefix) {
 	return generateUID(buffer,prefix, now, counter,&rgn, 20);
 }
 
-StrViewA DefaultUIDGen::generateUID(AutoArray<char>& buffer, StrViewA prefix,
+static void writeBaseX(IIDGen::Buffer &buffer, std::size_t val, unsigned int digits, unsigned int base) {
+	if (digits) {
+		writeBaseX(buffer, val/base, digits-1, base);
+		std::size_t d = val%base;
+		if (d < 10) buffer.push_back('0'+d);
+		else if (d < 36) buffer.push_back('A'+(d-10));
+		else buffer.push_back('a'+(d-36));
+	}
+}
+
+StrViewA DefaultUIDGen::generateUID(Buffer& buffer, StrViewA prefix,
 		std::size_t timeparam, std::size_t counterparam, Rand* randomGen,
 		std::size_t totalCount) {
 
 	buffer.clear();
-	buffer.append(prefix);
-	AutoArray<char>::WriteIter iter = buffer.getWriteIterator();
-	TextOut<AutoArray<char>::WriteIter &, SmallAlloc<256> > out(iter);
-	out.setBase(62);
-
-	out("%{06}1%%{04}2") << timeparam << counterparam;
-
+	buffer.reserve(totalCount);
+	for (auto &&x: prefix) buffer.push_back(x);
+	writeBaseX(buffer,  timeparam, 6, 62);
+	writeBaseX(buffer,  counterparam, 4, 62);
 	if (randomGen) {
-		while (buffer.length() < totalCount+prefix.length()) {
-			out("%1") << (randomGen->getNext() % 62);
+		while (buffer.size() < totalCount+prefix.length) {
+			writeBaseX(buffer, (*randomGen)() % 62, 1, 62);
 		}
 	}
 
-	return buffer;
+	return StrViewA(buffer.data(), buffer.size());
 }
 
 DefaultUIDGen &DefaultUIDGen::getInstance() {
-	return Singleton<DefaultUIDGen>::getInstance();
+	static DefaultUIDGen instance;
+	return instance;
 }
 
-String DefaultUIDGen::operator()(StrViewA prefix) {
-	AutoArray<char> buffer;
-	return this->operator ()(buffer,prefix);
+String DefaultUIDGen::operator()(const StrViewA &prefix) {
+	Buffer buff;
+	return operator()(buff, prefix);
 }
 
 } /* namespace LightCouch */

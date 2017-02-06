@@ -13,7 +13,6 @@
 
 namespace LightCouch {
 
-using namespace LightSpeed;
 
 	///custom UID generator
 	/** You can define own UID generator, which can be referenced in CouchDB configuration structure
@@ -23,6 +22,8 @@ using namespace LightSpeed;
 	public:
 		virtual ~IIDGen() {};
 
+
+		typedef std::vector<char> Buffer;
 		///Generates new ID
 		/**
 		 * @param buffer a buffer supplied by the CouchDB connection instance. The
@@ -31,7 +32,9 @@ using namespace LightSpeed;
 		 *  @param prefix allows specify prefix - it is used to encode type of the object
 		 * @return const-string contains newly generated UID. It can be created inside of the buffer.
 		 */
-		virtual StrViewA operator()(std::string &buffer, StrViewA prefix) = 0;
+		virtual StrViewA operator()(Buffer &buffer, const StrViewA &prefix) = 0;
+
+		virtual String operator()(const StrViewA &prefix) = 0;
 	};
 
 

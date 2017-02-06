@@ -7,70 +7,21 @@
 
 #include "queryServer.h"
 
-#include <lightspeed/base/exceptions/httpStatusException.h>
-#include <lightspeed/base/namedEnum.tcc>
-#include <lightspeed/base/streams/fileiobuff.tcc>
-#include <lightspeed/utils/md5iter.h>
-#include <lightspeed/base/interface.tcc>
-#include <lightspeed/base/containers/map.tcc>
-#include <lightspeed/base/text/textFormat.tcc>
 #include <imtjson/abstractValue.h>
 
 
 #include "changeset.h"
-#include "lightspeed/mt/thread.h"
+#include "namedEnum.h"
 
-#include "lightspeed/base/text/textParser.tcc"
-using LightSpeed::HashMD5;
-using LightSpeed::HttpStatusException;
-using LightSpeed::NamedEnumDef;
 namespace LightCouch {
 
-QueryServer::QueryServer(ConstStrA name, ConstStrW pathname)
-		:qserverName(name),qserverPath(pathname) {
-	IFileIOServices &svc = IFileIOServices::getIOServices();
-	appUpdateTime = svc.getFileInfo(pathname)->getModifiedTime();
-}
-
-
-void QueryServer::checkAppUpdate() {
-	IFileIOServices &svc = IFileIOServices::getIOServices();
-	TimeStamp updated = svc.getFileInfo(qserverPath)->getModifiedTime();
-	if (updated != appUpdateTime) {
-		throw VersionMistmatch(THISLOCATION);
-	}
-}
-
-
-const StringA& QueryServerError::getType() const {
-	return type;
-}
-
-const StringA& QueryServerError::getExplain() const {
-	return explain;
-}
-
-void QueryServerError::message(ExceptionMsg& msg) const {
-	msg("QueryServer error: %1 - %2") << type << explain;
-}
-integer QueryServerApp::start(const Args& args) {
-	integer init = initServer(args);
-	if (init) return init;
-	qserverPath = getAppPathname();
-	return QueryServer::runDispatchStdIO();
-}
-
-integer QueryServer::runDispatchStdIO() {
+QueryServer::QueryServer(ConstStrA name):qserverName(name) {}
 
 
 
-	IFileIOServices &svc = IFileIOServices::getIOServices();
-	PInOutStream stream = new IOBuffer<256*1024>(new SeqBidirStream(
-			svc.openStdFile(IFileIOServices::stdInput).get(),
-			svc.openStdFile(IFileIOServices::stdOutput).get()));
-	runDispatch(stream);
+int QueryServer::runDispatchStdIO() {
 
-	return 0;
+	return runDispatch(std::cin, std::cout);
 }
 
 enum Command {

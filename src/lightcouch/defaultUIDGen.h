@@ -9,6 +9,7 @@
 #define LIGHTCOUCH_DEFAULTUIDGEN_H_
 
 #include <random>
+#include <mutex>
 #include "iidgen.h"
 
 
@@ -39,8 +40,9 @@ namespace LightCouch {
  */
 class DefaultUIDGen: public IIDGen {
 public:
-	DefaultUIDGen();
-	virtual StrViewA operator()(std::string &buffer, StrViewA prefix);
+	typedef std::random_device Rand;
+
+	virtual StrViewA operator()(Buffer &buffer, const StrViewA &prefix) override;
 
 	///Generates UID statically
 	/**
@@ -53,19 +55,20 @@ public:
 	 *   match requested length. It requires to have randomGen not null
 	 * @return result is string reference to the buffer
 	 */
-	static StrViewA generateUID(std::string &buffer,
+	static StrViewA generateUID(Buffer &buffer,
 			StrViewA prefix,
 			std::size_t timeparam, std::size_t counterparam,
-			std::random_device *randomGen, std::size_t totalCount=20);
+			Rand *randomGen, std::size_t totalCount=20);
 
 	static DefaultUIDGen &getInstance();
 
-	virtual String operator()(StrViewA prefix);
+	virtual String operator()(const StrViewA &prefix) override;
 
 protected:
 	std::size_t counter;
-	std::random_device rgn;
+	Rand rgn;
 	std::mutex lock;
+	typedef std::lock_guard<std::mutex> Sync;
 
 
 
