@@ -56,9 +56,9 @@ public:
 		emit({doc["age"].getUInt()/10 * 10 ,doc["age"]},doc["height"]);
 	}
 	virtual Value reduce(const RowsWithKeys &rwk) const override {
-		natural sum = 0;
-		natural count = rwk.length;
-		for(natural i = 0; i<count;i++) sum+=rwk[i].value.getUInt();
+		std::size_t sum = 0;
+		std::size_t count = rwk.length;
+		for(std::size_t i = 0; i<count;i++) sum+=rwk[i].value.getUInt();
 		return Object("sum",sum)("count",count);
 	}
 };

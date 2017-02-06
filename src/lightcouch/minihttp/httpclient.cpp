@@ -24,19 +24,19 @@ LightCouch::HttpClient::HttpClient()
 {
 }
 
-LightCouch::HttpClient::HttpClient(StrView userAgent)
+LightCouch::HttpClient::HttpClient(StrViewA userAgent)
 	:userAgent(userAgent),curTimeout(70000)
 {
 }
 
-HttpClient& LightCouch::HttpClient::open(StrView url, StrView method, bool keepAlive) {
+HttpClient& LightCouch::HttpClient::open(StrViewA url, StrViewA method, bool keepAlive) {
 	this->keepAlive = keepAlive;
 
 	curStatus = 0;
 	json::String newTarget;
 
 	if (url.substr(0,7) == "http://") {
-		StrView u1 = url.substr(7);
+		StrViewA u1 = url.substr(7);
 		newTarget = crackURL(u1);
 	} else {
 		newTarget = custromPotocol(url);
@@ -125,7 +125,7 @@ int LightCouch::HttpClient::send() {
 	return readResponse();
 }
 
-int LightCouch::HttpClient::send(const StrView& body) {
+int LightCouch::HttpClient::send(const StrViewA& body) {
 	return send(body.data(),body.length());
 }
 
@@ -214,8 +214,8 @@ void HttpClient::initRequest(bool haveBody, std::size_t contentLength) {
 			LightSpeed::BinaryConvert<char, unsigned char>,
 			LightSpeed::ByteToBase64Convert > conv;
 		LightSpeed::StringCore<char> base = LightSpeed::convertString(conv,
-				LightSpeed::ConstStrA(StrView(auth)));
-		json::String val({"Basic ",StrView(base)});
+				LightSpeed::ConstStrA(StrViewA(auth)));
+		json::String val({"Basic ",StrViewA(base)});
 		hdr("Authorization", val);
 	}
 
@@ -277,7 +277,7 @@ int HttpClient::readResponse() {
 	responseHeaders = v;
 
 	curStatus = v["_status"].getUInt();
-	StrView te = v["Transfer-Encoding"].getString();
+	StrViewA te = v["Transfer-Encoding"].getString();
 	if (te == "chunked") {
 		responseData = new ChunkedStream(InputStream(conn));
 	} else {
@@ -309,14 +309,14 @@ void HttpClient::connectTarget() {
 	conn = NetworkConnection::connect(curTarget,80);
 }
 
-json::String HttpClient::crackURL(StrView urlWithoutProtocol) {
+json::String HttpClient::crackURL(StrViewA urlWithoutProtocol) {
 	json::String newTarget;
 	std::size_t p1 = urlWithoutProtocol.find('/');
-	if (p1 != LightSpeed::naturalNull) {
-		StrView adom = urlWithoutProtocol.substr(0,p1);
-		StrView path = urlWithoutProtocol.substr(p1);
+	if (p1 != LightSpeed::((std::size_t)-1)) {
+		StrViewA adom = urlWithoutProtocol.substr(0,p1);
+		StrViewA path = urlWithoutProtocol.substr(p1);
 		std::size_t p2 = adom.find('@');
-		if (p2 != LightSpeed::naturalNull) {
+		if (p2 != LightSpeed::((std::size_t)-1)) {
 			auth = adom.substr(0,p2);
 			newTarget = adom.substr(p2+1);
 		} else {
@@ -344,7 +344,7 @@ json::String HttpClient::getStatusMessage() {
 	return responseHeaders["_message"];
 }
 
-json::String HttpClient::custromPotocol(StrView) {
+json::String HttpClient::custromPotocol(StrViewA) {
 	return json::String();
 }
 

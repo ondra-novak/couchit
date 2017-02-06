@@ -165,13 +165,13 @@ Value QueryServer::commandAddLib(const Value& ) {
 	throw QueryServerError(THISLOCATION,"unsupported","You cannot add lib to native C++ query server");
 }
 
-static std::pair<StrView,natural> extractVersion(const StrView &name) {
-	natural versep = name.find('@');
-	if (versep == naturalNull)
+static std::pair<StrViewA,std::size_t> extractVersion(const StrViewA &name) {
+	std::size_t versep = name.find('@');
+	if (versep == ((std::size_t)-1))
 		throw QueryServerError(THISLOCATION,"no_version_defined", "View definition must contain version marker @version");
-	StrView ver = name.offset(versep+1);
-	StrView rawname = name.head(versep);
-	natural verid;
+	StrViewA ver = name.offset(versep+1);
+	StrViewA rawname = name.head(versep);
+	std::size_t verid;
 	if (!parseUnsignedNumber(ver.getFwIter(), verid,10))
 		throw QueryServerError(THISLOCATION,"invald version", "Version must be number");
 	return std::make_pair(rawname,verid);
@@ -214,7 +214,7 @@ Value QueryServer::commandMapDoc(const Value& req) {
 	Document doc = req[1];
 	Array result;
 
-	for (natural i = 0; i < preparedMaps.length(); i++) {
+	for (std::size_t i = 0; i < preparedMaps.length(); i++) {
 		Array subres;
 		Emit emit(subres);
 		preparedMaps[i].fn.map(doc,emit);
@@ -334,7 +334,7 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 
 	Object out;
 	for(auto && value: section){
-		StrView itemname = value.getKey();
+		StrViewA itemname = value.getKey();
 		bool inmap = false;
 		if (value.type() == json::object) {
 			value = value["map"];
@@ -368,11 +368,11 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 
 
 Value QueryServer::commandDDoc(const Value& req, const PInOutStream& stream) {
-	StrView docid = req[1].getString();
+	StrViewA docid = req[1].getString();
 	if (docid == "new") {
 		//cache new document
 
-		StrView docid = req[2].getString();
+		StrViewA docid = req[2].getString();
 		Value ddoc = req[3];
 
 		Value compiledDDoc = compileDesignDocument(ddoc);
@@ -384,7 +384,7 @@ Value QueryServer::commandDDoc(const Value& req, const PInOutStream& stream) {
 			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("The document '")+(docid)+ConstStrA("' is not cached at the query server")));
 		Value fn = doc;
 		Value path = req[2];
-		for (natural i = 0, cnt = path.size(); i < cnt; i++) {
+		for (std::size_t i = 0, cnt = path.size(); i < cnt; i++) {
 			fn = fn[path[i].getString()];
 			if (!fn.defined())
 				throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Path not found'")+convStr(path.toString())+ConstStrA("'")));
@@ -452,7 +452,7 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 			return {"end",chunks};
 		}
 
-		virtual void send(StrView text) {
+		virtual void send(StrViewA text) {
 			chunks.add(text);
 		}
 		virtual void send(Value jsonValue) {
@@ -560,10 +560,10 @@ void QueryServer::regFilter(StringA filterName, AbstractFilterBase* impl) {
 
 
 Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, ConstStrA &suffix) {
-	natural pos = fnName.find('/');
+	std::size_t pos = fnName.find('/');
 	ConstStrA docName;
 
-	if (pos== naturalNull) {
+	if (pos== ((std::size_t)-1)) {
 		docName = qserverName;
 		suffix = fnName;
 	} else {
@@ -571,7 +571,7 @@ Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, Con
 		suffix = fnName.offset(pos+1);
 	}
 
-	StrView strDocName(docName);
+	StrViewA strDocName(docName);
 	//pick named object
 	Value doc = container[strDocName];
 	if (!doc.defined()) {
@@ -588,7 +588,7 @@ Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, Con
 
 }
 
-Value createVersionedRef(ConstStrA name, natural ver) {
+Value createVersionedRef(ConstStrA name, std::size_t ver) {
 	TextFormatBuff<char, SmallAlloc<256 >> fmt;
 	fmt("%1@%2") << name << ver;
 	return Value(convStr(ConstStrA(fmt.write())));
@@ -619,7 +619,7 @@ Value QueryServer::generateDesignDocuments() {
 				view("reduce","_stats");break;
 			}
 		}
-		ddocs.set(StrView(ddoc.getKey()), ddocobj);
+		ddocs.set(StrViewA(ddoc.getKey()), ddocobj);
 	}
 
 	for (RegListFn::Iterator iter = lists.getFwIter(); iter.hasItems();) {

@@ -9,14 +9,11 @@
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_QUERYCACHE_H_
 
 #include <unordered_map>
-#include <lightspeed/base/types.h>
-#include "lightspeed/base/actions/promise.h"
-#include "lightspeed/base/containers/constStr.h"
+#include <mutex>
 
 #include "json.h"
 namespace LightCouch {
 
-using namespace LightSpeed;
 
 ///Query cache stores results of various queries to the CouchDB
 /**
@@ -48,15 +45,15 @@ public:
 	 * the cache is compacted, LRU-counter for all items is decreased and the cache can grow twice.
 	 * Once LRU-counter reaches zero, item is removed from the cache.
 	 */
-	static natural maxlru;
+	static std::size_t maxlru;
 
 	QueryCache():maxSize(1000),initialMaxSize(1000) {}
-	QueryCache(natural hint_size):maxSize(hint_size),initialMaxSize(hint_size) {}
+	QueryCache(std::size_t hint_size):maxSize(hint_size),initialMaxSize(hint_size) {}
 
 	struct CachedItem {
 		const String etag;
 		const Value value;
-		natural lru;
+		std::size_t lru;
 
 		CachedItem() {}
 		///Create cached item
@@ -72,10 +69,10 @@ public:
 	};
 
 	///search for url in the cache
-	CachedItem  find(StrView url);
+	CachedItem  find(StrViewA url);
 
 	///set content to cache (override if exists)
-	void set(StrView url, const CachedItem &item);
+	void set(StrViewA url, const CachedItem &item);
 
 	///clear the cache
 	void clear();
@@ -88,15 +85,16 @@ public:
 
 protected:
 
-	natural maxSize;
-	natural initialMaxSize;
+	std::size_t maxSize;
+	std::size_t initialMaxSize;
 
 
-	typedef std::unordered_map<natural, CachedItem  > ItemMap;
+	typedef std::unordered_map<std::size_t, CachedItem  > ItemMap;
 
 	ItemMap itemMap;
 
-	FastLock lock;
+	std::mutex lock;
+	typedef std::lock_guard<std::mutex> Sync;
 };
 
 } /* namespace LightCouch */

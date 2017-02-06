@@ -83,7 +83,7 @@ static void couchLoadData(PrintTextA &print) {
 	AutoArray<Document, SmallAlloc<50> > savedDocs;
 
 	Changeset chset(db.createChangeset());
-	natural id=10000;
+	std::size_t id=10000;
 	Value data = Value::fromString(strdata);
 	for(auto &&item : data) {
 		Document doc;
@@ -99,8 +99,8 @@ static void couchLoadData(PrintTextA &print) {
 	chset.commit(false);
 	Set<String> uuidmap;
 
-	for (natural i = 0; i < savedDocs.length(); i++) {
-		StrView uuid = savedDocs[i]["_id"].getString();
+	for (std::size_t i = 0; i < savedDocs.length(); i++) {
+		StrViewA uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
 	print("%1") << uuidmap.size();
@@ -126,12 +126,12 @@ static void couchLoadDesign(PrintTextA &) {
 	db.use(DATABASENAME);
 
 
-	for (natural i = 0; i < countof(designs); i++) {
+	for (std::size_t i = 0; i < countof(designs); i++) {
 		db.uploadDesignDocument(designs[i],strlen(designs[i]));
 	}
 
 	//try twice
-	for (natural i = 0; i < countof(designs); i++) {
+	for (std::size_t i = 0; i < countof(designs); i++) {
 		db.uploadDesignDocument(designs[i],strlen(designs[i]));
 	}
 
@@ -206,7 +206,7 @@ static void couchCaching(PrintTextA &a) {
 	db.use(DATABASENAME);
 	json::PValue v;
 
-	for (natural i = 0; i < 3; i++) {
+	for (std::size_t i = 0; i < 3; i++) {
 		Query q(db.createQuery(by_name_cacheable));
 		Value r = q.keys({
 			{"Kermit Byrd"},
@@ -241,7 +241,7 @@ static void couchCaching2(PrintTextA &a) {
 	json::PValue vhandle;
 
 
-	for (natural i = 0; i < 3; i++) {
+	for (std::size_t i = 0; i < 3; i++) {
 
 		if (i == 2) {
 			//make a change during second run
@@ -301,7 +301,7 @@ static void couchChangeSetOneShot(PrintTextA &a) {
 
 	ChangesSink chsink (db.createChangesSink());
 	Changes chngs = chsink.exec();
-	natural count = 0;
+	std::size_t count = 0;
 	while (chngs.hasItems()) {
 		ChangedDoc doc(chngs.getNext());
 		count++;
@@ -310,7 +310,7 @@ static void couchChangeSetOneShot(PrintTextA &a) {
 	a("%1") << (count > 10);
 }
 
-static void loadSomeDataThread(StrView locId) {
+static void loadSomeDataThread(StrViewA locId) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -327,7 +327,7 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	StrView uid = db.genUID();
+	StrViewA uid = db.genUID();
 
 	Thread thr;
 	thr.start(ThreadFunction::create(&loadSomeDataThread,uid));
@@ -352,7 +352,7 @@ static void loadSomeDataThread3(String locId) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	for (natural i = 0; i < 3; i++) {
+	for (std::size_t i = 0; i < 3; i++) {
 		Changeset chset = db.createChangeset();
 		Document doc;
 		doc("_id",locId.substr(i))

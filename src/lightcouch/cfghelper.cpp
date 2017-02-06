@@ -27,7 +27,7 @@ void LightCouch::readConfig(LightCouch::Config& cfg,const LightSpeed::IniConfig:
 	cfg.baseUrl = convStr(str);
 	parser.required(str,"dbname");
 	cfg.databaseName = convStr(str);
-	LightSpeed::natural iotimeout;
+	LightSpeed::std::size_t iotimeout;
 	if (parser.get(iotimeout,"iotimeout")) {
 		cfg.iotimeout = iotimeout;
 	}

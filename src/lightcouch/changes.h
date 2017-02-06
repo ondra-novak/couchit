@@ -8,9 +8,9 @@
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGEDDOC_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGEDDOC_H_
 
-#include <lightspeed/base/containers/constStr.h>
-#include <lightspeed/base/containers/optional.h>
-#include <lightspeed/mt/microlock.h>
+#include  <memory>
+#include  <mutex>
+
 
 #include "minihttp/cancelFunction.h"
 
@@ -21,7 +21,6 @@
 
 namespace LightCouch {
 
-using namespace LightSpeed;
 
 
 class CouchDB;
@@ -34,7 +33,7 @@ public:
 	///sequence number
 	const Value seqId;
 	///document id
-	const StrView id;
+	const StrViewA id;
 	///list of revisions changed
 	const Value revisions;
 	///true, if document has been deleted
@@ -52,7 +51,7 @@ public:
 
 
 ///Collection that contains all changed documents (or references) received from ChangesSink
-class Changes: public IteratorBase<Value, Changes> {
+class Changes {
 public:
 	///Initialize the collection
 	/**
@@ -72,14 +71,14 @@ public:
 	 *
 	 * Function also moves iteration to next change
 	 */
-	const Value &getNext();
+	Value getNext();
 	///Peek next change
 	/** @return next change in collection. It is returned as JSON object. You can convert it
 	 * to the ChangedDoc object to easy access to all its fields
 	 *
 	 * Function doesn't move to the next change
 	 */
-	const Value &peek() const;
+	Value peek() const;
 	///Determines whether any change follows
 	/**
 	 * @retval true still a change is available
@@ -93,16 +92,15 @@ public:
 	///Retrieve whole result as array of rows;
 	Value getAllChanges() const {return rows;}
 
-	natural length() const {return rows.size();}
+	std::size_t length() const {return rows.size();}
 
-	natural getRemain() const {return rows.size() - pos;}
+	std::size_t getRemain() const {return rows.size() - pos;}
 
 protected:
 
 	Value rows;
-	natural pos;
-	natural sz;
-	mutable Value vout;
+	std::size_t pos;
+	std::size_t sz;
 };
 
 
@@ -136,14 +134,14 @@ public:
 	 *
 	 * @param timeout According to CouchDB documentation, you can specify value between 0 and 60000.
 	 *                Specifying 0 causes that listener can return an empty result.
-	 *                You can also specify naturalNull to enable infinite wait. In this case,
+	 *                You can also specify ((std::size_t)-1) to enable infinite wait. In this case,
 	 *                heartbeat is used to keep connection up (using heartbeed is transparent for
 	 *                the API)
 	 * @return reference to this (chaining)
 	 *
 	 * @note default timeout is 0. You have to set timeout to perform longpool reading
 	 */
-	ChangesSink& setTimeout(natural timeout);
+	ChangesSink& setTimeout(std::size_t timeout);
 
 	///Sets filter
 	/**
@@ -165,7 +163,7 @@ public:
 	 * @param flags flags
 	 * @return reference to this (chaining)
 	 */
-	ChangesSink &setFilterFlags(natural flags);
+	ChangesSink &setFilterFlags(std::size_t flags);
 	///Define argument of the filter
 	/**
 	 * @param key name of key
@@ -173,13 +171,13 @@ public:
 	 * @return
 	 */
 	template<typename T>
-	ChangesSink& arg(StrView key, T value);
+	ChangesSink& arg(StrViewA key, T value);
 	///Limit output for max count result
 	/**
-	 * @param count count of results to be in output. Specify naturalNull to remove limit
+	 * @param count count of results to be in output. Specify ((std::size_t)-1) to remove limit
 	 * @return
 	 */
-	ChangesSink& limit(natural count);
+	ChangesSink& limit(std::size_t count);
 
 
 	///Executes the operation - reads all changes
@@ -214,7 +212,7 @@ public:
 	/**
 	 * You can easy chain sink with run operator to a function which receives all results one by one.
 	 * This function will run until empty result received. In case that
-	 * the timeout is set to naturalNull, the function will never return.
+	 * the timeout is set to ((std::size_t)-1), the function will never return.
 	 *
 	 * The only way how to stop this cycle is to call cancelWait() which causes the throwing the CanceledException
 	 * out of the function
@@ -230,13 +228,13 @@ protected:
 
 	CouchDB &couchdb;
 	Value seqNumber;
-	natural outlimit;
-	natural timeout;
-	Optional<Filter> filter;
+	std::size_t outlimit;
+	std::size_t timeout;
+	std::unique_ptr<Filter> filter;
 	Object filterArgs;
 
 	CancelFunction cancelFunction;
-	MicroLock cancelFnInitLock;
+	std::mutex cancelFnInitLock;
 	bool canceled;
 
 	void initCancelFunction();
@@ -247,7 +245,7 @@ protected:
 
 
 template<typename T>
-inline ChangesSink& LightCouch::ChangesSink::arg(StrView key, T value) {
+inline ChangesSink& LightCouch::ChangesSink::arg(StrViewA key, T value) {
 
 	filterArgs.set(key, value);
 	return *this;

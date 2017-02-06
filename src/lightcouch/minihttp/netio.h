@@ -9,6 +9,7 @@
 #define LIGHTCOUCH_MINIHTTP_NETIO_H_
 
 #include <imtjson/refcnt.h>
+#include <imtjson/stringview.h>
 #include <stdint.h>
 
 #include "abstractio.h"
@@ -17,14 +18,14 @@
 
 namespace LightCouch {
 
-class StrView;
 
+using json::StrViewA;
 
 
 class NetworkConnection: public IInputStream, public IOutputStream {
 public:
 
-	static NetworkConnection *connect(const StrView &addr_ddot_port, int defaultPort);
+	static NetworkConnection *connect(const StrViewA &addr_ddot_port, int defaultPort);
 
 	static ICancelWait *createCancelFunction();
 

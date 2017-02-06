@@ -7,29 +7,27 @@
 
 #ifndef LIGHTCOUCH_URLBUILDER_H_
 #define LIGHTCOUCH_URLBUILDER_H_
+#include <vector>
 #include "json.h"
 
 namespace LightCouch {
 
-using namespace LightSpeed;
 
 class UrlBuilder {
 public:
 
-	void init(StrView basicUrl, StrView dbname, StrView resourcePath);
+	void init(StrViewA basicUrl, StrViewA dbname, StrViewA resourcePath);
 	void init();
-	UrlBuilder &add(StrView path);
-	UrlBuilder &add(StrView key, StrView value);
-	UrlBuilder &addJson(StrView key, Value value);
-	operator StrView() const {return buffer.getArray();}
-	operator ConstStrA() const {return buffer.getArray();}
+	UrlBuilder &add(StrViewA path);
+	UrlBuilder &add(StrViewA key, StrViewA value);
+	UrlBuilder &addJson(StrViewA key, Value value);
+	operator StrViewA() const {return buffer;}
 
 protected:
 
 	char curSep;
 
-
-	AutoArrayStream<char> buffer;
+	std::vector<char> buffer;
 
 
 };

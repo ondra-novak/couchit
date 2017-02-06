@@ -51,7 +51,7 @@ inline Result LightCouch::Result::group(CmpFn compareRowsFunction,
 		ReduceFn reduceFn, bool descending) const {
 
 	AutoArray<Value> sortingRows;
-	natural cnt = this->size();
+	std::size_t cnt = this->size();
 	sortingRows.reserve(cnt);
 	HeapSort<AutoArray<Value>, SortResultCmp<CmpFn> > heapSort(sortingRows, SortResultCmp<CmpFn>(compareRowsFunction,descending));
 	for(auto &&item: *this) {
@@ -59,10 +59,10 @@ inline Result LightCouch::Result::group(CmpFn compareRowsFunction,
 		heapSort.push();
 	}
 	heapSort.sortHeap();
-	natural startPos = 0;
-	natural insertPos = 0;
+	std::size_t startPos = 0;
+	std::size_t insertPos = 0;
 	Array out;
-	for (natural i = 1; i < cnt; i++) {
+	for (std::size_t i = 1; i < cnt; i++) {
 		if (compareRowsFunction(sortingRows[startPos],sortingRows[i]) != 0) {
 			ConstStringT<Value> block = sortingRows.mid(startPos, i-startPos);
 			Value res = reduceFn(block);
@@ -83,10 +83,10 @@ inline Result LightCouch::Result::group(CmpFn compareRowsFunction,
 template<typename MergeFn>
 inline Result LightCouch::Result::merge(const Result& other, MergeFn mergeFn) const {
 
-	natural leftPos = 0;
-	natural rightPos = 0;
-	natural leftCnt = size();
-	natural rightCnt = other.size();
+	std::size_t leftPos = 0;
+	std::size_t rightPos = 0;
+	std::size_t leftCnt = size();
+	std::size_t rightCnt = other.size();
 	Array rows;
 
 	while (leftPos < leftCnt && rightPos < rightCnt) {
@@ -137,15 +137,15 @@ struct ResultJoinHlp {
 };
 
 template<typename BindFn>
-inline Result LightCouch::Result::join(QueryBase& q, const StrView &name, natural flags,  BindFn bindFn)
+inline Result LightCouch::Result::join(QueryBase& q, const StrViewA &name, std::size_t flags,  BindFn bindFn)
 {
 	typedef MultiMap<Value, ResultJoinHlp, JsonIsLess> ResultMap;
 	ResultMap map;
 
 	q.reset();
 
-	natural cnt = size();
-	for (natural i = 0; i < cnt; i++) {
+	std::size_t cnt = size();
+	for (std::size_t i = 0; i < cnt; i++) {
 		Value row = (*this)[i];
 		Value fk = bindFn(row);
 		ResultMap::ValueList &rows = map(fk);
@@ -184,7 +184,7 @@ inline Result LightCouch::Result::join(QueryBase& q, const StrView &name, natura
 					(name,row.value.joinRows.tail(1)[0]));
 					break;
 			case joinAllRows: output.add(Object(row.value.baseObject)
-					(name,Value(StrViewT<Value>(row.value.joinRows))));
+					(name,Value(StrViewAT<Value>(row.value.joinRows))));
 					break;
 			default:
 				//skip row

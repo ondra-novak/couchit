@@ -7,62 +7,67 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_EXCEPTION_H_
 #define LIBS_LIGHTCOUCH_SRC_EXCEPTION_H_
-#include <lightspeed/base/containers/string.h>
-#include <lightspeed/base/exceptions/exception.h>
-#include <lightspeed/base/containers/constStr.h>
-#include <lightspeed/base/exceptions/httpStatusException.h>
 #include "json.h"
 
 namespace LightCouch {
 
-using namespace LightSpeed;
+class Exception: public virtual std::exception {
+public:
+
+	virtual const char *what() const throw() override;
+	virtual ~Exception() throw() {}
+
+protected:
+	mutable String whatMsg;
+	virtual String getWhatMsg() const throw() = 0;
+
+};
+
+class HttpStatusException: public Exception {
+public:
+	HttpStatusException(const String &url, unsigned int code, const String &message);
+
+	unsigned int getCode() const throw() {return code;}
+	const String &getURL() const throw() {return url;}
+	const String &getMessage() const throw() {return message;}
+
+protected:
+	virtual String getWhatMsg() const throw();
+
+	unsigned int code;
+	String url;
+	String message;
+
+};
+
+
 
 class RequestError: public HttpStatusException {
 public:
-	LIGHTSPEED_EXCEPTIONFINAL;
 
-	RequestError(const ProgramLocation &loc, StringA url, natural code, StringA message, Value extraInfo);
+	RequestError(const String &url, unsigned int code, const String& message, const Value &extraInfo);
 
 	Value getExtraInfo() const {return extraInfo;}
 	virtual ~RequestError() throw();
 protected:
 	Value extraInfo;
 
-    virtual void message(ExceptionMsg &msg) const;
+	virtual String getWhatMsg() const throw();
 
 };
 
 class DocumentHasNoID: public Exception {
 public:
-	LIGHTSPEED_EXCEPTIONFINAL;
 
-	DocumentHasNoID(const ProgramLocation &location, Value document):Exception(location),document(document) {}
+	DocumentHasNoID(Value document):document(document) {}
 	Value getDocument() const {return document;}
 protected:
 	Value document;
 
-	virtual void message(ExceptionMsg &msg) const;
+	virtual String getWhatMsg() const throw();
 
 };
 
-
-class DocumentNotEditedException: public Exception {
-public:
-	LIGHTSPEED_EXCEPTIONFINAL;
-
-	DocumentNotEditedException(const ProgramLocation &location, Value docId):Exception(location),documentId(docId) {}
-	virtual ~DocumentNotEditedException() throw() {}
-
-	const Value documentId;
-
-	static const char *msgText;
-	static const char *msgNone;
-	virtual void message(ExceptionMsg &msg) const {
-		if (documentId == null) msg(msgText) << msgNone;
-		else msg(msgText) << StrView(documentId.getString());
-	}
-
-};
 
 class UpdateException: public Exception{
 public:
@@ -75,33 +80,28 @@ public:
 	};
 
 
-	LIGHTSPEED_EXCEPTIONFINAL;
-	UpdateException(const ProgramLocation &loc, const StringCore<ErrorItem> &errors);
-	ConstStringT<ErrorItem> getErrors() const;
-	const ErrorItem &getError(natural index) const;
-	natural getErrorCnt() const;
-
-	static const char *msgText;
-
+	UpdateException(const StringView<ErrorItem> &errors);
+	UpdateException(std::vector<ErrorItem> &&errors);
+	StringView<ErrorItem> getErrors() const;
+	const ErrorItem &getError(std::size_t index) const;
+	std::size_t getErrorCnt() const;
 
 protected:
-	StringCore<ErrorItem> errors;
+	std::vector<ErrorItem> errors;
 
-	void message(ExceptionMsg &msg) const;
+	virtual String getWhatMsg() const throw();
 };
 
 class CanceledException: public Exception{
 public:
 
-	LIGHTSPEED_EXCEPTIONFINAL;
-	CanceledException(const ProgramLocation &loc):Exception(loc) {}
-
-	static const char *msgText;
+	CanceledException() {}
 
 
 protected:
 
-	void message(ExceptionMsg &msg) const;
+	virtual String getWhatMsg() const throw();
+
 };
 
 

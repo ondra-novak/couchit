@@ -11,7 +11,6 @@
 
 namespace LightCouch {
 
-using namespace LightSpeed;
 
 class ReducedRow {
 public:

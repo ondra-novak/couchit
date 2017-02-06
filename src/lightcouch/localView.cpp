@@ -5,16 +5,11 @@
  *      Author: ondra
  */
 
-#include "lightspeed/base/containers/map.tcc"
 #include "localView.h"
 
-#include <lightspeed/base/constructor.h>
-#include <lightspeed/base/streams/utf.h>
 #include "collation.h"
 #include "couchDB.h"
 
-#include "lightspeed/base/containers/autoArray.tcc"
-#include "lightspeed/base/actions/promise.tcc"
 #include "json.h"
 #include "queryServerIfc.h"
 
@@ -53,7 +48,7 @@ LocalView::LocalView():queryable(*this),includeDocs(false),linkedView(&allDocVie
 
 
 
-LocalView::LocalView(natural flags)
+LocalView::LocalView(std::size_t flags)
 	:queryable(*this)
 	,includeDocs((flags & View::includeDocs) != 0)
 	,linkedView(&allDocView)
@@ -61,7 +56,7 @@ LocalView::LocalView(natural flags)
 
 }
 
-LocalView::LocalView(AbstractViewBase *view, natural flags)
+LocalView::LocalView(AbstractViewBase *view, std::size_t flags)
 	:queryable(*this)
 	,includeDocs((flags & View::includeDocs) != 0)
 	,linkedView(view)
@@ -225,43 +220,43 @@ void LocalView::addDocLk(const String &docId, const Value &doc, const Value& key
 
 
 
-CompareResult LocalView::KeyAndDocId::compare(const KeyAndDocId& other) const {
-	CompareResult c = compareJson(key,other.key);
-	if (c == cmpResultEqual) {
+int LocalView::KeyAndDocId::compare(const KeyAndDocId& other) const {
+	int c = compareJson(key,other.key);
+	if (c == 0) {
 		return compareStringsUnicode(docId,other.docId);
 	} else {
 		return c;
 	}
 }
 
-Value LocalView::searchKeys(const Value &keys, natural groupLevel) const {
+Value LocalView::searchKeys(const Value &keys, std::size_t groupLevel) const {
 
 	Shared _(lock);
 
-	AutoArray<RowWithKey, SmallAlloc<128> > group;
+	std::vector<RowWithKey> group;
 
 	if (groupLevel == 0) {
 		for (auto &&key : keys) {
 			for (auto &kv : iterRange(keyToValueMap.lower_bound(KeyAndDocId(key, Query::minString)),
 						   keyToValueMap.upper_bound(KeyAndDocId(key, Query::maxString)))) {
 
-				group.add(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
+				group.push_back(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
 			}
 		}
 		return Object("rows",Array().add(
 					Object("key",nullptr)
-			      	  ("value",reduce(StringView<RowWithKey>(group.data(),group.length())))
+			      	  ("value",reduce(StringView<RowWithKey>(group.data(),group.size())))
 				));
-	} else if (groupLevel != naturalNull) {
+	} else if (groupLevel != ((std::size_t)-1)) {
 		Array rows;
 		for (auto &&key : keys) {
 			for (auto &kv : iterRange(keyToValueMap.lower_bound(KeyAndDocId(key, Query::minString)),
 						   keyToValueMap.upper_bound(KeyAndDocId(key, Query::maxString)))) {
 
-				group.add(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
+				group.push_back(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
 			}
 			rows.add(Object("key",key)
-						("value",reduce(StringView<RowWithKey>(group.data(),group.length()))));
+						("value",reduce(StringView<RowWithKey>(group.data(),group.size()))));
 			group.clear();
 		}
 		return Object("rows",rows);
@@ -283,12 +278,12 @@ Value LocalView::searchKeys(const Value &keys, natural groupLevel) const {
 
 }
 
-Query LocalView::createQuery(natural viewFlags) const {
+Query LocalView::createQuery(std::size_t viewFlags) const {
 	View v(String(),viewFlags);
 	return Query(v, queryable);
 }
 
-Query LocalView::createQuery(natural viewFlags, PostProcessFn fn) const {
+Query LocalView::createQuery(std::size_t viewFlags, PostProcessFn fn) const {
 	View v(String(),viewFlags,fn);
 	return Query(v, queryable);
 }
@@ -297,27 +292,27 @@ Query LocalView::createQuery(natural viewFlags, PostProcessFn fn) const {
 static bool canGroupKeys(const Value &subj, const Value &sliced) {
 	if (!sliced.defined()) return false;
 	if (subj.type() == json::array) {
-		natural cnt = subj.size();
+		std::size_t cnt = subj.size();
 		if (cnt >= sliced.size()) {
 			cnt = sliced.size();
 		} else {
 			return false;
 		}
 
-		for (natural i = 0; i < cnt; i++) {
-			if (compareJson(subj[i],sliced[i]) != cmpResultEqual) return false;
+		for (std::size_t i = 0; i < cnt; i++) {
+			if (compareJson(subj[i],sliced[i]) != 0) return false;
 		}
 		return true;
 	} else {
-		return compareJson(subj,sliced) == cmpResultEqual;
+		return compareJson(subj,sliced) == 0;
 	}
 }
 
-static Value sliceKey(const Value &key, natural groupLevel) {
+static Value sliceKey(const Value &key, std::size_t groupLevel) {
 	if (key.type() == json::array) {
 		if (key.size() <= groupLevel) return key;
 		Array out;
-		for (natural i = 0; i < groupLevel; i++)
+		for (std::size_t i = 0; i < groupLevel; i++)
 			out.add(key[i]);
 		return out;
 	} else {
@@ -357,16 +352,16 @@ ReversedIterator<T> reversedIterator(T &&iter) {
 }
 
 template<typename R>
-Value LocalView::searchRange2(R &&range, natural groupLevel, natural offset, natural limit) const {
+Value LocalView::searchRange2(R &&range, std::size_t groupLevel, std::size_t offset, std::size_t limit) const {
 
-	natural totalLimit = limit+offset<offset?naturalNull:limit+offset;
+	std::size_t totalLimit = limit+offset<offset?((std::size_t)-1):limit+offset;
 
-	natural p = 0;
+	std::size_t p = 0;
 	Array rows;
 
 
 	//no grouping - perform standard iteration
-	if (groupLevel == naturalNull) {
+	if (groupLevel == ((std::size_t)-1)) {
 		//process range
 		for (auto &&kv : range) {
 			//if reached totalLimit, exit iteration
@@ -387,7 +382,7 @@ Value LocalView::searchRange2(R &&range, natural groupLevel, natural offset, nat
 				("total_rows",keyToValueMap.size());
 	} else {
 		//grouping active, prepare empty group
-		AutoArray<RowWithKey, SmallAlloc<32> > group;
+		std::vector<RowWithKey> group;
 		//prepare grouping key
 		Value grKey;
 		//iterator rows
@@ -401,8 +396,8 @@ Value LocalView::searchRange2(R &&range, natural groupLevel, natural offset, nat
 					//skip if offset is not reached
 					if (p >= offset) {
 						//add row after running reduce
-						rows.add(Object("key",grKey)
-								("value",reduce(StringView<RowWithKey>(group.data(),group.length()))));
+						rows.push_back(Object("key",grKey)
+								("value",reduce(StringView<RowWithKey>(group.data(),group.size()))));
 					}
 					//clear the group
 					group.clear();
@@ -413,13 +408,13 @@ Value LocalView::searchRange2(R &&range, natural groupLevel, natural offset, nat
 				grKey = sliceKey(kv.first.key, groupLevel);
 			}
 			//add item to group
-			group.add(RowWithKey(kv.first.docId,kv.first.key, kv.second.value));
+			group.push_back(RowWithKey(kv.first.docId,kv.first.key, kv.second.value));
 		}
 		//finalize last group
 		//when we are in limit, when group is not empty and when offset was reached
 		if (p < totalLimit && !group.empty() && p >= offset) {
 			rows.add(Object("key",grKey)
-					("value",reduce(StringView<RowWithKey>(group.data(),group.length()))));
+					("value",reduce(StringView<RowWithKey>(group.data(),group.size()))));
 		}
 		//finalise result
 		return Object("rows",rows);
@@ -428,7 +423,7 @@ Value LocalView::searchRange2(R &&range, natural groupLevel, natural offset, nat
 
 
 Value LocalView::searchRange(const Value &startKey, const Value &endKey,
-natural groupLevel, bool descending, natural offset, natural limit,
+std::size_t groupLevel, bool descending, std::size_t offset, std::size_t limit,
 bool excludeEnd) const {
 
 	Shared _(lock);
@@ -439,7 +434,7 @@ bool excludeEnd) const {
 
 	KeyAndDocId start(startKey,startDoc);
 	KeyAndDocId end(endKey,endDoc);
-	if (start > end) {
+	if (start.compare(end) > 0) {
 		return Object("rows",json::array)
 				("total_rows",keyToValueMap.size());
 	}
@@ -487,7 +482,7 @@ LocalView::Queryable::Queryable(const LocalView& lview):lview(lview) {
 Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 
 	bool descend = ((r.view.flags & View::reverseOrder) != 0) != r.reversedOrder;
-	natural groupLevel;
+	std::size_t groupLevel;
 	bool reduce;
 	Value result;
 
@@ -515,7 +510,7 @@ Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 		break;
 	}
 
-	if (reduce == false) groupLevel = naturalNull;
+	if (reduce == false) groupLevel = ((std::size_t)-1);
 	switch (r.mode) {
 	case qmAllItems:
 		result = lview.searchRange(Query::minKey,Query::maxKey,groupLevel,descend,r.offset,r.limit,false);

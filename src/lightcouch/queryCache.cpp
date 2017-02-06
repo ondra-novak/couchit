@@ -7,30 +7,27 @@
 
 #include "queryCache.h"
 
-#include "lightspeed/base/sync/synchronize.h"
-#include "lightspeed/base/actions/promise.tcc"
-#include "lightspeed/base/containers/map.tcc"
 #include "fnv.h"
 
 namespace LightCouch {
 
 
-natural QueryCache::maxlru = 4;
+std::size_t QueryCache::maxlru = 4;
 
-static std::uintptr_t hashUrl(StrView url) {
+static std::uintptr_t hashUrl(StrViewA url) {
 	typedef FNV1a<sizeof(std::uintptr_t)> HashFn;
-	std::size_t sz = url.length(),pos = 0;
+	std::size_t sz = url.length,pos = 0;
 	return HashFn::hash([&]() -> int {
-		if (pos < sz) return (byte)url[pos++];
+		if (pos < sz) return (unsigned char)url[pos++];
 		else return -1;
 	});
 
 }
 
 
-QueryCache::CachedItem QueryCache::find(StrView url) {
+QueryCache::CachedItem QueryCache::find(StrViewA url) {
 
-	Synchronized<FastLock> _(lock);
+	Sync _(lock);
 
 	auto f = itemMap.find(hashUrl(url));
 	if (f == itemMap.end()) return CachedItem();
@@ -45,8 +42,8 @@ void QueryCache::clear() {
 	itemMap.clear();
 }
 
-void QueryCache::set(StrView url, const CachedItem& item) {
-	Synchronized<FastLock> _(lock);
+void QueryCache::set(StrViewA url, const CachedItem& item) {
+	Sync _(lock);
 
 	if (itemMap.size() >= maxSize) {
 		optimize();

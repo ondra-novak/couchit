@@ -9,52 +9,52 @@
 
 namespace LightCouch {
 
-RequestError::RequestError(const ProgramLocation& loc, StringA url, natural code,
-		StringA message,Value extraInfo)
-	:HttpStatusException(loc,url,code,message), extraInfo(extraInfo)
+RequestError::RequestError(const String &url, unsigned int code, const String& message, const Value &extraInfo)
+	:HttpStatusException(url,code,message), extraInfo(extraInfo)
 {
 }
 
 RequestError::~RequestError() throw () {
 }
 
-void RequestError::message(ExceptionMsg& msg) const {
+String RequestError::getWhatMsg() const throw() {
 	String details;
 	if (this->extraInfo.defined()) {
 		details = extraInfo.stringify();
 	}
-	msg("CouchDB error: url=%1, status=%2, message=%3, details=%4")
-		<< this->url
-		<< this->status
-		<< this->statusMsg
-		<< convStr(details);
+	std::ostringstream buff;
+	buff << "CouchDB error: url=" << url << ", status=" << code << ", message=" << message << ", details=" << details;
+	return String(buff.str());
 }
 
 
-UpdateException::UpdateException(
-		const ProgramLocation& loc, const StringCore<ErrorItem>& errors)
-
-	:Exception(loc),errors(errors)
+UpdateException::UpdateException(const StringView<ErrorItem> &errors)
 {
+	this->errors.reserve(errors.length);
+	for (auto &&x : errors) this->errors.push_back(x);
+}
+UpdateException::UpdateException(std::vector<ErrorItem> &&errors)
+	:errors(std::move(errors))
+{
+
 }
 
-ConstStringT<UpdateException::ErrorItem> UpdateException::getErrors() const {
+StringView<UpdateException::ErrorItem>  UpdateException::getErrors() const {
 	return errors;
 }
 
-void UpdateException::message(ExceptionMsg& msg) const {
-	msg(msgText) << errors.length();
+String UpdateException::getWhatMsg() const throw() {
+	std::ostringstream buff;
+	for (auto x : errors) {
+		buff << "Update error '" << x.errorType << "' for document '" << x.document["_id"].getString() << "'. ";
+	}
+	return String(buff.str());
 }
 
 
-void LightCouch::CanceledException::message(ExceptionMsg& msg) const {
-	msg(msgText);
+String CanceledException::getWhatMsg() const throw() {
+	return "Operation has been canceled.";
 }
-
-const char *DocumentNotEditedException::msgText = "Document %1 is not edited. You have to call edit() first";
-const char *DocumentNotEditedException::msgNone = "<n/a>";
-const char *UpdateException::msgText = "Update exception - some items was not written: %1";
-const char *CanceledException::msgText = "Operation has been canceled";
 
 
 bool UpdateException::ErrorItem::isConflict() const {
@@ -62,18 +62,34 @@ bool UpdateException::ErrorItem::isConflict() const {
 }
 
 
-const UpdateException::ErrorItem& UpdateException::getError(natural index) const {
+const UpdateException::ErrorItem& UpdateException::getError(std::size_t index) const {
 	return errors[index];
 }
 
-natural UpdateException::getErrorCnt() const {
-	return errors.length();
+std::size_t UpdateException::getErrorCnt() const {
+	return errors.size();
 }
 
-void DocumentHasNoID::message(ExceptionMsg& msg) const {
-	msg("Document has no id: %1") << convStr(document.toString());
+String DocumentHasNoID::getWhatMsg() const throw() {
+	return String({"Document has no id: ", document.toString()});
 }
 
 
+const char* Exception::what() const throw () {
+	if (whatMsg.empty()) {
+		whatMsg = getWhatMsg();
+	}
+	return whatMsg.c_str();
 }
 
+HttpStatusException::HttpStatusException(const String& url, unsigned int code, const String& message)
+	:code(code),url(url),message(message)
+{
+}
+
+String HttpStatusException::getWhatMsg() const throw () {
+	std::ostringstream buff;
+	buff << "Unexpected HTTP status: url=" << url << ", status=" << code << ", message=" << message << ".";
+}
+
+}

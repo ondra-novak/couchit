@@ -8,13 +8,10 @@
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_VIEW_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_VIEW_H_
 #include <functional>
-#include <lightspeed/base/types.h>
-#include <lightspeed/base/containers/string.h>
 #include "json.h"
 
 namespace LightCouch {
 
-using namespace LightSpeed;
 class CouchDB;
 
 ///Uses to configure the query
@@ -30,31 +27,31 @@ public:
 
 	///always include documents to the view's results
 	/** If view refers to the list, then documents are processed by the list, not returned */
-	static const natural includeDocs=0x01;
+	static const std::size_t includeDocs=0x01;
 	///Perform reduce (default value is not to perform reduce)
-	static const natural reduce=0x02;
+	static const std::size_t reduce=0x02;
 	///Controls whether the endkey is excluded in the result. Default is false
-	static const natural exludeEnd=0x04;
+	static const std::size_t exludeEnd=0x04;
 	///Disable caching for this view
-	static const natural noCache=0x04;
+	static const std::size_t noCache=0x04;
 	///never update the view
-	static const natural stale=0x10;
+	static const std::size_t stale=0x10;
 	///update view after values are returned
-	static const natural updateAfter=0x20;
+	static const std::size_t updateAfter=0x20;
 	///include update seq
-	static const natural updateSeq = 0x40;
+	static const std::size_t updateSeq = 0x40;
 	///include attachments to the result (before list is processed)
-	static const natural attachments = 0x80;
+	static const std::size_t attachments = 0x80;
 	///include attachment encoding info
-	static const natural attEncodingInfo = 0x100;
+	static const std::size_t attEncodingInfo = 0x100;
 	///include conflicts, requires includeDocs
-	static const natural conflicts = 0x200;
+	static const std::size_t conflicts = 0x200;
 	///reverse ordering
 	/**reverses order, so result will be returned in reversed order. Note that
 	 * if order is reserver in the View and also in the Query, original order is
 	 * returned
 	 */
-	static const natural reverseOrder = 0x400;
+	static const std::size_t reverseOrder = 0x400;
 
 	///specify group level
 	/** Use this flag and multiply it by selected group level. You have to turn on reduce
@@ -64,9 +61,9 @@ public:
 	 * the behaviour of couchDb
 	 *
 	 *  */
-	static const natural     groupLevel=0x01000000;
+	static const std::size_t     groupLevel=0x01000000;
 	///Masks groupLevel, maximum 255 levels
-	static const natural groupLevelMask=0xFF000000;
+	static const std::size_t groupLevelMask=0xFF000000;
 
 	///Function called to postprocess to view
 	/**
@@ -89,7 +86,7 @@ public:
      * @param flags various flags
      * @param args additional arguments preconfigured for this view
      */
-	View(String viewPath, natural flags, Value args = Value());
+	View(String viewPath, std::size_t flags, Value args = Value());
 
 	///Declare more specific view
 	/**
@@ -99,10 +96,10 @@ public:
 	 * not cached. If you need to cache results, use Lists on the server side instead
 	 * @param args additional arguments passed to list-function on the couchDb. It must be Object
 	 */
-	View(String viewPath, natural flags, const Postprocessing &ppfunction, Value args = Value() );
+	View(String viewPath, std::size_t flags, const Postprocessing &ppfunction, Value args = Value() );
 
 	const String viewPath;
-	const natural flags;
+	const std::size_t flags;
 	const Value args;
 	Postprocessing postprocess;
 };
@@ -120,7 +117,7 @@ public:
 	 * @param flags some flags to define additional behaviour
 	 * @param args optional arguments passed to the filter
 	 */
-	Filter(String filter, natural flags, Value args = Value()  );
+	Filter(String filter, std::size_t flags, Value args = Value()  );
 	///Declare filter using the view
 	/**
 	 * @param view view that will be used to filter results
@@ -134,7 +131,7 @@ public:
 	///Declare filter without flags (convert string name of the filter to the filter definition)
 	Filter(String filter);
 	///return all current revisions, including deleted
-	static const natural allRevs = 0x10000;
+	static const std::size_t allRevs = 0x10000;
 
 
 };

@@ -7,20 +7,18 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_ATTACHMENT_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_ATTACHMENT_H_
-#include "lightspeed/base/containers/string.h"
 
 #include "string.h"
 
 #include "json.h"
 namespace LightCouch {
 
-using namespace LightSpeed;
 
 ///Contains attachment data as reference
 /** use this class to refer some binary data (with proper content type). Data
  * are not stored with the object, you must not destroy referred objects
  */
-class AttachmentDataRef: public ConstBin {
+class AttachmentDataRef: public BinaryView {
 public:
 	///Constructor
 	/**
@@ -28,9 +26,9 @@ public:
 	 * @param data reference to binary data
 	 * @param contenType content type
 	 */
-	AttachmentDataRef(const ConstBin data, const StrView &contentType)
-		:ConstBin(data),contentType(contentType) {}
-	const StrView contentType;
+	AttachmentDataRef(const BinaryView data, const StrViewA &contentType)
+		:BinaryView(data),contentType(contentType) {}
+	const StrViewA contentType;
 
 	///Converts data to base64 string.
 	String toBase64() const;
@@ -55,8 +53,8 @@ public:
 	 * @param data binary data
 	 * @param contentType content type
 	 */
-	AttachmentData(const StringB &data, const String &contentType)
-		:AttachmentDataRef(data,StrView(contentType)),bindata(data),ctx(contentType) {}
+	AttachmentData(const String &data, const String &contentType)
+		:AttachmentDataRef(BinaryView(StrViewA(data)),StrViewA(contentType)),bindata(data),ctx(contentType) {}
 	///Constructor from JSON value
 	/**
 	 * @param attachment value contains attachment from a document. It required that
@@ -74,10 +72,10 @@ public:
 	 * @param contentType contenr type
 	 * @return attachment object
 	 */
-	static AttachmentData fromBase64(const StrView &base64, const StrView &contentType);
+	static AttachmentData fromBase64(const StrViewA &base64, const StrViewA &contentType);
 
 private:
-	StringB bindata;
+	String bindata;
 	String ctx;
 };
 

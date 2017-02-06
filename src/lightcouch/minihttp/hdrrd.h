@@ -29,8 +29,8 @@ protected:
 	std::vector<char> linebuff;
 
 
-	StrView readLine();
-	StrView crop(const StrView &str);
+	StrViewA readLine();
+	StrViewA crop(const StrViewA &str);
 
 
 };
@@ -42,18 +42,18 @@ inline json::Value LightCouch::HeaderRead<Fn>::parseHeaders() {
 	json::Object collect;
 	bool stline = false;
 	do {
-		StrView line = crop(readLine());
+		StrViewA line = crop(readLine());
 		if (line.empty()) {
 			if (stline) break;
 			else continue;
 		}
 
-		natural pos = line.find(':');
-		if (pos != naturalNull) {
-			StrView field = line.substr(0,pos);
-			StrView value = line.substr(pos+1);
-			StrView cfield = crop(field);
-			StrView cvalue = crop(value);
+		std::size_t pos = line.find(':');
+		if (pos != ((std::size_t)-1)) {
+			StrViewA field = line.substr(0,pos);
+			StrViewA value = line.substr(pos+1);
+			StrViewA cfield = crop(field);
+			StrViewA cvalue = crop(value);
 			collect.set(cfield,cvalue);
 		} else if (line.substr(0,6) == "HTTP/1" && !stline) {
 				stline = true;
@@ -85,20 +85,20 @@ inline json::Value LightCouch::HeaderRead<Fn>::parseHeaders() {
 }
 
 template<typename Fn>
-inline StrView HeaderRead<Fn>::readLine() {
+inline StrViewA HeaderRead<Fn>::readLine() {
 	linebuff.clear();
 	int i = input();
 	while (i != -1) {
 		linebuff.push_back((char)i);
-		StrView l(linebuff);
-		if (StrView(l.tail(2)) == StrView("\r\n")) return l.crop(0,2);
+		StrViewA l(linebuff);
+		if (StrViewA(l.tail(2)) == StrViewA("\r\n")) return l.crop(0,2);
 		i = input();
 	}
-	return StrView("EOF");
+	return StrViewA("EOF");
 }
 
 template<typename Fn>
-inline StrView HeaderRead<Fn>::crop(const StrView &str) {
+inline StrViewA HeaderRead<Fn>::crop(const StrViewA &str) {
 	std::size_t p1 = 0;
 	while (p1<str.length() && isspace(str[p1])) p1++;
 	std::size_t p2 = str.length();

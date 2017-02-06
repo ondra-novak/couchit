@@ -46,34 +46,22 @@ struct Config {
 	 * ETags will be used to determine, whether cache will be used. Using cache
 	 * can reduce time by skipping data transfering and parsing
 	 */
-	Pointer<QueryCache> cache;
+	QueryCache *cache = nullptr;
 	///Pointer to object validator
 	/** Everytime anything is being put into database, validator is called. Failed
 	 * validation is thrown as exception.
 	 */
-	Pointer<Validator> validator;
+	Validator *validator = nullptr;
 
 	///Pointer to function that is responsible toUID generation
 	/** Pointer can be NULL, then default UID generator is used - See: DefaultUIDGen; */
-	Pointer<IIDGen> uidgen;
-
-	///Define provider for https.
-	/** Standard http client has disabled https unless you specify https provider. You
-	 * can use SimpleHttps::getInstance from the library "jsonrpcserver". However you will
-	 * need to link along with libssl
-	 */
-	Pointer<BredyHttpClient::IHttpsProvider> httpsProvider;
-
-	////Define provider for proxies
-	/** Use only if you need to communicate through the proxy. Otherwise you can leave undefined.
-	 */
-	Pointer<BredyHttpClient::IHttpProxyProvider> proxyProvider;
+	IIDGen *uidgen = nullptr;
 
 	///Defines I/O timeout. Default value is 30 seconds.
 	/** I/O timeout is applied only for standard requests. It is not applied on pooling through
 	 * function CouchDB::listenChanges(). That function defines temporarily own timeout.
 	 */
-	Optional<natural> iotimeout;
+	std::size_t iotimeout = 30000;
 
 };
 

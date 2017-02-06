@@ -11,8 +11,8 @@ public:
 	Query(const View &view, IQueryableObject &qau);
 
 
-	static const natural docIdFromGetKey = 1;
-	static const natural excludeEnd = 2;
+	static const std::size_t docIdFromGetKey = 1;
+	static const std::size_t excludeEnd = 2;
 
 	///Select single key
 	/**
@@ -43,9 +43,9 @@ public:
 	 *
 	 * @return
 	 */
-	Query &range(const Value &from, const Value &to, natural flags = 0);
+	Query &range(const Value &from, const Value &to, std::size_t flags = 0);
 
-	Query &range(const Value &from, const StrView &fromDoc, const Value &to, const StrView &toDoc, bool exclusiveEnd = false);
+	Query &range(const Value &from, const StrViewA &fromDoc, const Value &to, const StrViewA &toDoc, bool exclusiveEnd = false);
 
 
 	///Defines ranged search as prefix
@@ -64,11 +64,11 @@ public:
 	 */
 	Query &prefixString(const Value &v);
 	///Change offset (default is 0)
-	Query &offset(natural offset);
+	Query &offset(std::size_t offset);
 	///Change limit (default is unlimited)
-	Query &limit(natural limit);
+	Query &limit(std::size_t limit);
 	///Append argument to postprocessing
-	Query &arg(const StrView &argname, const 	Value &value);
+	Query &arg(const StrViewA &argname, const 	Value &value);
 	///Reverse order
 	/** The view can be declared with already reversed order. In this
 	 * case the function reverses already reversed order which results to
@@ -82,7 +82,7 @@ public:
 	///reduce per key (duplicated keys will be reduced)
 	Query &group();
 	///reduce per if duplicated keys up to count of columns (levels)
-	Query &groupLevel(natural level);
+	Query &groupLevel(std::size_t level);
 	///Disables default ordering
 	/** Result may be unordered */
 	Query &nosort();
@@ -116,8 +116,8 @@ public:
 
 	Result(const Value &result);
 
-	natural getTotal() const {return total;}
-	natural getOffset() const {return offset;}
+	std::size_t getTotal() const {return total;}
+	std::size_t getOffset() const {return offset;}
 
 	///Join operation will use only first row of the dependent result (skipping additional rows returned)
 	/** Due to nature of CouchDB's view, the first row is also minimal row in order of CouchDB's collation
@@ -125,21 +125,21 @@ public:
 	 * @note this option is default if not specified any other option
 	 *
 	 * */
-	static const natural joinFirstRow = 0;
+	static const std::size_t joinFirstRow = 0;
 	///Join operation will use last row of the dependent result (previous rows skipped)
 	/** Due to nature of CouchDB's view, the first row is also minimal row in order of CouchDB's collation
 	 *
 	 * @note this option supresses joinFirstRow
 	 *
 	 * */
-	static const natural joinLastRow = 1;
+	static const std::size_t joinLastRow = 1;
 	///Join operation will put all rows to the result
 	/** Note that this flag switches to use arrays. Instead direct value, there will be always array (even
 	 * if there is one result)
 	 *
 	 * @note this option suppresses joinFirstRow and joinLastRow
 	 */
-	static const natural joinAllRows = 2;
+	static const std::size_t joinAllRows = 2;
 	///Join operation will include rows which missing in dependant result
 	/** These such rows will be copied directly from the source result without modification. So the
 	 * target field is undefined there.
@@ -148,17 +148,17 @@ public:
 	 */
 
 
-	static const natural joinMissingRows= 4;
+	static const std::size_t joinMissingRows= 4;
 
 
 	///Exclusive join
 	/** From original result removes all rows which exists on dependant result, regardless on how many are there.
 	 * This flags automatically turn on joinMissingRows
 	 */
-	static const natural joinExclude = 3 | joinMissingRows;
+	static const std::size_t joinExclude = 3 | joinMissingRows;
 
 	template<typename BindFn>
-	Value join(Query &q, const StrView & name, natural flags, BindFn bindFn);
+	Value join(Query &q, const StrViewA & name, std::size_t flags, BindFn bindFn);
 
 	class Iterator: public json::ValueIterator {
 	public:
@@ -176,10 +176,10 @@ public:
 
 protected:
 
-	natural total;
-	natural offset;
-	natural pos;
-	natural cnt;
+	std::size_t total;
+	std::size_t offset;
+	std::size_t pos;
+	std::size_t cnt;
 
 };
 

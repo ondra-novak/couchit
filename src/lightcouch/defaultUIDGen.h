@@ -8,11 +8,9 @@
 #ifndef LIGHTCOUCH_DEFAULTUIDGEN_H_
 #define LIGHTCOUCH_DEFAULTUIDGEN_H_
 
-#include <lightspeed/base/streams/random.h>
-#include <lightspeed/mt/fastlock.h>
+#include <random>
 #include "iidgen.h"
 
-using LightSpeed::Rand;
 
 namespace LightCouch {
 
@@ -42,7 +40,7 @@ namespace LightCouch {
 class DefaultUIDGen: public IIDGen {
 public:
 	DefaultUIDGen();
-	virtual StrView operator()(AutoArray<char> &buffer, StrView prefix);
+	virtual StrViewA operator()(std::string &buffer, StrViewA prefix);
 
 	///Generates UID statically
 	/**
@@ -55,19 +53,19 @@ public:
 	 *   match requested length. It requires to have randomGen not null
 	 * @return result is string reference to the buffer
 	 */
-	static StrView generateUID(AutoArray<char> &buffer,
-			StrView prefix,
-			natural timeparam, natural counterparam,
-			Rand *randomGen, natural totalCount=20);
+	static StrViewA generateUID(std::string &buffer,
+			StrViewA prefix,
+			std::size_t timeparam, std::size_t counterparam,
+			std::random_device *randomGen, std::size_t totalCount=20);
 
 	static DefaultUIDGen &getInstance();
 
-	virtual String operator()(StrView prefix);
+	virtual String operator()(StrViewA prefix);
 
 protected:
-	natural counter;
-	Rand rgn;
-	FastLock lock;
+	std::size_t counter;
+	std::random_device rgn;
+	std::mutex lock;
 
 
 

@@ -115,7 +115,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 		Value rev = item["rev"];
 		Value err = item["error"];
 		String id (item["id"]);
-		StrView orgId = (*siter)["_id"].getString();
+		StrViewA orgId = (*siter)["_id"].getString();
 		if (orgId != id) {
 			UpdateException::ErrorItem e;
 
@@ -149,7 +149,7 @@ Changeset::Changeset(const Changeset& other):db(other.db) {
 }
 
 
-void Changeset::revert(const StrView &docId) {
+void Changeset::revert(const StrViewA &docId) {
 	auto iter = scheduledDocs.rbegin();
 	while (iter != scheduledDocs.rend()) {
 		if (iter->id == docId) {
@@ -180,7 +180,7 @@ Changeset& Changeset::erase(const String &docId, const String &revId) {
 	return *this;
 }
 
-String Changeset::getCommitRev(const StrView& docId) const {
+String Changeset::getCommitRev(const StrViewA& docId) const {
 
 
 	auto f = std::lower_bound(commitedDocs.begin(), commitedDocs.end(), CommitedDoc(docId,String(),Value()),docOrder<CommitedDoc>);

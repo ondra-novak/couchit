@@ -19,7 +19,7 @@ class HttpClient {
 public:
 
 	HttpClient();
-	HttpClient(StrView userAgent);
+	HttpClient(StrViewA userAgent);
 
 	///Opens http connection
 	/**
@@ -35,7 +35,7 @@ public:
 	 * @return reference to this object that allows to make chains
 	 *
 	 */
-	HttpClient &open(StrView url, StrView method, bool keepAlive = true);
+	HttpClient &open(StrViewA url, StrViewA method, bool keepAlive = true);
 
 	///Sets cancel function for the current request
 	void setCancelFunction(const CancelFunction &cancelFn);
@@ -90,7 +90,7 @@ public:
 	 *
 	 * @note if the body has been started by beginBody(), the function ignores the argument
 	 */
-	int send(const StrView &body);
+	int send(const StrViewA &body);
 	///Sends the request with the prepared body
 	/**
 	 * @param body pointer to binary body
@@ -172,8 +172,8 @@ protected:
 
 
 	virtual void connectTarget();
-	virtual json::String crackURL(StrView urlWithoutProtocol);
-	virtual json::String custromPotocol(StrView url);
+	virtual json::String crackURL(StrViewA urlWithoutProtocol);
+	virtual json::String custromPotocol(StrViewA url);
 
 	void initConnection();
 

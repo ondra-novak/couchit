@@ -7,8 +7,6 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_DOCUMENT_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_DOCUMENT_H_
-#include "lightspeed/base/containers/constStr.h"
-#include "lightspeed/base/containers/autoArray.h"
 
 #include "json.h"
 
@@ -17,7 +15,6 @@ namespace LightCouch {
 
 class AttachmentDataRef;
 
-using namespace LightSpeed;
 
 ///Contains document fetched from couchdb, it also handles editing
 /** By default, this is extension of ConstValue, however, you can change it.
@@ -39,22 +36,22 @@ public:
 	 * @param id id of document
 	 * @param rev revision. It can be empty for new document
 	 */
-	Document(const StrView &id, const StrView &rev);
+	Document(const StrViewA &id, const StrViewA &rev);
 
 
 	///Retrieves current document ID. Empty if missing
-	StrView getID() const;
+	StrViewA getID() const;
 	///Retrieves current document revision ID. Empty if missing
-	StrView getRev() const;
+	StrViewA getRev() const;
 
 	///Retrieves current document ID. Function returns null if missing
 	Value getIDValue() const;
 	///Retrieves current document revision ID. Function returns null if missing
 	Value getRevValue() const;
 
-	void deleteAttachment(const StrView &name);
-	void inlineAttachment(const StrView &name, const AttachmentDataRef &data);
-	Value getAttachment(const StrView &name) const;
+	void deleteAttachment(const StrViewA &name);
+	void inlineAttachment(const StrViewA &name, const AttachmentDataRef &data);
+	Value getAttachment(const StrViewA &name) const;
 
 
 
@@ -79,7 +76,7 @@ public:
 	 * old the deleted document is. You can also let the replication to skip very old deleted
 	 * documents so it is safe to purge them.
 	 */
-	void setDeleted(StringView<StrView> fieldsToKept = StringView<StrView>(), bool timestamp=true);
+	void setDeleted(StringView<StrViewA> fieldsToKept = StringView<StrViewA>(), bool timestamp=true);
 
 	///Enables timestamping of changes
 	/** Document with timestamps carries field, which contains timestamp of last update. Once this is
@@ -158,14 +155,6 @@ protected:
 
 };
 
-
-
-
-class Conflicts: public  AutoArray<Document> {
-public:
-
-
-};
 
 } /* namespace LightCouch */
 

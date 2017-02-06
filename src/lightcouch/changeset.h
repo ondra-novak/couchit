@@ -7,8 +7,6 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
-#include <lightspeed/base/containers/constStr.h>
-#include <lightspeed/base/exceptions/exception.h>
 #include "couchDB.h"
 
 
@@ -84,7 +82,7 @@ public:
 
 
 	///Retrieves revision of the committed document
-	String getCommitRev(const StrView &docId) const;
+	String getCommitRev(const StrViewA &docId) const;
 
 	///Retrieves revision of the commited document
 	String getCommitRev(const Document &doc) const;
@@ -95,11 +93,11 @@ public:
 	 * @return updated document. Document has updated "_rev", so it can be modified and updated again without re-downloading it.
 	 *
 	 */
-	Document getUpdatedDoc(const StrView &docId) const;
+	Document getUpdatedDoc(const StrViewA &docId) const;
 
 	///Revets changes made in document docId
 	/** Removes document from the changeset */
-	void revert(const StrView &docId);
+	void revert(const StrViewA &docId);
 
 	///Marks current state of changeset
 	/**
@@ -135,11 +133,11 @@ public:
 
 
 	struct ScheduledDoc {
-		StrView id;
+		StrViewA id;
 		Value data;
 		Value conflicts;
 
-		ScheduledDoc(const StrView &id, const Value &data, const Value &conflicts)
+		ScheduledDoc(const StrViewA &id, const Value &data, const Value &conflicts)
 			:id(id),data(data),conflicts(conflicts) {}
 		ScheduledDoc() {}
 	};
@@ -148,11 +146,11 @@ public:
 
 
 	struct CommitedDoc {
-		StrView id;
+		StrViewA id;
 		String newRev;
 		Value doc;
 
-		CommitedDoc(const StrView &id, const String &newRev, const Value &doc)
+		CommitedDoc(const StrViewA &id, const String &newRev, const Value &doc)
 			:id(id),newRev(newRev),doc(doc) {}
 
 		operator Document() const;

@@ -56,7 +56,7 @@ public:
 	 *
 	 * @return version. Value is considered static, it should not change over time.
 	 */
-	virtual natural version() const = 0;
+	virtual std::size_t version() const = 0;
 
 	virtual ~QueryServerHandler() {}
 
@@ -128,10 +128,10 @@ public:
  *
  */
 
-template<natural ver>
+template<std::size_t ver>
 class AbstractView: public AbstractViewBase {
 public:
-	virtual natural version() const override {return ver;}
+	virtual std::size_t version() const override {return ver;}
 };
 
 
@@ -143,7 +143,7 @@ public:
  *        rmNone which is implemented in class AbstractViewMapOnly. You should not use
  *        rmFunction, which is default for AbstractView itself
  */
-template<natural ver, AbstractViewBase::ReduceMode mode>
+template<std::size_t ver, AbstractViewBase::ReduceMode mode>
 class AbstractViewBuildin: public AbstractView<ver> {
 public:
 	typedef typename AbstractView<ver>::ReduceMode ReduceMode;
@@ -161,7 +161,7 @@ public:
  * to enforce reindexing of the view. However, without changing the version, the updated
  * code will apply for newly added items
  */
-template<natural ver>
+template<std::size_t ver>
 class AbstractViewMapOnly: public AbstractViewBuildin<ver, AbstractViewBase::rmNone> {
 public:
 };
@@ -181,12 +181,12 @@ public:
 	 */
 	virtual Value getRow() = 0;
 	///send text to output
-	virtual void send(StrView text) = 0;
+	virtual void send(StrViewA text) = 0;
 	///send json to output
 	virtual void send(Value jsonValue) = 0;
 	///send anything convertible to string
 	template<typename Str>
-	void send(const Str &txt) {send(StrView(txt));}
+	void send(const Str &txt) {send(StrViewA(txt));}
 	///retrieve view header
 	virtual Value getViewHeader() const = 0;
 	///Initializes output
@@ -264,40 +264,38 @@ public:
 	virtual ~AbstractFilterBase() {}
 };
 
-template<natural ver> class AbstractList: public AbstractListBase {
-	virtual natural version() const {return ver;}
+template<std::size_t ver> class AbstractList: public AbstractListBase {
+	virtual std::size_t version() const {return ver;}
 };
-template<natural ver> class AbstractShow: public AbstractShowBase {
-	virtual natural version() const {return ver;}
+template<std::size_t ver> class AbstractShow: public AbstractShowBase {
+	virtual std::size_t version() const {return ver;}
 };
-template<natural ver> class AbstractUpdateFn: public AbstractUpdateFnBase {
-	virtual natural version() const {return ver;}
+template<std::size_t ver> class AbstractUpdateFn: public AbstractUpdateFnBase {
+	virtual std::size_t version() const {return ver;}
 };
-template<natural ver> class AbstractFilter: public AbstractFilterBase {
-	virtual natural version() const {return ver;}
+template<std::size_t ver> class AbstractFilter: public AbstractFilterBase {
+	virtual std::size_t version() const {return ver;}
 };
 
 class QueryServerError: public Exception {
 public:
-	LIGHTSPEED_EXCEPTIONFINAL;
 
-	QueryServerError(const ProgramLocation &loc, StringA type, StringA explain)
-		:Exception(loc),type(type),explain(explain) {}
-	const StringA &getType() const;
-	const StringA &getExplain() const;
+	QueryServerError(const String &type, const String &explain)
+		:type(type),explain(explain) {}
+	const String &getType() const;
+	const String &getExplain() const;
 protected:
-	StringA type, explain;
-	void message(ExceptionMsg &msg) const;
-
+	String type, explain;
+	virtual String getWhatMsg() const throw();
 };
 
 class VersionMistmatch: public Exception {
 public:
-	LIGHTSPEED_EXCEPTIONFINAL;
 
-	VersionMistmatch(const ProgramLocation &loc):Exception(loc) {}
+
+	VersionMistmatch(){}
 protected:
-	void message(ExceptionMsg &msg) const;
+	virtual String getWhatMsg() const throw();
 
 };
 

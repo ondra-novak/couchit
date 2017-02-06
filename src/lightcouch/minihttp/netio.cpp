@@ -62,7 +62,7 @@ protected:
 
 };
 
-NetworkConnection* LightCouch::NetworkConnection::connect(const StrView &addr_ddot_port, int defaultPort) {
+NetworkConnection* LightCouch::NetworkConnection::connect(const StrViewA &addr_ddot_port, int defaultPort) {
 
 	using namespace LightSpeed;
 
@@ -74,8 +74,8 @@ NetworkConnection* LightCouch::NetworkConnection::connect(const StrView &addr_dd
 	struct addrinfo *res;
 
 
-	natural pos = addr_ddot_port.findLast(':');
-	if (pos != naturalNull) {
+	std::size_t pos = addr_ddot_port.findLast(':');
+	if (pos != ((std::size_t)-1)) {
 
 		json::String host = addr_ddot_port.substr(0,pos);
 		json::String service = addr_ddot_port.substr(pos+1);

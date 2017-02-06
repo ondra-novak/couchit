@@ -25,7 +25,7 @@ namespace LightCouch {
 			SeqFileOutBuff<> out(StdOutput().getStream());
 			collector.runTests(ConstStrW(),out);
 		}
-		else for (natural i = 1; i < args.length(); i++) {
+		else for (std::size_t i = 1; i < args.length(); i++) {
 			ConstStrW itm = args[i];
 			if (itm == L"list") {
 				StringA lst = collector.listTests();

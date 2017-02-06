@@ -14,8 +14,8 @@
 namespace LightCouch {
 
 
- CompareResult compareStringsUnicode(StrView str1, StrView str2) {
-	Utf8ToWideReader<StrView::Iterator> iter1(str1.getFwIter()), iter2(str2.getFwIter());
+ CompareResult compareStringsUnicode(StrViewA str1, StrViewA str2) {
+	Utf8ToWideReader<StrViewA::Iterator> iter1(str1.getFwIter()), iter2(str2.getFwIter());
 	iter1.enableSkipInvalidChars(true);
 	iter2.enableSkipInvalidChars(true);
 
@@ -34,7 +34,7 @@ namespace LightCouch {
 }
 
 
-CompareResult compareJson(const Value &left, const Value &right) {
+int compareJson(const Value &left, const Value &right) {
 	if (left.type() != right.type()) {
 		if (left.type()==json::null) return cmpResultLess;
 		if (left.type()==json::object) return cmpResultGreater;

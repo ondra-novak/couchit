@@ -68,12 +68,12 @@ defineTest test_serializeHeaders("couchdb.minihttp.serializeHeaders",
 	auto fn = [&](char c){out.push_back(c);};
 	HeaderWrite<decltype(fn)> writer(fn);
 	writer.serialize(hdr);
-	print("%1") << StrView(out);
+	print("%1") << StrViewA(out);
 });
 
 defineTest test_httpcReadChunked("couchdb.minihttp.readChunked", "Wikipedia in\r\n\r\nchunks.-Wikipedia in\r\n\r\nchunks.", [](PrintTextA &out) {
 
-	StrView data =
+	StrViewA data =
 		"4\r\n"
 		"Wiki\r\n"
 		"5\r\n"
@@ -118,7 +118,7 @@ defineTest test_httpcReadChunked("couchdb.minihttp.readChunked", "Wikipedia in\r
 		}
 	}
 
-	out("%1-%2") << StrView(res) << StrView(res2);
+	out("%1-%2") << StrViewA(res) << StrViewA(res2);
 
 });
 
@@ -126,7 +126,7 @@ defineTest test_writeChunked("couchdb.minihttp.writeChunked",
 		"14\r\nThis is long string \r\n14\r\nwritten in chunks...\r\n2\r\n..\r\n0\r\n\r\n",
 		[](PrintTextA &out) {
 
-	StrView source = "This is long string written in chunks.....";
+	StrViewA source = "This is long string written in chunks.....";
 	std::string res;
 	res.reserve(1000);
 
@@ -140,14 +140,14 @@ defineTest test_writeChunked("couchdb.minihttp.writeChunked",
 	for (auto &&c : source) chunks(c);
 	chunks(-1);
 
-	out("%1") << StrView(res);
+	out("%1") << StrViewA(res);
 
 });
 defineTest test_writeChunked2("couchdb.minihttp.writeChunked2",
 		"5\r\nThis \r\n13\r\nis long string writ\r\n47\r\nten in chunks..... And because it should be long enough, make it longer\r\n0\r\n\r\n",
 		[](PrintTextA &out) {
 
-	StrView source = "This is long string written in chunks..... And because it should be long enough, make it longer";
+	StrViewA source = "This is long string written in chunks..... And because it should be long enough, make it longer";
 	std::string res;
 	res.reserve(1000);
 
@@ -165,7 +165,7 @@ defineTest test_writeChunked2("couchdb.minihttp.writeChunked2",
 	chunks(data+24,source.length()-24,0);
 	chunks(0,0,0);
 
-	out("%1") << StrView(res);
+	out("%1") << StrViewA(res);
 
 });
 defineTest test_simpleGetRequest("couchdb.minihttp.getRequest","TestClient",
@@ -194,7 +194,7 @@ defineTest test_simplePostRequest("couchdb.minihttp.postRequest",
 	int status = client.send();
 	if (status == 200) {
 		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
-		out("%1") << StrView(v["data"].stringify());
+		out("%1") << StrViewA(v["data"].stringify());
 	} else {
 		out("Status: %1") << status;
 	}
@@ -213,7 +213,7 @@ defineTest test_postRequestFromString("couchdb.minihttp.postRequestFromString",
 	int status = client.send(strReq);
 	if (status == 200) {
 		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
-		out("%1") << StrView(v["data"].stringify());
+		out("%1") << StrViewA(v["data"].stringify());
 	} else {
 		out("Status: %1") << status;
 	}

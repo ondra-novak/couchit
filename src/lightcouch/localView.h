@@ -7,14 +7,11 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_LOCALVIEW_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_LOCALVIEW_H_
+#include <mutex>
 
-
-#include "lightspeed/mt/rwlock.h"
 #include "query.h"
 
-#include "lightspeed/base/compare.h"
 
-#include "lightspeed/base/actions/promise.h"
 
 #include "btree/btree_map.h"
 
@@ -55,10 +52,10 @@ public:
 	 * - View::includeDocs - the view will store whole documents. If this
 	 *     flag is not set, only ID's are stored
 	 */
-	explicit LocalView(natural flags);
+	explicit LocalView(std::size_t flags);
 
 
-	LocalView(AbstractViewBase *view, natural flags);
+	LocalView(AbstractViewBase *view, std::size_t flags);
 
 	virtual ~LocalView();
 
@@ -144,7 +141,7 @@ public:
 	 *
 	 * @return created query.
 	 */
-	Query createQuery(natural viewFlags) const;
+	Query createQuery(std::size_t viewFlags) const;
 
 	///Creates Query object to ask LocalView with list function
 	/**
@@ -158,7 +155,7 @@ public:
 	 * @note function is not compatible with function from View, because it cannot supply active
 	 *  CouchDB client. You have to supply it in function instance.
 	 */
-	Query createQuery(natural viewFlags, PostProcessFn fn) const;
+	Query createQuery(std::size_t viewFlags, PostProcessFn fn) const;
 
 
 	void clear();
@@ -169,14 +166,14 @@ protected:
 
 
 
-	struct KeyAndDocId: public Comparable<KeyAndDocId> {
+	struct KeyAndDocId {
 		Value key;
 		String docId;
 
 		KeyAndDocId() {}
 		KeyAndDocId(const Value &key,const String &docId):key(key),docId(docId) {}
 
-		CompareResult compare(const KeyAndDocId &other) const;
+		int compare(const KeyAndDocId &other) const;
 
 	};
 
@@ -243,11 +240,16 @@ protected:
 
 
 	///RW lock for MT access
-	mutable RWLock lock;
+	/* TODO: for C++11 it has been replaced by ordinary mutex. Must be improved later*/
+	mutable std::mutex lock;
 
-	typedef Synchronized<RWLock::ReadLock> Shared;
-	typedef Synchronized<RWLock::WriteLock> Exclusive;
+	typedef std::lock_guard<std::mutex> Shared;
+	typedef std::lock_guard<std::mutex> Exclusive;
 
+
+	struct CmpKeyAndDocId {
+		bool operator()(const KeyAndDocId &l, const KeyAndDocId &r) const { return l.compare(r) < 0;}
+	};
 
 
 	///Contains for each document set of keys
@@ -255,7 +257,7 @@ protected:
 	typedef btree::btree_multimap<String, Value> DocToKey;
 	///Contains keys mapped to documents
 	/** Key contains the key itself and documentId to easyly handle duplicated keys */
-	typedef btree::btree_map<KeyAndDocId, ValueAndDoc> KeyToValue;
+	typedef btree::btree_map<KeyAndDocId, ValueAndDoc, CmpKeyAndDocId> KeyToValue;
 
 	///Contains map where documendID is key and view's key is value
 	/** This helps to search all keys for selected document. The documentID string can
@@ -282,15 +284,15 @@ protected:
 	void updateDocLk(const Value &doc);
 
 
-	Value searchKeys(const Value &keys, natural groupLevel) const;
+	Value searchKeys(const Value &keys, std::size_t groupLevel) const;
 	Value searchRange(const Value &startKey, const Value &endKey,
-			natural groupLevel, bool descending, natural offset, natural limit,
+			std::size_t groupLevel, bool descending, std::size_t offset, std::size_t limit,
 			bool excludeEnd) const;
 
 
 
 	template<typename R>
-	Value searchRange2(R &&range, natural groupLevel, natural offset, natural limit) const;
+	Value searchRange2(R &&range, std::size_t groupLevel, std::size_t offset, std::size_t limit) const;
 
 	class Emitor;
 

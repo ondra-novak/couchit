@@ -3,12 +3,12 @@
 #include <imtjson/abstractValue.h>
 namespace LightCouch {
 
-const StrView maxStrView("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
+const StrViewA maxStrViewA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
 
 
 const Value Query::minKey(nullptr);
-const Value Query::maxKey(Object(maxStrView,maxStrView));
-const String Query::maxString(maxStrView);
+const Value Query::maxKey(Object(maxStrViewA,maxStrViewA));
+const String Query::maxString(maxStrViewA);
 const String Query::minString("");
 
 
@@ -38,17 +38,17 @@ Query& Query::prefixString(const Value& v) {
 	return *this;
 }
 
-Query& Query::offset(natural offset) {
+Query& Query::offset(std::size_t offset) {
 	request.offset = offset;
 	return *this;
 }
 
-Query& Query::limit(natural limit) {
+Query& Query::limit(std::size_t limit) {
 	request.limit = limit;
 	return *this;
 }
 
-Query& Query::arg(const StrView& argname, const Value& value) {
+Query& Query::arg(const StrViewA& argname, const Value& value) {
 	request.ppargs.set(argname,value);
 	return *this;
 }
@@ -73,7 +73,7 @@ Query& Query::group() {
 	return *this;
 }
 
-Query& Query::groupLevel(natural level) {
+Query& Query::groupLevel(std::size_t level) {
 	request.reduceMode = rmGroupLevel;
 	request.groupLevel = level;
 	return *this;
@@ -96,7 +96,7 @@ Query& Query::key(const Value& v) {
 	return *this;
 }
 
-Query& Query::range(const Value& from, const Value& to, natural flags) {
+Query& Query::range(const Value& from, const Value& to, std::size_t flags) {
 	request.mode = qmKeyRange;
 	request.keys.clear();
 	request.keys.add(from);
@@ -106,8 +106,8 @@ Query& Query::range(const Value& from, const Value& to, natural flags) {
 	return *this;
 }
 
-Query& Query::range(const Value& from, const StrView& fromDoc,
-		const Value& to, const StrView& toDoc, bool exclusiveEnd) {
+Query& Query::range(const Value& from, const StrViewA& fromDoc,
+		const Value& to, const StrViewA& toDoc, bool exclusiveEnd) {
 	request.mode = qmKeyRange;
 	request.keys.clear();
 	if (fromDoc.empty() && toDoc.empty()) {

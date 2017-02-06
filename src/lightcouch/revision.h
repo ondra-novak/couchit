@@ -18,13 +18,13 @@ using namespace LightSpeed;
 class Revision: public Comparable<Revision> {
 public:
 	Revision();
-	Revision(natural revId, ConstStrA tag);
+	Revision(std::size_t revId, ConstStrA tag);
 	Revision(ConstStrA revStr);
 
-	natural getRevId() const {return revId;}
+	std::size_t getRevId() const {return revId;}
 	ConstStrA getTag() const {return tag;}
 
-	static natural getRevId(ConstStrA rev);
+	static std::size_t getRevId(ConstStrA rev);
 	static ConstStrA getTag(ConstStrA rev);
 
 
@@ -34,7 +34,7 @@ public:
 	CompareResult compare(const Revision &other) const;
 
 protected:
-	natural revId;
+	std::size_t revId;
 	AutoArray<char, StaticAlloc<32> > tag;
 
 };

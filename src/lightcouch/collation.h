@@ -7,8 +7,6 @@
 
 #ifndef SRC_LIGHTCOUCH_COLLATION_H_1278AEOLBBD456800
 #define SRC_LIGHTCOUCH_COLLATION_H_1278AEOLBBD456800
-#include <lightspeed/base/containers/constStr.h>
-#include "lightspeed/base/compare.h"
 #include "json.h"
 
 
@@ -16,10 +14,9 @@
 
 namespace LightCouch {
 
-using namespace LightSpeed;
 
-CompareResult compareStringsUnicode(StrView str1, StrView str2);
-CompareResult compareJson(const Value &left, const Value &right);
+int compareStringsUnicode(StrViewA str1, StrViewA str2);
+int compareJson(const Value &left, const Value &right);
 
 struct JsonIsLess {
 	bool operator()(const Value &v1, const Value &v2) const;

@@ -8,8 +8,6 @@
 #include "document.h"
 #include "couchDB.h"
 
-#include <lightspeed/base/containers/constStr.h>
-#include "lightspeed/base/containers/autoArray.tcc"
 
 namespace LightCouch {
 
@@ -17,11 +15,11 @@ namespace LightCouch {
 Document::Document(const Value& base):json::Object(base) {
 }
 
-StrView Document::getID() const {
+StrViewA Document::getID() const {
 	return getIDValue().getString();
 }
 
-StrView Document::getRev() const {
+StrViewA Document::getRev() const {
 	return getRevValue().getString();
 }
 
@@ -60,7 +58,7 @@ void Document::setRev(const Value& rev) {
 	set("_rev",rev);
 }
 
-void Document::setDeleted(StringView<StrView> fieldsToKept, bool timestamp) {
+void Document::setDeleted(StringView<StrViewA> fieldsToKept, bool timestamp) {
 	json::Object delDoc;
 	for (auto &&fld : fieldsToKept) {
 		delDoc(fld,(*this)[fld]);
@@ -79,19 +77,19 @@ void Document::enableRevTracking() {
 }
 
 
-void Document::deleteAttachment(const StrView &name) {
+void Document::deleteAttachment(const StrViewA &name) {
 	object("_attachments").unset(name);
 }
 
-void Document::inlineAttachment(const StrView &name, const AttachmentDataRef &data) {
+void Document::inlineAttachment(const StrViewA &name, const AttachmentDataRef &data) {
 	object("_attachments").set(name,data.toInline());
 }
 
-Value Document::getAttachment(const StrView &name) const {
+Value Document::getAttachment(const StrViewA &name) const {
 	return (*this)["_attachments"][name];
 }
 
-Document::Document(const StrView& id, const StrView& rev) {
+Document::Document(const StrViewA& id, const StrViewA& rev) {
 	set("_id",id);
 	if (!rev.empty()) set("_rev",rev);
 }
@@ -109,7 +107,7 @@ Value Document::getTimestamp() const {
 }
 
 String Document::getPrevRevision() const {
-	return (*this)[CouchDB::fldPrevRevision];
+	return String((*this)[CouchDB::fldPrevRevision]);
 }
 
 bool Document::isDeleted() const {

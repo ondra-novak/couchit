@@ -15,19 +15,19 @@ View::View(String viewPath)
 {
 }
 
-View::View(String viewPath, natural flags,Value args)
+View::View(String viewPath, std::size_t flags,Value args)
 :viewPath(viewPath),flags(flags),args(args)
 
 {
 }
 
-View::View(String viewPath, natural flags,const Postprocessing &ppfunction, Value args)
+View::View(String viewPath, std::size_t flags,const Postprocessing &ppfunction, Value args)
 :viewPath(viewPath),flags(flags),args(args),postprocess(ppfunction)
 
 {
 }
 
-Filter::Filter(String filter, natural flags, Value args)
+Filter::Filter(String filter, std::size_t flags, Value args)
 	:View(filter,flags,args)
 {
 }

@@ -19,7 +19,7 @@ Validator& Validator::add(IValidationFn* fn) {
 }
 
 bool Validator::remove(IValidationFn* fn, bool destroy) {
-	for (natural i = 0, cnt = fnList.length(); i < cnt; i++) {
+	for (std::size_t i = 0, cnt = fnList.length(); i < cnt; i++) {
 		if (fnList[i].get() == fn) {
 			PValidationFn x = fnList[i];
 			fnList.erase(i);
@@ -31,7 +31,7 @@ bool Validator::remove(IValidationFn* fn, bool destroy) {
 }
 
 Validator::Result Validator::validateDoc(const Value& document) const {
-	for (natural i = 0, cnt = fnList.length(); i < cnt; i++) {
+	for (std::size_t i = 0, cnt = fnList.length(); i < cnt; i++) {
 		try {
 			if (!fnList[i]->operator ()(document)) {
 				return Result(fnList[i]->getName());

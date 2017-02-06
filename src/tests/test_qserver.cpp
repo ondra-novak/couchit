@@ -62,16 +62,16 @@ static void prepareQueryServer(QueryServer &qserver) {
 			emit({doc["age"].getUInt()/10*10,doc["age"]}, doc["height"]);
 		}
 		virtual Value reduce(const RowsWithKeys &rows) override {
-			natural sum = 0;
-			for (natural i = 0; i < rows.length; i++) {
+			std::size_t sum = 0;
+			for (std::size_t i = 0; i < rows.length; i++) {
 				sum+=rows[i].value.getUInt();
 			}
 			return Object("sum",sum)("count",rows.length);
 		}
 		virtual Value rereduce(const ReducedRows &rows) override {
-			natural count = 0;
-			natural sum = 0;
-			for (natural i = 0; i < rows.length; i++) {
+			std::size_t count = 0;
+			std::size_t sum = 0;
+			for (std::size_t i = 0; i < rows.length; i++) {
 				sum+=rows[i].value["sum"].getUInt();
 				count+=rows[i].value["count"].getUInt();
 			}
@@ -115,9 +115,9 @@ static void prepareQueryServer(QueryServer &qserver) {
 		virtual bool run(const Document &doc, Value request) {
 			if (doc.getID().substr(0,8) == "_design/") return false;
 			Value q = request["query"];
-			natural agemin = q["agemin"].getUInt();
-			natural agemax = q["agemax"].getUInt();
-			natural age = doc["age"].getUInt();
+			std::size_t agemin = q["agemin"].getUInt();
+			std::size_t agemax = q["agemax"].getUInt();
+			std::size_t age = doc["age"].getUInt();
 			return age >= agemin && age <= agemax;
 		}
 	};
@@ -175,7 +175,7 @@ static void couchLoadData(PrintTextA &print) {
 	AutoArray<Document, SmallAlloc<50> > savedDocs;
 
 	Changeset chset(db.createChangeset());
-	natural id=10000;
+	std::size_t id=10000;
 	Value data = Value::fromString(strdata);
 	for(auto &&item : data) {
 		Document doc;
@@ -191,8 +191,8 @@ static void couchLoadData(PrintTextA &print) {
 	chset.commit(false);
 	Set<String> uuidmap;
 
-	for (natural i = 0; i < savedDocs.length(); i++) {
-		StrView uuid = savedDocs[i]["_id"].getString();
+	for (std::size_t i = 0; i < savedDocs.length(); i++) {
+		StrViewA uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
 	print("%1") << uuidmap.size();

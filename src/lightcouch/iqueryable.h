@@ -67,15 +67,15 @@ struct QueryRequest {
 	///Type of search
 	QueryMode mode;
 	///offset in result
-	natural offset;
+	std::size_t offset;
 	///count of results
-	natural limit;
+	std::size_t limit;
 	///arguments passed to the postprocessing function (or server's list function)
 	Object ppargs;
 	///Specifies mode for reduce
 	ReduceMode reduceMode;
 	///for reduce mode rmGroupLevel specifies the level (otherwise ignored)
-	natural groupLevel;
+	std::size_t groupLevel;
 	///set true to reversed order
 	bool reversedOrder;
 	///set true to skip sorting the result
@@ -96,7 +96,7 @@ struct QueryRequest {
 		:view(view)
 		,mode(qmAllItems)
 		,offset(0)
-		,limit(naturalNull)
+		,limit(((std::size_t)-1))
 		,reduceMode(rmDefault)
 		,groupLevel(0)
 		,reversedOrder(false)
@@ -106,7 +106,7 @@ struct QueryRequest {
 	void reset() {
 		mode = qmAllItems;
 		offset = 0;
-		limit = naturalNull;
+		limit = ((std::size_t)-1);
 		reduceMode = rmDefault;
 		groupLevel = 0;
 		reversedOrder = false;

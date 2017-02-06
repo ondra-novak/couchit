@@ -27,7 +27,7 @@ static void genFastUUIDS(PrintTextA &print) {
 	CouchDB db(getTestCouch());
 	ConsoleA out;
 
-	for (natural i = 0; i < 50; i++) {
+	for (std::size_t i = 0; i < 50; i++) {
 		String uuid = Value(db.genUID("test-"));
 		out.print("%1\n") << convStr(uuid);
 		uuidmap.insert(uuid);

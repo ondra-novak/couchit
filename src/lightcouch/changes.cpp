@@ -30,14 +30,12 @@ Changes::Changes(Value jsonResult)
 
 }
 
-const Value& Changes::getNext() {
-	vout = rows[pos++];
-	return vout;
+Value Changes::getNext() {
+	return  rows[pos++];
 }
 
-const Value& Changes::peek() const {
-	vout = rows[pos];
-	return vout;
+Value Changes::peek() const {
+	return  rows[pos];
 
 }
 
@@ -50,7 +48,7 @@ void Changes::rewind() {
 }
 
 ChangesSink::ChangesSink(CouchDB& couchdb)
-	:couchdb(couchdb), outlimit(naturalNull),timeout(0),canceled(false)
+	:couchdb(couchdb), outlimit(((std::size_t)-1)),timeout(0),canceled(false)
 {
 }
 
@@ -59,25 +57,25 @@ ChangesSink& ChangesSink::fromSeq(const Value &seqNumber) {
 	return *this;
 }
 
-ChangesSink& ChangesSink::setTimeout(natural timeout) {
+ChangesSink& ChangesSink::setTimeout(std::size_t timeout) {
 	this->timeout = timeout;
 	return *this;
 }
 
 ChangesSink& ChangesSink::setFilter(const Filter& filter) {
-	this->filter = filter;
+	this->filter = std::unique_ptr<Filter>(new Filter(filter));
 	filterArgs.revert();
 	return *this;
 }
 
 ChangesSink& ChangesSink::unsetFilter() {
-	this->filter = null;
+	this->filter = nullptr;
 	filterArgs.revert();
 	return *this;
 }
 
 
-ChangesSink& ChangesSink::limit(natural count) {
+ChangesSink& ChangesSink::limit(std::size_t count) {
 	this->outlimit = count;
 	return *this;
 }
@@ -86,7 +84,7 @@ Changes ChangesSink::exec() {
 	return couchdb.receiveChanges(*this);
 }
 
-ChangesSink& ChangesSink::setFilterFlags(natural flags) {
+ChangesSink& ChangesSink::setFilterFlags(std::size_t flags) {
 	return setFilter(Filter(String(),flags));
 }
 
@@ -98,7 +96,7 @@ void ChangesSink::cancelWait() {
 
 void ChangesSink::initCancelFunction() {
 	if (!cancelFunction) {
-		Synchronized<MicroLock> _(cancelFnInitLock);
+		std::lock_guard<std::mutex> _(cancelFnInitLock);
 		if (!cancelFunction)
 			cancelFunction = NetworkConnection::createCancelFunction();
 	}

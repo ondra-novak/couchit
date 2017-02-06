@@ -14,7 +14,7 @@
 namespace LightCouch {
 
 
-void LightCouch::UrlBuilder::init(StrView basicUrl, StrView dbname, StrView resourcePath) {
+void LightCouch::UrlBuilder::init(StrViewA basicUrl, StrViewA dbname, StrViewA resourcePath) {
 	buffer.clear();
 	if (resourcePath.empty()) {
 		buffer.blockWrite(basicUrl,true);
@@ -31,17 +31,17 @@ void LightCouch::UrlBuilder::init(StrView basicUrl, StrView dbname, StrView reso
 	curSep = '/';
 }
 
-UrlBuilder &LightCouch::UrlBuilder::add(StrView path) {
-	ConvertReadIter<UrlEncodeConvert, StrView::Iterator> rd(path.getFwIter());
+UrlBuilder &LightCouch::UrlBuilder::add(StrViewA path) {
+	ConvertReadIter<UrlEncodeConvert, StrViewA::Iterator> rd(path.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rd);
 	return *this;
 }
 
-UrlBuilder &LightCouch::UrlBuilder::add(StrView key, StrView value) {
+UrlBuilder &LightCouch::UrlBuilder::add(StrViewA key, StrViewA value) {
 	if (curSep == '/') curSep = '?'; else curSep = '&';
-	ConvertReadIter<UrlEncodeConvert, StrView::Iterator> rdkey(key.getFwIter());
-	ConvertReadIter<UrlEncodeConvert, StrView::Iterator> rdvalue(value.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, StrViewA::Iterator> rdkey(key.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, StrViewA::Iterator> rdvalue(value.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rdkey);
 	buffer.write('=');
@@ -49,9 +49,9 @@ UrlBuilder &LightCouch::UrlBuilder::add(StrView key, StrView value) {
 	return *this;
 }
 
-UrlBuilder &LightCouch::UrlBuilder::addJson(StrView key, Value value) {
+UrlBuilder &LightCouch::UrlBuilder::addJson(StrViewA key, Value value) {
 	if (curSep == '/') curSep = '?'; else curSep = '&';
-	ConvertReadIter<UrlEncodeConvert, StrView::Iterator> rdkey(key.getFwIter());
+	ConvertReadIter<UrlEncodeConvert, StrViewA::Iterator> rdkey(key.getFwIter());
 	buffer.write(curSep);
 	buffer.copy(rdkey);
 	buffer.write('=');
