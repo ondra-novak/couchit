@@ -14,9 +14,13 @@
 
 namespace LightCouch {
 
+typedef int CompareResult;
+static const int cmpResultLess = -1;
+static const int cmpResultEqual = 0;
+static const int cmpResultGreater = 1;
 
-int compareStringsUnicode(StrViewA str1, StrViewA str2);
-int compareJson(const Value &left, const Value &right);
+CompareResult compareStringsUnicode(StrViewA str1, StrViewA str2);
+CompareResult compareJson(const Value &left, const Value &right);
 
 struct JsonIsLess {
 	bool operator()(const Value &v1, const Value &v2) const;

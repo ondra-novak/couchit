@@ -8,33 +8,78 @@
 
 
 #include "collation.h"
-#include <lightspeed/base/streams/utf.h>
+
 
 
 namespace LightCouch {
 
 
- CompareResult compareStringsUnicode(StrViewA str1, StrViewA str2) {
-	Utf8ToWideReader<StrViewA::Iterator> iter1(str1.getFwIter()), iter2(str2.getFwIter());
-	iter1.enableSkipInvalidChars(true);
-	iter2.enableSkipInvalidChars(true);
+template<typename Fn>
+class Utf8Reader {
+public:
+	Utf8Reader(const Fn &fn):fn(fn) {}
 
-	while (iter1.hasItems() && iter2.hasItems()) {
-		wchar_t c1 = iter1.getNext();
-		wchar_t c2 = iter2.getNext();
-		if (c1 < c2) return cmpResultLess;
-		else if (c1 > c2) return cmpResultGreater;
+	int operator()() const {
+		int c = fn();
+		if (c == -1) return -1;
+		if (c & 0x80 == 0) return c;
+		int uchar = 0;
+		if ((c & 0xe0) == 0xc0) {
+			uchar = (c & 0x3F) << 6;
+			uchar |= fn() & 0x3F;
+		}
+		else if ((c & 0xf0) == 0xe0) {
+			uchar = (c & 0x1F) << 12;
+			uchar |= (fn() & 0x3F) << 6;
+			uchar |= (fn() & 0x3F);
+		}
+		else if ((c & 0xF8) == 0xF0) {
+			uchar = (c & 0x0F) << 18;
+			uchar |= (fn() & 0x3F) << 12;
+			uchar |= (fn() & 0x3F) << 6;
+			uchar |= (fn() & 0x3F);
+		} else {
+			uchar = 0;
+		}
+		return uchar;
 	}
-	if (iter1.hasItems())
-		return cmpResultGreater;
-	else if (iter2.hasItems())
-		return cmpResultLess;
-	else
-		return cmpResultEqual;
+
+protected:
+	Fn fn;
+};
+
+template<typename Fn>
+Utf8Reader<Fn> createUtf82WideReader(const Fn &fn) {
+	return Utf8Reader<Fn>(fn);
 }
 
 
-int compareJson(const Value &left, const Value &right) {
+CompareResult compareStringsUnicode(StrViewA str1, StrViewA str2) {
+	unsigned int pos1 = 0;
+	unsigned int pos2 = 0;
+	auto iter1 = createUtf82WideReader([&]() -> int {
+		if (pos1 < str1.length) return str1[pos1++]; else return -1;
+	});
+	auto iter2 = createUtf82WideReader([&]() -> int {
+		if (pos2 < str2.length) return str2[pos2++]; else return -1;
+	});
+
+
+	int c1 = iter1();
+	int c2 = iter2();
+	while (c1 > 0 && c2 > 0) {
+		if (c1 < c2) return cmpResultLess;
+		if (c1 > c2) return cmpResultGreater;
+		c1 = iter1();
+		c2 = iter2();
+	}
+	if (c1 != 0) return cmpResultGreater;
+	if (c2 != 0) return cmpResultLess;
+	return cmpResultEqual;
+}
+
+
+CompareResult compareJson(const Value &left, const Value &right) {
 	if (left.type() != right.type()) {
 		if (left.type()==json::null) return cmpResultLess;
 		if (left.type()==json::object) return cmpResultGreater;
