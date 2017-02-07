@@ -43,7 +43,7 @@ public:
 
 	Enum operator[](StrViewA name) const;
 	StrViewA operator[](Enum enm) const;
-	Enum *find(StrViewA name) const;
+	const Enum *find(StrViewA name) const;
 
 	const std::size_t count;
 	const NamedEnumDef<Enum> * const items;
@@ -58,9 +58,9 @@ protected:
 		unsigned int idxs[n];
 		for (unsigned int i = 0; i < n;++i) idxs[i] = i;
 		std::sort(idxs, idxs+n, [&](unsigned int a, unsigned int b) {
-			return items[a].name.value.compare(items[b].name.value) < 0;
+			return arr[a].name.value.compare(arr[b].name.value) < 0;
 		});
-		for (unsigned int i = 0; i < n;++i) items[i].name.order = idxs[i];
+		for (unsigned int i = 0; i < n;++i) arr[i].name.order = idxs[i];
 	}
 
 	template<int n>
@@ -68,22 +68,22 @@ protected:
 		unsigned int idxs[n];
 		for (unsigned int i = 0; i < n;++i) idxs[i] = i;
 		std::sort(idxs, idxs+n, [&](unsigned int a, unsigned int b) {
-			return items[a].enm.value < items[b].enm.value;
+			return arr[a].enm.value < arr[b].enm.value;
 		});
-		for (unsigned int i = 0; i < n;++i) items[i].enm.order = idxs[i];
+		for (unsigned int i = 0; i < n;++i) arr[i].enm.order = idxs[i];
 	}
 
 };
 
 class UnknownEnumName: public std::exception {
 public:
-	UnknownEnumName(const StrView name, const String &set)
+	UnknownEnumName(const StrViewA name, const String &set)
 		:name(name),set(set) {}
 
 	const String name;
 	const String set;
 
-	virtual const char *what() const throw() = 0;
+	virtual const char *what() const throw();
 
 	virtual ~UnknownEnumName() throw () {}
 
@@ -94,24 +94,6 @@ protected:
 
 };
 
-
-
-	template<typenae Enum>
-	UnknownEnumName(const ProgramLocation &loc, StrViewA name, const NamedEnum<Enum> * const items);
-	virtual ~UnknownEnumName() throw () {}
-
-	StrViewA getName() const;
-	StrViewA getSet() const;
-
-protected:
-	StringA name;
-	StringA set;
-
-	void message(ExceptionMsg &msg) const;
-
-};
-
-
 template<typename Enum>
 template<int n>
 inline NamedEnum<Enum>::NamedEnum(Def (&arr)[n]):count(n),items(arr)
@@ -121,28 +103,27 @@ inline NamedEnum<Enum>::NamedEnum(Def (&arr)[n]):count(n),items(arr)
 }
 
 template<typename Enum>
-inline Enum LightSpeed::NamedEnum<Enum>::operator [](StrViewA name) const {
-	Enum *r = find(name)
+inline Enum NamedEnum<Enum>::operator [](StrViewA name) const {
+	const Enum *r = find(name);
 	if (r) return *r;
-	else throw UnknownEnumName(THISLOCATION,name,this);
+	else throw UnknownEnumName(name,toString());
 }
 
 template<typename Enum>
-inline bool LightSpeed::NamedEnum<Enum>::find(StrViewA name, Enum &res) const {
+inline const Enum * NamedEnum<Enum>::find(StrViewA name) const {
 	std::size_t h = 0;
 	std::size_t t = count;
 	while (h < t) {
 		std::size_t c = (h + t) / 2;
 		std::size_t i = items[c].name.order;
-		CompareResult cr = name.compare(items[i].name.value);
-		if (cr == cmpResultLess) t = c;
-		else if (cr == cmpResultGreater) h = c + 1;
+		int cr = name.compare(items[i].name.value);
+		if (cr < 0) t = c;
+		else if (cr > 0) h = c + 1;
 		else {
-			res = items[i].enm.value;
-			return true;
+			return & items[i].enm.value;
 		}
 	}
-	return false;
+	return nullptr;
 }
 
 
@@ -151,7 +132,7 @@ inline StrViewA NamedEnum<Enum>::operator [](Enum enm) const {
 	std::size_t h = 0;
 	std::size_t t = count;
 	while (h < t) {
-		std::size_t rc= (h + t)/2;
+		std::size_t c= (h + t)/2;
 		std::size_t i = items[c].enm.order;
 		Enum chl = items[i].enm.value;
 		if (enm < chl) t = c;
@@ -162,34 +143,34 @@ inline StrViewA NamedEnum<Enum>::operator [](Enum enm) const {
 
 }
 
+template<typename Enum>
+inline NamedEnum<Enum>::NamedEnum(std::initializer_list<Def>& arr)
+:count(arr.end() - arr.begin()), items(arr.begin())
+{
+}
 
 
 template<typename Enum>
-StringA NamedEnum<Enum>::toString(StrViewA separator)const {
-	AutoArray<char, SmallAlloc<256> > setValues;
+String NamedEnum<Enum>::toString(StrViewA separator)const {
+	std::ostringstream builder;
 	if (count) {
-		setValues.append(items[0].name.value);
+		builder << items[0].name.value;
 		for (std::size_t i = 1; i < count;i++) {
-			setValues.append(separator);
-			setValues.append(items[i].name.value);
+			builder << separator << items[i].name.value;
 		}
 	}
-	return setValues;
+	return String(builder.str());
 }
 
-template<typename Enum>
-inline UnknownEnumName::UnknownEnumName(const ProgramLocation& loc,
-		StrViewA name, const NamedEnum<Enum>* const items)
-	:Exception(loc),name(name),set(items->toString())
-{
 
-
+inline const char* UnknownEnumName::what() const throw () {
+	if (whatMsg.empty()) {
+		whatMsg = String({"Unknown enumeration value: '", name, "'. The value was not found in the following set: '", set, "'."});
+	}
+	return whatMsg.c_str();
 }
-
 
 
 
 }
-
-
 

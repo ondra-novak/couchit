@@ -15,7 +15,7 @@
 
 namespace LightCouch {
 
-QueryServer::QueryServer(ConstStrA name):qserverName(name) {}
+QueryServer::QueryServer(const StrViewA &name):qserverName(name) {}
 
 
 
@@ -65,43 +65,43 @@ static NamedEnumDef<DDocCommand> ddocCommandsDef[] = {
 static NamedEnum<DDocCommand> ddocCommands(ddocCommandsDef);
 
 
-void LightCouch::QueryServer::runDispatch(PInOutStream stream) {
-	SeqFileInput requests(stream);
-	SeqFileOutput responses(stream);
-	auto reqInput = [&](){return requests.getNext();};
-	auto resOutput = [&](char c){responses.write(c);};
+int LightCouch::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
+	int r;
 
-	while (requests.hasItems()) {
-		Value req = Value::parse(reqInput);
+	while (!in.eof()) {
+		Value req = Value::fromStream(in);
 
 		try {
 
-			Command cmd = commands[convStr(req[0].getString())];
+			Command cmd = commands[req[0].getString()];
 			Value resp;
 			switch (cmd) {
-				case cmdReset: resp=commandReset(req);break;
+				case cmdReset:
+					r = checkAppUpdate();
+					if (r) return r;
+					resp=commandReset(req);
+					break;
 				case cmdAddLib: resp=commandAddLib(req);break;
 				case cmdAddFun: resp=commandAddFun(req);break;
 				case cmdMapDoc: resp=commandMapDoc(req);break;
 				case cmdReduce: resp=commandReduce(req);break;
 				case cmdReReduce: resp=commandReReduce(req);break;
-				case cmdDDoc: resp=commandDDoc(req,stream);break;
+				case cmdDDoc: resp=commandDDoc(req,in,out);break;
 			}
-			resp.serialize(resOutput);
+			resp.toStream(out);
 		} catch (QueryServerError &e) {
-			Value out({"error",convStr(e.getType()),convStr(e.getExplain())});
-			out.serialize(resOutput);
+			Value resp({"error",e.getType(),e.getExplain()});
+			resp.toStream(out);
 		} catch (VersionMistmatch &m) {
-			Value out({"error","try_again","restarting query server, please try again"});
-			out.serialize(resOutput);
-			responses.write('\n');
-			responses.flush();
+			Value resp({"error","try_again","restarting query server, please try again"});
+			resp.toStream(out);
+			out << std::endl;
 			throw;
 		} catch (std::exception &e) {
-			Value out({"error","internal_error",e.what()});
-			out.serialize(resOutput);
+			Value resp({"error","internal_error",e.what()});
+			resp.toStream(out);
 		}
-		responses.write('\n');
+		out << std::endl;
 
 	}
 }
@@ -113,32 +113,33 @@ Value QueryServer::commandReset(const Value& ) {
 }
 
 Value QueryServer::commandAddLib(const Value& ) {
-	throw QueryServerError(THISLOCATION,"unsupported","You cannot add lib to native C++ query server");
+	throw QueryServerError("unsupported","You cannot add lib to native C++ query server");
 }
 
 static std::pair<StrViewA,std::size_t> extractVersion(const StrViewA &name) {
-	std::size_t versep = name.find('@');
+	std::size_t versep = name.indexOf("@",0);
 	if (versep == ((std::size_t)-1))
-		throw QueryServerError(THISLOCATION,"no_version_defined", "View definition must contain version marker @version");
-	StrViewA ver = name.offset(versep+1);
-	StrViewA rawname = name.head(versep);
-	std::size_t verid;
-	if (!parseUnsignedNumber(ver.getFwIter(), verid,10))
-		throw QueryServerError(THISLOCATION,"invald version", "Version must be number");
-	return std::make_pair(rawname,verid);
+		throw QueryServerError("no_version_defined", "View definition must contain version marker @version");
+	StrViewA ver = name.substr(versep+1);
+	StrViewA rawname = name.substr(0,versep);
+	Value verid = Value::fromString(ver);
+	if (verid.type() != json::number) {
+		throw QueryServerError("invald version", "Version must be number");
+	}
+	return std::make_pair(rawname,verid.getUInt());
 
 }
 
 Value QueryServer::commandAddFun(const Value& req) {
 	auto vinfo = extractVersion(req[1].getString());
 
-	const AllocPointer<AbstractViewBase>  *fn = views.find(StrKey(ConstStrA(vinfo.first)));
-	if (fn == 0) {
-		throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Map Function '")+vinfo.first+ConstStrA("' not found")));
+	auto fniter = views.find(vinfo.first);
+	if (fniter == views.end()) {
+		throw QueryServerError("not_found",String({"Map Function '",vinfo.first,"' not found"}));
 	}
-	if ((*fn)->version() != vinfo.second)
-		throw VersionMistmatch(THISLOCATION);
-	preparedMaps.add(PreparedMap(*(*fn)));
+	if (fniter->second->version() != vinfo.second)
+		throw VersionMistmatch();
+	preparedMaps.push_back(fniter->second);
 	return true;
 }
 
@@ -164,12 +165,13 @@ Value QueryServer::commandMapDoc(const Value& req) {
 
 	Document doc = req[1];
 	Array result;
+	Array subres;
 
-	for (std::size_t i = 0; i < preparedMaps.length(); i++) {
-		Array subres;
+	for (auto &&x : preparedMaps) {
+		subres.clear();
 		Emit emit(subres);
-		preparedMaps[i].fn.map(doc,emit);
-		result.add(Value(subres));
+		x->map(doc,emit);
+		result.push_back(subres);
 	}
 
 	return result;
@@ -192,14 +194,14 @@ Value QueryServer::commandReduce(const Value& req) {
 	}
 
 	for (auto &&val: fnlist) {
-		ConstStrA name = convStr(val.getString());
-		const AllocPointer<AbstractViewBase>  *fn = views.find(StrKey(name));
-		if (fn == 0 ) {
-			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Reduce Function '")+name+ConstStrA("' not found")));
+		StrViewA name = val.getString();
+		auto fniter = views.find(name);
+		if (fniter == views.end() ) {
+			throw QueryServerError("not_found",String({"Reduce Function '",name,"' not found"}));
 		}
-		AbstractViewBase &view = *(*fn);
+		AbstractViewBase &view = *fniter->second;
 		if (view.reduceMode() != AbstractViewBase::rmFunction) {
-			throw QueryServerError(THISLOCATION,"invalid_view",StringA(ConstStrA("Specified view '")+name+ConstStrA("' doesn't define reduce function")));
+			throw QueryServerError("invalid_view",String({"Specified view '",name,"' doesn't define reduce function"}));
 		}
 		output.add(view.reduce(rowBuffer));
 	}
@@ -217,15 +219,15 @@ Value QueryServer::commandReReduce(const Value& req) {
 	}
 
 	for (auto &&val: fnlist) {
-		ConstStrA name = convStr(val.getString());
+		StrViewA name = val.getString();
 
-		const AllocPointer<AbstractViewBase>  *fn = views.find(StrKey(name));
-		if (fn == 0 ) {
-			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Reduce Function '")+name+ConstStrA("' not found")));
+		auto fniter = views.find(name);
+		if (fn == views.end() ) {
+			throw QueryServerError("not_found",String({"Reduce Function '",name,"' not found"}));
 		}
-		AbstractViewBase &view = *(*fn);
+		AbstractViewBase &view = *fniter->second;
 		if (view.reduceMode() != AbstractViewBase::rmFunction) {
-			throw QueryServerError(THISLOCATION,"invalid_view",StringA(ConstStrA("Specified view '")+name+ConstStrA("' doesn't define reduce function")));
+			throw QueryServerError("invalid_view",String({"Specified view '",name,"' doesn't define reduce function"}));
 		}
 		output.add(view.rereduce(valueBuffer));
 	}
@@ -281,7 +283,7 @@ Value createCompiledFnRef(T &fnRef) {
 }
 
 template<typename T>
-Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA sectionName) {
+Value QueryServer::compileDesignSection(T &reg, const Value &section, StrViewA sectionName) {
 
 	Object out;
 	for(auto && value: section){
@@ -294,9 +296,9 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, ConstStrA 
 		}
 		auto verId = extractVersion(value.getString());
 
-		auto fnptr = reg.find(StrKey(ConstStrA(verId.first)));
+		auto fnptr = reg.find(StrKey(StrViewA(verId.first)));
 		if (fnptr == 0) {
-			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Function '")+verId.first+ConstStrA("' in section '")+sectionName+ConstStrA("' not found")));
+			throw QueryServerError(THISLOCATION,"not_found",StringA(StrViewA("Function '")+verId.first+StrViewA("' in section '")+sectionName+StrViewA("' not found")));
 		}
 
 		if ((*fnptr)->version() != verId.second) {
@@ -332,13 +334,13 @@ Value QueryServer::commandDDoc(const Value& req, const PInOutStream& stream) {
 	} else {
 		Value doc = ddcache[docid];
 		if (!doc.defined())
-			throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("The document '")+(docid)+ConstStrA("' is not cached at the query server")));
+			throw QueryServerError(THISLOCATION,"not_found",StringA(StrViewA("The document '")+(docid)+StrViewA("' is not cached at the query server")));
 		Value fn = doc;
 		Value path = req[2];
 		for (std::size_t i = 0, cnt = path.size(); i < cnt; i++) {
 			fn = fn[path[i].getString()];
 			if (!fn.defined())
-				throw QueryServerError(THISLOCATION,"not_found",StringA(ConstStrA("Path not found'")+convStr(path.toString())+ConstStrA("'")));
+				throw QueryServerError(THISLOCATION,"not_found",StringA(StrViewA("Path not found'")+convStr(path.toString())+StrViewA("'")));
 		}
 		Value arguments = req[3];
 		DDocCommand cmd = ddocCommands[convStr(path[0].getString())];
@@ -391,7 +393,7 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 				eof = true;
 				return null;
 			} else {
-				throw QueryServerError(THISLOCATION,"protocol_error",StringA(ConstStrA("Expects list_row or list_end, got:")+(convStr(req[0].getString()))));
+				throw QueryServerError(THISLOCATION,"protocol_error",StringA(StrViewA("Expects list_row or list_end, got:")+(convStr(req[0].getString()))));
 			}
 		}
 
@@ -510,9 +512,9 @@ void QueryServer::regFilter(StringA filterName, AbstractFilterBase* impl) {
 }
 
 
-Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, ConstStrA &suffix) {
+Value QueryServer::createDesignDocument(Object &container, StrViewA fnName, StrViewA &suffix) {
 	std::size_t pos = fnName.find('/');
-	ConstStrA docName;
+	StrViewA docName;
 
 	if (pos== ((std::size_t)-1)) {
 		docName = qserverName;
@@ -539,10 +541,10 @@ Value QueryServer::createDesignDocument(Object &container, ConstStrA fnName, Con
 
 }
 
-Value createVersionedRef(ConstStrA name, std::size_t ver) {
+Value createVersionedRef(StrViewA name, std::size_t ver) {
 	TextFormatBuff<char, SmallAlloc<256 >> fmt;
 	fmt("%1@%2") << name << ver;
-	return Value(convStr(ConstStrA(fmt.write())));
+	return Value(convStr(StrViewA(fmt.write())));
 }
 
 Value QueryServer::generateDesignDocuments() {
@@ -551,7 +553,7 @@ Value QueryServer::generateDesignDocuments() {
 
 	for(RegView::Iterator iter = views.getFwIter(); iter.hasItems();) {
 		const RegView::KeyValue &kv = iter.getNext();
-		ConstStrA itemName;
+		StrViewA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key, itemName);
 		Object ddocobj(ddoc);
 		{
@@ -575,7 +577,7 @@ Value QueryServer::generateDesignDocuments() {
 
 	for (RegListFn::Iterator iter = lists.getFwIter(); iter.hasItems();) {
 		const RegListFn::KeyValue &kv = iter.getNext();
-		ConstStrA itemName;
+		StrViewA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
 		Object e(ddoc);
 		e.object("lists")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
@@ -584,7 +586,7 @@ Value QueryServer::generateDesignDocuments() {
 
 	for (RegShowFn::Iterator iter = shows.getFwIter(); iter.hasItems();) {
 		const RegShowFn::KeyValue &kv = iter.getNext();
-		ConstStrA itemName;
+		StrViewA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
 		Object e(ddoc);
 		e.object("shows")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
@@ -593,7 +595,7 @@ Value QueryServer::generateDesignDocuments() {
 
 	for (RegUpdateFn::Iterator iter = updates.getFwIter(); iter.hasItems();) {
 		const RegUpdateFn::KeyValue &kv = iter.getNext();
-		ConstStrA itemName;
+		StrViewA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
 		Object e(ddoc);
 		e.object("updates")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
@@ -602,7 +604,7 @@ Value QueryServer::generateDesignDocuments() {
 
 	for (RegFilterFn::Iterator iter = filters.getFwIter(); iter.hasItems();) {
 		const RegFilterFn::KeyValue &kv = iter.getNext();
-		ConstStrA itemName;
+		StrViewA itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
 		Object e(ddoc);
 		e.object("filters")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
@@ -638,7 +640,7 @@ void QueryServer::syncDesignDocuments(Value designDocuments, CouchDB& couch, Cou
 
 
 
-QueryServerApp::QueryServerApp(ConstStrA name, integer priority):LightSpeed::App(priority), QueryServer(name, ConstStrW()) {
+QueryServerApp::QueryServerApp(StrViewA name, integer priority):LightSpeed::App(priority), QueryServer(name, ConstStrW()) {
 }
 
 

@@ -39,7 +39,7 @@ public:
 	 * from the QueryServer's function defintions. Otherwise, you can use constructor without argument
 	 *
 	 */
-	QueryServer(StrViewA name);
+	QueryServer(const StrViewA &name);
 
 
 	///Registers view
@@ -95,7 +95,7 @@ public:
 	///Starts queryServer's dispatcher
 	/**
 	 */
-	void runDispatch(std::istream &input, std::ostream &output);
+	int runDispatch(std::istream &input, std::ostream &output);
 
 	///start dispatching from standard input/output
 	virtual int runDispatchStdIO();
