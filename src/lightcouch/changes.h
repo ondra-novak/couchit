@@ -119,6 +119,8 @@ public:
 	 */
 	ChangesSink(CouchDB &couchdb);
 
+	ChangesSink(ChangesSink &&other);
+
 
 	///specifies sequence of last seen change.
 	/**

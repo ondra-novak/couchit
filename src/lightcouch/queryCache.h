@@ -51,8 +51,8 @@ public:
 	QueryCache(std::size_t hint_size):maxSize(hint_size),initialMaxSize(hint_size) {}
 
 	struct CachedItem {
-		const String etag;
-		const Value value;
+		String etag;
+		Value value;
 		std::size_t lru;
 
 		CachedItem() {}

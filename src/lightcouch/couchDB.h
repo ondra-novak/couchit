@@ -496,7 +496,9 @@ public:
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 *
 	 */
-	bool uploadDesignDocument(StrViewA pathname, DesignDocUpdateRule updateRule = ddurOverwrite);
+	bool uploadDesignDocument(const std::string &pathname, DesignDocUpdateRule updateRule = ddurOverwrite);
+
+	bool uploadDesignDocument(const std::wstring &pathname, DesignDocUpdateRule updateRule = ddurOverwrite);
 
 	///Uploads design document from the resource
 	/**
@@ -526,6 +528,7 @@ public:
 protected:
 
 	std::mutex lock;
+	typedef std::lock_guard<std::mutex> LockGuard;
 
 
 
@@ -537,7 +540,7 @@ protected:
 	std::size_t lastStatus;
 	QueryCache *cache;
 	Validator *validator;
-	std::string uidBuffer;
+	std::vector<char> uidBuffer;
 	IIDGen& uidGen;
 
 	String lastConnectError;

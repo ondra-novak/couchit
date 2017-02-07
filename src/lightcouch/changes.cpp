@@ -102,4 +102,21 @@ void ChangesSink::initCancelFunction() {
 	}
 }
 
+ChangesSink::ChangesSink(ChangesSink&& other)
+	:couchdb(other.couchdb)
+	,seqNumber(std::move(other.seqNumber))
+	,outlimit(std::move(other.outlimit))
+	,timeout(std::move(other.timeout))
+	,filter(std::move(other.filter))
+	,filterArgs(std::move(other.filterArgs))
+	,cancelFunction(std::move(other.cancelFunction))
+	,canceled(false)
+
+
+{
+
 }
+
+
+}
+

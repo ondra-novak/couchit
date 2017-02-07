@@ -10,4 +10,4 @@ install(TARGETS couchity
         ) 
 INSTALL(FILES ${imtjson_HDR}
         DESTINATION "include/couchity"
-        ) 
+        )  

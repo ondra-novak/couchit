@@ -16,7 +16,6 @@
 #include "changes.h"
 
 
-#include "conflictResolver.h_"
 #include "defaultUIDGen.h"
 #include "queryCache.h"
 
@@ -55,7 +54,7 @@ Value CouchDB::requestGET(const StrViewA &path, Value *headers, std::size_t flag
 
 	if (isRelativePath(path)) return requestGET(*getUrlBuilder(path),headers,flags);
 
-	Synchronized<FastLock> _(lock);
+	LockGuard _(lock);
 
 	std::size_t baseUrlLen = baseUrl.length();
 	std::size_t databaseLen = database.length();
@@ -71,7 +70,7 @@ Value CouchDB::requestGET(const StrViewA &path, Value *headers, std::size_t flag
 	StrViewA cacheKey = path.substr(prefixLen);
 
 	//there will be stored cached item
-	Optional<QueryCache::CachedItem> cachedItem;
+	QueryCache::CachedItem cachedItem;
 
 	if (usecache) {
 		cachedItem = cache->find(cacheKey);
@@ -86,20 +85,20 @@ Value CouchDB::requestGET(const StrViewA &path, Value *headers, std::size_t flag
     	redirectRetry = false;
     	Object hdr(headers?*headers:Value());
 		hdr("Accept","application/json");
-		if (cachedItem != nil && cachedItem->isDefined()) {
-			hdr("If-None-Match", cachedItem->etag);
+		if (cachedItem.isDefined()) {
+			hdr("If-None-Match", cachedItem.etag);
 		}
 
 		status = http.setHeaders(hdr).send();
-		if (status == 304 && cachedItem != null) {
+		if (status == 304 && cachedItem.isDefined()) {
 			http.close();
-			return cachedItem->value;
+			return cachedItem.value;
 		}
 		if (status == 301 || status == 302 || status == 303 || status == 307) {
 			json::Value val = http.getHeaders()["Location"];
 			if (!val.defined()) {
 				http.abort();
-				throw RequestError(THISLOCATION,path,http.getStatus(),StrViewA(http.getStatusMessage()), Value("Redirect without Location"));
+				throw RequestError(path,http.getStatus(),http.getStatusMessage(), Value("Redirect without Location"));
 			}
 			http.close();
 			http.open(val.getString(), "GET",true);
@@ -137,7 +136,7 @@ void CouchDB::handleUnexpectedStatus(StrViewA path) {
 
 	}
 	http.close();
-	throw RequestError(THISLOCATION,path,http.getStatus(), StrViewA(http.getStatusMessage()), errorVal);
+	throw RequestError(path,http.getStatus(), http.getStatusMessage(), errorVal);
 }
 
 Value CouchDB::parseResponse() {
@@ -149,7 +148,7 @@ Value CouchDB::requestDELETE(const StrViewA &path, Value *headers, std::size_t f
 
 	if (isRelativePath(path)) return requestDELETE(*getUrlBuilder(path),headers,flags);
 
-	Synchronized<FastLock> _(lock);
+	LockGuard _(lock);
 	http.open(path,"DELETE",true);
 	Object hdr(headers?*headers:Value());
 	hdr("Accept","application/json");
@@ -170,10 +169,12 @@ Value CouchDB::requestDELETE(const StrViewA &path, Value *headers, std::size_t f
 
 Value CouchDB::jsonPUTPOST(bool postMethod, const StrViewA &path, Value data, Value *headers, std::size_t flags) {
 
+	typedef std::uint8_t byte;
+
 	if (isRelativePath(path)) return jsonPUTPOST(postMethod,*getUrlBuilder(path),data,headers,flags);
 
 
-	Synchronized<FastLock> _(lock);
+	LockGuard _(lock);
 	http.open(path,postMethod?"POST":"PUT",true);
 	Object hdr(headers?*headers:Value());
 	hdr("Accept","application/json");
@@ -291,7 +292,7 @@ Value CouchDB::retrieveLocalDocument(const StrViewA &localId, std::size_t flags)
 	try {
 		return requestGET(*url,nullptr, flags & (flgDisableCache|flgRefreshCache));
 	} catch (const RequestError &e) {
-		if (e.getStatus() == 404 && (flags & flgCreateNew)) {
+		if (e.getCode() == 404 && (flags & flgCreateNew)) {
 			return Object("_id",String({"_local/",localId}));
 		}
 		else throw;
@@ -299,10 +300,12 @@ Value CouchDB::retrieveLocalDocument(const StrViewA &localId, std::size_t flags)
 }
 
 StrViewA CouchDB::genUID() {
+	LockGuard _(lock);
 	return uidGen(uidBuffer,StrViewA());
 }
 
 StrViewA CouchDB::genUID(StrViewA prefix) {
+	LockGuard _(lock);
 	return uidGen(uidBuffer,prefix);
 }
 
@@ -327,7 +330,7 @@ Value CouchDB::retrieveDocument(const StrViewA &docId, std::size_t flags) {
 	try {
 		return requestGET(*url,nullptr,flags & (flgDisableCache|flgRefreshCache));
 	} catch (const RequestError &e) {
-		if (e.getStatus() == 404 && (flags & flgCreateNew)) {
+		if (e.getCode() == 404 && (flags & flgCreateNew)) {
 			return Object("_id",docId);
 		}
 		else throw;
@@ -380,11 +383,11 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachme
 
 	class UploadClass: public Upload::Target {
 	public:
-		UploadClass(FastLock &lock, HttpClient &http, const PUrlBuilder &urlline)
+		UploadClass(std::mutex &lock, HttpClient &http, PUrlBuilder &urlline)
 			:lock(lock)
 			,http(http)
 			,out(http.beginBody())
-			,urlline(urlline)
+			,urlline(std::move(urlline))
 			,finished(false) {
 		}
 
@@ -415,7 +418,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachme
 					}
 					http.close();
 					StrViewA url(*urlline);
-					throw RequestError(THISLOCATION,url,status, StrViewA(http.getStatusMessage()), errorVal);
+					throw RequestError(url,status, http.getStatusMessage(), errorVal);
 				} else {
 					Value v = Value::parse(BufferedRead<InputStream>(http.getResponse()));
 					http.close();
@@ -430,7 +433,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachme
 		}
 
 	protected:
-		FastLock &lock;
+		std::mutex &lock;
 		HttpClient &http;
 		OutputStream out;
 		Value response;
@@ -458,29 +461,29 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachme
 String CouchDB::uploadAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData) {
 
 	Upload upld = uploadAttachment(document,attachmentName,attachmentData.contentType);
-	upld.write(attachmentData.data(), attachmentData.length());
+	upld.write(attachmentData.data, attachmentData.length);
 	return upld.finish();
 }
 
 
 Value CouchDB::genUIDValue() {
-	Synchronized<FastLock> _(lock);
+	LockGuard _(lock);
 	return StrViewA(genUID());
 }
 
 Value CouchDB::genUIDValue(StrViewA prefix) {
-	Synchronized<FastLock> _(lock);
+	LockGuard _(lock);
 	return StrViewA(genUID(prefix));
 }
 
 
 Document CouchDB::newDocument() {
-	Synchronized<FastLock> _(lock);
+	LockGuard _(lock);
 	return Document(genUID(),StrViewA());
 }
 
 Document CouchDB::newDocument(const StrViewA &prefix) {
-	Synchronized<FastLock> _(lock);
+	LockGuard _(lock);
 	return Document(genUID(StrViewA(prefix)),StrViewA());
 }
 
@@ -512,19 +515,20 @@ public:
 				functionBuff.append(functionkw);
 
 
-				Stack<char, SmallAlloc<256> > levelStack;
+				std::vector<char> levelStack;
 				while(true) {
 					char c = Super::rd.nextCommit();
 					functionBuff.push_back(c);
 					if (c == '(' || c == '[' || c == '{') {
-						levelStack.push(c);
+						levelStack.push_back(c);
 					} else if (c == ')' || c == ']' || c == '}') {
-						if (levelStack.empty() ||
-								(c == ')' && levelStack.top() != '(') ||
-								(c == '}' && levelStack.top() != '{') ||
-								(c == ']' && levelStack.top() != '['))
-							throw json::ParseError(std::string(functionBuff.data(),functionBuff.length()));
-						levelStack.pop();
+						char t = levelStack.empty()?0:levelStack[levelStack.size()-1];
+						if (t == 0 ||
+								(c == ')' && t != '(') ||
+								(c == '}' && t != '{') ||
+								(c == ']' && t != '['))
+							throw json::ParseError(std::string(functionBuff.data,functionBuff.length));
+						levelStack.pop_back();
 						if (levelStack.empty() && c == '}') break;
 					} else if (c == '"') {
 						json::Value v = Super::parseString();
@@ -593,19 +597,19 @@ bool CouchDB::uploadDesignDocument(const Value &content, DesignDocUpdateRule upd
 			errItem.errorDetails = Object();
 			errItem.errorType = "conflict";
 			errItem.reason = "ddurCheck in effect, cannot update design document";
-			throw UpdateException(THISLOCATION,ConstStringT<UpdateException::ErrorItem>(&errItem,1));
+			throw UpdateException(StringView<UpdateException::ErrorItem>(&errItem,1));
 		}
 
 		if (updateRule == ddurOverwrite) {
 			chset.update(newddoc);
 		} else {
-			throwUnsupportedFeature(THISLOCATION,this,"Merge design document");
+			throw std::runtime_error("Feature is not supported");
 		}
 
 
 
 	} catch (HttpStatusException &e) {
-		if (e.getStatus() == 404) {
+		if (e.getCode() == 404) {
 			chset.update(content);
 		} else {
 			throw;
@@ -625,18 +629,34 @@ bool CouchDB::uploadDesignDocument(const Value &content, DesignDocUpdateRule upd
 }
 
 template<typename T>
-Value parseDesignDocument(IIterator<char, T> &stream) {
-	auto reader = [&](){return stream.getNext();};
+Value parseDesignDocument(std::istream &stream) {
+	auto reader = [&](){return stream.get();};
 	DesignDocumentParse<decltype(reader)> parser(reader);
 	return parser.parse();
 }
 
-bool CouchDB::uploadDesignDocument(ConstStrW pathname, DesignDocUpdateRule updateRule) {
+bool CouchDB::uploadDesignDocument(const std::string &pathname, DesignDocUpdateRule updateRule) {
 
-	SeqFileInBuff<> infile(pathname,0);
-	SeqTextInA intextfile(infile);
-	return uploadDesignDocument(parseDesignDocument(intextfile), updateRule);
+	std::ifstream infile(pathname, std::ios::in);
+	if (!infile) {
+		UpdateException::ErrorItem err;
+		err.errorType = "not found";
+		err.reason = String({"Failed to open file: ",pathname});
+		throw UpdateException(StringView<ErrorItem>(&err,1));
+	}
+	return uploadDesignDocument(parseDesignDocument(stream), updateRule);
+}
 
+bool CouchDB::uploadDesignDocument(const std::wstring &pathname, DesignDocUpdateRule updateRule) {
+
+	std::ifstream infile(pathname, std::ios::in);
+	if (!infile) {
+		UpdateException::ErrorItem err;
+		err.errorType = "not found";
+		err.reason = String({"Failed to open file: ",StrViewWpathname});
+		throw UpdateException(StringView<ErrorItem>(&err,1));
+	}
+	return uploadDesignDocument(parseDesignDocument(stream), updateRule);
 }
 
 bool  CouchDB::uploadDesignDocument(const char* content,
@@ -726,7 +746,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		sink.initCancelFunction();
 	}
 
-	Synchronized<FastLock> _(lock);
+	LockGuard _(lock);
 
 	if (!sink.cancelFunction) {
 		sink.cancelFunction = http.initCancelFunction();
