@@ -5,13 +5,13 @@
  *      Author: ondra
  */
 
+#include <fstream>
 
 #include "changeset.h"
 #include "couchDB.h"
 #include <imtjson/json.h>
 #include "exception.h"
 #include "query.h"
-
 
 #include "changes.h"
 
@@ -527,7 +527,7 @@ public:
 								(c == ')' && t != '(') ||
 								(c == '}' && t != '{') ||
 								(c == ']' && t != '['))
-							throw json::ParseError(std::string(functionBuff.data,functionBuff.length));
+							throw json::ParseError(functionBuff);
 						levelStack.pop_back();
 						if (levelStack.empty() && c == '}') break;
 					} else if (c == '"') {
@@ -628,10 +628,9 @@ bool CouchDB::uploadDesignDocument(const Value &content, DesignDocUpdateRule upd
 
 }
 
-template<typename T>
-Value parseDesignDocument(std::istream &stream) {
-	auto reader = [&](){return stream.get();};
-	DesignDocumentParse<decltype(reader)> parser(reader);
+template<typename Fn>
+Value parseDesignDocument(const Fn &fn) {
+	DesignDocumentParse<Fn> parser(fn);
 	return parser.parse();
 }
 
@@ -642,29 +641,17 @@ bool CouchDB::uploadDesignDocument(const std::string &pathname, DesignDocUpdateR
 		UpdateException::ErrorItem err;
 		err.errorType = "not found";
 		err.reason = String({"Failed to open file: ",pathname});
-		throw UpdateException(StringView<ErrorItem>(&err,1));
+		throw UpdateException(StringView<UpdateException::ErrorItem>(&err,1));
 	}
-	return uploadDesignDocument(parseDesignDocument(stream), updateRule);
+	return uploadDesignDocument(parseDesignDocument(json::fromStream(infile)), updateRule);
 }
 
-bool CouchDB::uploadDesignDocument(const std::wstring &pathname, DesignDocUpdateRule updateRule) {
-
-	std::ifstream infile(pathname, std::ios::in);
-	if (!infile) {
-		UpdateException::ErrorItem err;
-		err.errorType = "not found";
-		err.reason = String({"Failed to open file: ",StrViewWpathname});
-		throw UpdateException(StringView<ErrorItem>(&err,1));
-	}
-	return uploadDesignDocument(parseDesignDocument(stream), updateRule);
-}
 
 bool  CouchDB::uploadDesignDocument(const char* content,
 		std::size_t contentLen, DesignDocUpdateRule updateRule) {
 
-	ConstStrA ctt(content, contentLen);
-	ConstStrA::Iterator iter = ctt.getFwIter();
-	return uploadDesignDocument(parseDesignDocument(iter), updateRule);
+	StrViewA ctt(content, contentLen);
+	return uploadDesignDocument(parseDesignDocument(json::fromString(ctt)), updateRule);
 
 }
 
@@ -676,35 +663,35 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 		url->add("since", sink.seqNumber.toString());
 	}
 	if (sink.outlimit != ((std::size_t)-1)) {
-		url->add("limit",ToString<std::size_t>(sink.outlimit));
+		url->add("limit",sink.outlimit);
 	}
 	if (sink.timeout > 0) {
 		url->add("feed","longpoll");
 		if (sink.timeout == ((std::size_t)-1)) {
 			url->add("heartbeat","true");
 		} else {
-			url->add("timeout",ToString<std::size_t>(sink.timeout));
+			url->add("timeout",sink.timeout);
 		}
 	}
-	if (sink.filter != null) {
-		const Filter &flt = sink.filter;
+	if (sink.filter != nullptr) {
+		const Filter &flt = *sink.filter;
 		if (!flt.viewPath.empty()) {
-			ConstStrA fltpath = convStr(flt.viewPath);
-			ConstStrA ddocName;
-			ConstStrA filterName;
+			StrViewA fltpath = flt.viewPath;
+			StrViewA ddocName;
+			StrViewA filterName;
 			bool isView = false;
-			ConstStrA::SplitIterator iter = fltpath.split('/');
-			ConstStrA x = iter.getNext();
-			if (x == "_design") x = iter.getNext();
+			auto iter = fltpath.split("/");
+			StrViewA x = iter();
+			if (x == "_design") x = iter();
 			ddocName = x;
-			x = iter.getNext();
+			x = iter();
 			if (x == "_view") {
 				isView = true;
-				x = iter.getNext();
+				x = iter();
 			}
 			filterName = x;
 
-			String fpath({StrViewA(ddocName),"/",StrViewA(filterName)});
+			String fpath({ddocName,"/",filterName});
 
 			if (isView) {
 				url->add("filter","_view");
@@ -766,7 +753,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 	if (status/100 != 2) {
 		if (sink.canceled) {
 			sink.canceled = false;
-			throw CanceledException(THISLOCATION);
+			throw CanceledException();
 		}
 		handleUnexpectedStatus(*url);
 	} else {
@@ -786,7 +773,7 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 			http.abort();
 			if (sink.canceled) {
 				sink.canceled = false;
-				throw CanceledException(THISLOCATION);
+				throw CanceledException();
 			}
 			//throw it
 			throw;
@@ -825,7 +812,7 @@ public:
 
 class StreamDownload: public Download::Source {
 public:
-	StreamDownload(const InputStream &stream, FastLock &lock, HttpClient &http):stream(stream),lock(lock),http(http) {}
+	StreamDownload(const InputStream &stream, std::mutex &lock, HttpClient &http):stream(stream),lock(lock),http(http) {}
 	virtual std::size_t operator()(void *buffer, std::size_t size) {
 		std::size_t rd;
 		const unsigned char *c = stream(0,&rd);
@@ -845,12 +832,12 @@ public:
 
 protected:
 	InputStream stream;
-	FastLock &lock;
+	std::mutex &lock;
 	HttpClient &http;
 };
 
 
-Download CouchDB::downloadAttachmentCont(PUrlBuilder urlline, const StrViewA &etag) {
+Download CouchDB::downloadAttachmentCont(PUrlBuilder &urlline, const StrViewA &etag) {
 
 	lock.lock();
 	try {
@@ -933,10 +920,10 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 	PUrlBuilder url = owner.getUrlBuilder(r.view.viewPath);
 
-	ConstStrA startKey = "startkey";
-	ConstStrA endKey = "endkey";
-	ConstStrA startKeyDocId = "startkey_docid";
-	ConstStrA endKeyDocId = "endkey_docid";
+	StrViewA startKey = "startkey";
+	StrViewA endKey = "endkey";
+	StrViewA startKeyDocId = "startkey_docid";
+	StrViewA endKeyDocId = "endkey_docid";
 	bool useCache;
 
 	bool desc = (r.view.flags & View::reverseOrder) != 0;
@@ -1003,7 +990,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 			if (r.mode == qmKeyList) {
 				url->add("group",level?"true":"false");
 			} else {
-				url->add("groupLevel",ToString<std::size_t>(level));
+				url->add("groupLevel",level);
 			}
 		}
 			break;
@@ -1011,7 +998,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		url->add("group","true");
 		break;
 	case rmGroupLevel:
-		url->add("group_level",ToString<std::size_t>(r.groupLevel));
+		url->add("group_level",r.groupLevel);
 		break;
 	case rmNoReduce:
 		url->add("reduce","false");
@@ -1020,8 +1007,8 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		break;
 	}
 
-	if (r.offset) url->add("skip",ToString<std::size_t>(r.offset));
-	if (r.limit != ((std::size_t)-1)) url->add("limit",ToString<std::size_t>(r.limit));
+	if (r.offset) url->add("skip",r.offset);
+	if (r.limit != ((std::size_t)-1)) url->add("limit",r.limit);
 	if (r.nosort) url->add("sorted","false");
 	if (r.view.flags & View::includeDocs) {
 		url->add("include_docs","true");
@@ -1055,24 +1042,27 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 }
 
 
-CouchDB::UrlBldPool::UrlBldPool():AbstractResourcePool(3,((std::size_t)-1),((std::size_t)-1)) {
-}
-
-AbstractResource* CouchDB::UrlBldPool::createResource() {
-	return new UrlBld;
-}
-
-const char* CouchDB::UrlBldPool::getResourceName() const {
-	return "Url buffer";
-}
 
 CouchDB::PUrlBuilder CouchDB::getUrlBuilder(StrViewA resourcePath) {
-	if (database.empty() && resourcePath.substr(0,1) != StrViewA("/"))
-		throw ErrorMessageException(THISLOCATION,"No database selected");
 
-	PUrlBuilder b(urlBldPool);
+	if (database.empty() && resourcePath.substr(0,1) != StrViewA("/"))
+		throw std::runtime_error("No database selected");
+
+
+	PUrlBuilder b(nullptr);
+	if (urlBldPool.empty()) {
+		PUrlBuilder p(new UrlBuilder, Deleter(*this));
+		b = std::move(p);
+	} else {
+		b = std::move(urlBldPool.top());
+		urlBldPool.pop();
+	}
 	b->init(baseUrl,database,resourcePath);
-	return b;
+	return std::move(b);
+}
+
+void CouchDB::releaseUrlBuilder(UrlBuilder* bld) {
+	urlBldPool.push(PUrlBuilder(bld));
 }
 
 Value CouchDB::bulkUpload(const Value docs, bool all_or_nothing) {
@@ -1095,4 +1085,5 @@ void CouchDB::updateDocument(Document& doc) {
 
 
 } /* namespace assetex */
+
 

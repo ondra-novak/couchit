@@ -8,6 +8,7 @@
 
 
 #include "collation.h"
+#include <imtjson/utf8.h>
 
 
 
@@ -15,63 +16,27 @@ namespace LightCouch {
 
 
 template<typename Fn>
-class Utf8Reader {
-public:
-	Utf8Reader(const Fn &fn):fn(fn) {}
-
-	int operator()() const {
-		int c = fn();
-		if (c == -1) return -1;
-		if (c & 0x80 == 0) return c;
-		int uchar = 0;
-		if ((c & 0xe0) == 0xc0) {
-			uchar = (c & 0x3F) << 6;
-			uchar |= fn() & 0x3F;
-		}
-		else if ((c & 0xf0) == 0xe0) {
-			uchar = (c & 0x1F) << 12;
-			uchar |= (fn() & 0x3F) << 6;
-			uchar |= (fn() & 0x3F);
-		}
-		else if ((c & 0xF8) == 0xF0) {
-			uchar = (c & 0x0F) << 18;
-			uchar |= (fn() & 0x3F) << 12;
-			uchar |= (fn() & 0x3F) << 6;
-			uchar |= (fn() & 0x3F);
-		} else {
-			uchar = 0;
-		}
-		return uchar;
-	}
-
-protected:
-	Fn fn;
-};
-
-template<typename Fn>
-Utf8Reader<Fn> createUtf82WideReader(const Fn &fn) {
-	return Utf8Reader<Fn>(fn);
+inline unsigned int getWideFromUtf8(Fn &fn) {
+	unsigned int rdchr;
+	bool stop = false;
+	json::Utf8ToWide conv;
+	conv([&]()->int {if (stop) return json::eof;else return fn();},
+		 [&](unsigned int c) {rdchr = c;stop = true;});
+	return rdchr;
 }
 
 
 CompareResult compareStringsUnicode(StrViewA str1, StrViewA str2) {
-	unsigned int pos1 = 0;
-	unsigned int pos2 = 0;
-	auto iter1 = createUtf82WideReader([&]() -> int {
-		if (pos1 < str1.length) return str1[pos1++]; else return -1;
-	});
-	auto iter2 = createUtf82WideReader([&]() -> int {
-		if (pos2 < str2.length) return str2[pos2++]; else return -1;
-	});
+	auto iter1 = json::fromString(str1);
+	auto iter2 = json::fromString(str2);
 
-
-	int c1 = iter1();
-	int c2 = iter2();
+	int c1 = getWideFromUtf8(iter1);
+	int c2 = getWideFromUtf8(iter2);
 	while (c1 > 0 && c2 > 0) {
 		if (c1 < c2) return cmpResultLess;
 		if (c1 > c2) return cmpResultGreater;
-		c1 = iter1();
-		c2 = iter2();
+		c1 = getWideFromUtf8(iter1);
+		c2 = getWideFromUtf8(iter2);
 	}
 	if (c1 != 0) return cmpResultGreater;
 	if (c2 != 0) return cmpResultLess;

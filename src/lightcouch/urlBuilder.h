@@ -21,6 +21,7 @@ public:
 	UrlBuilder &add(StrViewA path);
 	UrlBuilder &add(StrViewA key, StrViewA value);
 	UrlBuilder &addJson(StrViewA key, Value value);
+	UrlBuilder &add(StrViewA key, std::size_t value);
 	operator StrViewA() const {return buffer;}
 
 protected:
@@ -28,6 +29,8 @@ protected:
 	char curSep;
 
 	std::vector<char> buffer;
+
+	void addNumRec(std::size_t value);
 
 
 };

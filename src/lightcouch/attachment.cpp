@@ -5,20 +5,19 @@
  *      Author: ondra
  */
 
-#include <lightspeed/base/containers/convertString.h>
-#include <lightspeed/utils/base64.h>
-#include "lightspeed/base/containers/autoArray.tcc"
 
 #include "attachment.h"
+#include <imtjson/binary.h>
 
-#include <lightspeed/base/iter/iterConv.h>
 namespace LightCouch {
 
 
 String AttachmentDataRef::toBase64() const {
-	AutoArrayStream<char, SmallAlloc<1024> > buff;
-	ConvertWriteIter<ByteToBase64Convert,decltype(buff) &>(buff).copy(ConstBin(*this).getFwIter());
-	return StrViewA(buff.getArray());
+	std::ostringstream out;
+	json::base64->encodeBinaryValue(BinaryView(*this), [&](StrViewA c){
+		out.write(c.data, c.length);
+	});
+	return out.str();
 }
 
 Value AttachmentDataRef::toInline() const {
@@ -27,7 +26,7 @@ Value AttachmentDataRef::toInline() const {
 }
 
 AttachmentData::AttachmentData(const Value &attachment)
-	:AttachmentDataRef(ConstBin(), attachment["content_type"].getString())
+	:AttachmentDataRef(BinaryView(nullptr, 0), attachment["content_type"].getString())
 {
 
 	AttachmentData x = fromBase64(attachment["data"].getString(),StrViewA());
