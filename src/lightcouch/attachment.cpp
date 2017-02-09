@@ -8,6 +8,7 @@
 
 #include "attachment.h"
 #include <imtjson/binary.h>
+#include <imtjson/stringValue.h>
 
 namespace LightCouch {
 
@@ -33,27 +34,32 @@ AttachmentData::AttachmentData(const Value &attachment)
 	bindata = x.bindata;
 }
 
-AttachmentData::AttachmentData(Download&& dwn):AttachmentDataRef(ConstBin(),dwn.contentType.str())
+AttachmentData::AttachmentData(Download&& dwn):AttachmentDataRef(BinaryView(0,0),dwn.contentType.str())
 ,ctx(dwn.contentType)
 {
-	byte *b = bindata.createBuffer(dwn.length);
-	std::size_t remain = dwn.length;
-	std::size_t sz = dwn.read(b,remain);
-	while (sz != 0) {
-		b+=sz;
-		remain -=sz;
-		if (remain == 0) break;
-		sz = dwn.read(b,remain);
-	}
+	RefCntPtr<StringValue> data = new(dwn.length) StringValue(json::base64,dwn.length,[&](char *b) {
+		std::size_t remain = dwn.length;
+		std::size_t sz = dwn.read(b,remain);
+		while (sz != 0) {
+			b+=sz;
+			remain -=sz;
+			if (remain == 0) break;
+			sz = dwn.read(b,remain);
+		}
+		return dwn.length;
+	});
 
-	ConstBin &x = (*this);
-	x = bindata;
+	bindata = String(Value(PValue::staticCast(data)));
+	BinaryView &x = (*this);
+	x = BinaryView(bindata.str());
+
+
 }
 
 
 AttachmentData AttachmentData::fromBase64(const StrViewA &base64, const StrViewA &contentType) {
-	StringB b = convertString(Base64ToByteConvert(), ConstStrA(base64));
-	return AttachmentData(b,contentType);
+	Value v = json::base64->decodeBinaryValue(base64);
+	return AttachmentData(String(v),contentType);
 }
 
 

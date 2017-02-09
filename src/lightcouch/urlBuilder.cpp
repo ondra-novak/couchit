@@ -5,60 +5,63 @@
  *      Author: ondra
  */
 
-#include <lightspeed/base/iter/iterConv.h>
-#include <lightspeed/utils/urlencode.h>
-
-#include "lightspeed/base/containers/autoArray.tcc"
 #include "urlBuilder.h"
+
+#include "minihttp/urlencode.h"
 
 namespace LightCouch {
 
 
+template<typename V, typename X>
+static std::vector<V> &operator+=(std::vector<V> &v, const X &x) {
+	for (auto &&a : x) {
+		v.push_back(a);
+	}
+}
+
 void LightCouch::UrlBuilder::init(StrViewA basicUrl, StrViewA dbname, StrViewA resourcePath) {
 	buffer.clear();
 	if (resourcePath.empty()) {
-		buffer.blockWrite(basicUrl,true);
-		buffer.blockWrite(dbname,true);
+		buffer += basicUrl;
+		buffer += dbname;
 	} else if (resourcePath[0] == '/') {
-		buffer.blockWrite(basicUrl,true);
-		buffer.blockWrite(resourcePath.offset(1),true);
+		buffer += basicUrl;
+		buffer += resourcePath.substr(1);
 	} else {
-		buffer.blockWrite(basicUrl,true);
-		buffer.blockWrite(dbname,true);
-		buffer.write('/');
-		buffer.blockWrite(resourcePath,true);
+		buffer += basicUrl;
+		buffer += dbname;
+		buffer.push_back('/');
+		buffer += resourcePath;
 	}
 	curSep = '/';
 }
 
 UrlBuilder &LightCouch::UrlBuilder::add(StrViewA path) {
-	ConvertReadIter<UrlEncodeConvert, StrViewA::Iterator> rd(path.getFwIter());
-	buffer.write(curSep);
-	buffer.copy(rd);
+	UrlEncoder enc;
+	enc(json::fromString(path),[&](char c) {buffer.push_back(c);});
 	return *this;
 }
 
 UrlBuilder &LightCouch::UrlBuilder::add(StrViewA key, StrViewA value) {
 	if (curSep == '/') curSep = '?'; else curSep = '&';
-	ConvertReadIter<UrlEncodeConvert, StrViewA::Iterator> rdkey(key.getFwIter());
-	ConvertReadIter<UrlEncodeConvert, StrViewA::Iterator> rdvalue(value.getFwIter());
-	buffer.write(curSep);
-	buffer.copy(rdkey);
-	buffer.write('=');
-	buffer.copy(rdvalue);
+	UrlEncoder enc;
+	auto wr = [&](char c) {buffer.push_back(c);};
+	buffer.push_back(curSep);
+	enc(json::fromString(key),wr);
+	buffer.push_back('=');
+	enc(json::fromString(value),wr);
 	return *this;
 }
 
 UrlBuilder &LightCouch::UrlBuilder::addJson(StrViewA key, Value value) {
 	if (curSep == '/') curSep = '?'; else curSep = '&';
-	ConvertReadIter<UrlEncodeConvert, StrViewA::Iterator> rdkey(key.getFwIter());
-	buffer.write(curSep);
-	buffer.copy(rdkey);
-	buffer.write('=');
-	UrlEncodeConvert conv;
-	value.serialize([&](char c) {
-		conv.write(c);
-		while (conv.hasItems) buffer.write(conv.getNext());
+	auto wr = [&](char c) {buffer.push_back(c);};
+	buffer.push_back(curSep);
+	UrlEncoder enc;
+	enc(json::fromString(key),wr);
+	buffer.push_back('=');
+	value.serialize(json::emitUtf8, [&](char c) {
+		enc(json::oneCharStream(c), wr);
 	});
 	return *this;
 }

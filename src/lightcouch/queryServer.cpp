@@ -222,7 +222,7 @@ Value QueryServer::commandReReduce(const Value& req) {
 		StrViewA name = val.getString();
 
 		auto fniter = views.find(name);
-		if (fn == views.end() ) {
+		if (fniter == views.end() ) {
 			throw QueryServerError("not_found",String({"Reduce Function '",name,"' not found"}));
 		}
 		AbstractViewBase &view = *fniter->second;
@@ -279,14 +279,15 @@ Value QueryServer::compileDesignDocument(const Value &document) {
 
 template<typename T>
 Value createCompiledFnRef(T &fnRef) {
-	return new FnCallValue<typename T::ItemT>(*fnRef);
+	typedef decltype(*fnRef) IT;
+	return new FnCallValue<IT>(*fnRef);
 }
 
 template<typename T>
 Value QueryServer::compileDesignSection(T &reg, const Value &section, StrViewA sectionName) {
 
 	Object out;
-	for(auto && value: section){
+	for(auto value: section){
 		StrViewA itemname = value.getKey();
 		bool inmap = false;
 		if (value.type() == json::object) {
@@ -297,21 +298,21 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, StrViewA s
 		auto verId = extractVersion(value.getString());
 
 		auto fnptr = reg.find(StrKey(StrViewA(verId.first)));
-		if (fnptr == 0) {
-			throw QueryServerError(THISLOCATION,"not_found",StringA(StrViewA("Function '")+verId.first+StrViewA("' in section '")+sectionName+StrViewA("' not found")));
+		if (fnptr == reg.end()) {
+			throw QueryServerError("not_found",String({"Function '",verId.first,"' in section '",sectionName,"' not found"}));
 		}
 
-		if ((*fnptr)->version() != verId.second) {
-			throw VersionMistmatch(THISLOCATION);
+		if (fnptr->second->version() != verId.second) {
+			throw VersionMistmatch();
 		}
 
-		Value compiled = createCompiledFnRef(*fnptr);
+		Value compiled = createCompiledFnRef(fnptr->second);
 		if (inmap) {
 			Object o;
-			o.set("map", createCompiledFnRef(*fnptr));
+			o.set("map", createCompiledFnRef(fnptr->second));
 			compiled = o;
 		} else{
-			compiled = createCompiledFnRef(*fnptr);
+			compiled = createCompiledFnRef(fnptr->second);
 		}
 		out.set(itemname, compiled);
 	}
@@ -320,7 +321,7 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, StrViewA s
 }
 
 
-Value QueryServer::commandDDoc(const Value& req, const PInOutStream& stream) {
+Value QueryServer::commandDDoc(const Value& req, std::istream &input, std::ostream &output) {
 	StrViewA docid = req[1].getString();
 	if (docid == "new") {
 		//cache new document

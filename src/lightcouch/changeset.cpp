@@ -9,7 +9,7 @@
 
 #include "document.h"
 
-#include "lightspeed/base/containers/autoArray.tcc"
+
 
 #include "localView.h"
 #include "validator.h"
@@ -25,7 +25,7 @@ Changeset& Changeset::update(const Document &document) {
 	Value doc = document;
 	Value id = doc["_id"];
 	if (!id.defined())
-		throw DocumentHasNoID(THISLOCATION, document);
+		throw DocumentHasNoID( document);
 
 	Value ctodel = document.getConflictsToDelete();
 	if (ctodel.defined()) {
@@ -47,7 +47,7 @@ Changeset& Changeset::update(const Value &document) {
 	Value doc = document;
 	Value id = doc["_id"];
 	if (!id.defined())
-		throw DocumentHasNoID(THISLOCATION, document);
+		throw DocumentHasNoID( document);
 
 	scheduledDocs.push_back(ScheduledDoc(id.getString(),doc,json::undefined));
 
@@ -78,7 +78,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 
 		if (v) {
 			Validator::Result r = v->validateDoc(doc);;
-			if (!r) throw ValidationFailedException(THISLOCATION,r);
+			if (!r) throw ValidationFailedException(r);
 		}
 
 		Object adj(doc);
@@ -86,7 +86,9 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 		bool hasTm = doc[CouchDB::fldTimestamp].defined();
 		bool hasPrevRev =  doc[CouchDB::fldPrevRevision].defined();
 		if (hasTm && !now.defined()) {
-			adj.set(CouchDB::fldTimestamp,Value(TimeStamp::now().asUnix()));
+			 std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+			  std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+			adj.set(CouchDB::fldTimestamp,Value(now_c));
 		}
 		if (hasPrevRev) {
 			adj.set(CouchDB::fldPrevRevision, doc["_rev"]);
@@ -106,7 +108,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 	scheduledDocs.clear();
 	Value out = db.bulkUpload(docsToCommit, all_or_nothing);
 
-	AutoArray<UpdateException::ErrorItem> errors;
+	std::vector<UpdateException::ErrorItem> errors;
 
 	auto siter = docsToCommit.begin();
 
@@ -123,7 +125,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 							   ("_rev",rev);
 			e.errorType = "internal_error";
 			e.reason = "Server's response is out of sync";
-			errors.add(e);
+			errors.push_back(e);
 		} else if (err.defined()) {
 			UpdateException::ErrorItem e;
 
@@ -131,14 +133,14 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 			e.document = *siter;
 			e.errorType = String(err);
 			e.reason = String(item["reason"]);
-			errors.add(e);
+			errors.push_back(e);
 		} else if (rev.defined()) {
 			commitedDocs.push_back(CommitedDoc(orgId, String(rev), *siter));
 		}
 		++siter;
 	}
 
-	if (errors.length()) throw UpdateException(THISLOCATION,errors);
+	if (!errors.empty()) throw UpdateException(errors);
 
 	return *this;
 

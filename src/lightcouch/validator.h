@@ -7,15 +7,11 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_VALIDATOR_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_VALIDATOR_H_
-#include "lightspeed/base/memory/sharedPtr.h"
-#include "lightspeed/base/containers/autoArray.h"
-#include "lightspeed/base/containers/string.h"
 #include "json.h"
-
+#include "exception.h"
 
 namespace LightCouch {
 
-using namespace LightSpeed;
 
 ///Validates document before it is put to the database
 /** Similar to validation functions defined by design documents. However. this
@@ -30,7 +26,7 @@ public:
 
 		virtual ~IValidationFn() {}
 		virtual bool operator()(const Value &doc) = 0;
-		virtual const StringA &getName() const = 0;
+		virtual const String &getName() const = 0;
 	};
 
 	///adds validation function
@@ -51,7 +47,7 @@ public:
 	 * @return pointer to internal object which can be used as argument of function remove()
 	 */
 	template<typename Fn>
-	IValidationFn *add(const Fn &fn,const StringA &name);
+	IValidationFn *add(const Fn &fn,const String &name);
 
 	///Removes validation function
 	/**
@@ -68,13 +64,13 @@ public:
 		///true if test passed
 		const bool valid;
 		///contains name of validation function when test failed
-		const StringA failedName;
+		const String failedName;
 		///contains details of failure - used only when validation function throws an exception
-		const StringA details;
+		const String details;
 
 		Result():valid(true) {}
-		Result(const StringA &failedName):valid(false), failedName(failedName) {}
-		Result(const StringA & failedName, const StringA &details):valid(false), failedName(failedName),details(details) {}
+		Result(const String &failedName):valid(false), failedName(failedName) {}
+		Result(const String & failedName, const String &details):valid(false), failedName(failedName),details(details) {}
 
 		operator bool() const {return valid;}
 		bool operator!() const {return !valid;}
@@ -87,8 +83,8 @@ public:
 	 */
 	Result validateDoc(const Value &document) const;
 
-	typedef SharedPtr<IValidationFn> PValidationFn;
-	typedef AutoArray<PValidationFn> FnList;
+	typedef std::unique_ptr<IValidationFn> PValidationFn;
+	typedef std::vector<PValidationFn> FnList;
 
 protected:
 
@@ -97,34 +93,32 @@ protected:
 
 class ValidationFailedException: public Exception {
 public:
-	LIGHTSPEED_EXCEPTIONFINAL;
 
-	ValidationFailedException(const ProgramLocation &loc, const Validator::Result &res)
-		:Exception(loc),res(res) {}
+	ValidationFailedException(const Validator::Result &res):res(res) {}
 
 	const Validator::Result getValidationResult() const {return res;}
 	virtual ~ValidationFailedException() throw();
 
 protected:
 	Validator::Result res;
-	void message(ExceptionMsg &msg) const;
+	virtual String getWhatMsg() const throw() override;
 
 };
 
 template<typename Fn>
-inline Validator::IValidationFn* Validator::add(const Fn &fn,const StringA &name) {
+inline Validator::IValidationFn* Validator::add(const Fn &fn,const String &name) {
 	class FnInst: public IValidationFn {
 	public:
-		FnInst(const Fn &fn,const StringA &name):fn(fn),name(name) {}
+		FnInst(const Fn &fn,const String &name):fn(fn),name(name) {}
 		virtual bool operator()(const Value &doc) {return fn(doc);}
-		virtual const StringA &getName() const {return name;}
+		virtual const String &getName() const {return name;}
 
 	protected:
 		Fn fn;
-		StringA name;
+		String name;
 	};
 	PValidationFn f = new FnInst(fn,name);
-	fnList.add(f);
+	fnList.push_back(f);
 	return f;
 }
 
