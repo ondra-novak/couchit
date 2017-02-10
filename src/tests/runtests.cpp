@@ -1,6 +1,26 @@
-#include "lightspeed/base/framework/app.h"
-#include "lightspeed/base/framework/testapp.h"
-#include "lightspeed/base/streams/standardIO.tcc"
+#include "testClass.h"
+
+
+namespace LightCouch {
+
+
+	void runMiniHttpTests(TestSimple &tst) ;
+	void testUUIDs(TestSimple &tst) ;
+
+}
+
+int main(int argc, char *argv[]) {
+	TestSimple tst;
+
+	LightCouch::runMiniHttpTests(tst);
+	LightCouch::testUUIDs(tst);
+
+	return tst.didFail()?1:0;
+
+}
+
+
+#if 0
 
 namespace LightCouch {
 
@@ -46,3 +66,5 @@ namespace LightCouch {
 
 	static Main theApp;
 }
+
+#endif

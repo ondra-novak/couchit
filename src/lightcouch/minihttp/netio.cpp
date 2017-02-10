@@ -61,6 +61,7 @@ protected:
 
 };
 
+
 NetworkConnection* LightCouch::NetworkConnection::connect(const StrViewA &addr_ddot_port, int defaultPort) {
 
 
@@ -72,7 +73,7 @@ NetworkConnection* LightCouch::NetworkConnection::connect(const StrViewA &addr_d
 	struct addrinfo *res;
 
 
-	std::size_t pos = addr_ddot_port.findLast(':');
+	std::size_t pos = addr_ddot_port.lastIndexOf(":");
 	if (pos != ((std::size_t)-1)) {
 
 		json::String host = addr_ddot_port.substr(0,pos);

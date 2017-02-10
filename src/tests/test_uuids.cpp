@@ -5,38 +5,37 @@
  *      Author: ondra
  */
 
-#include "lightspeed/base/framework/testapp.h"
-#include "lightspeed/base/text/textstream.tcc"
-#include "lightspeed/base/streams/fileiobuff.tcc"
+#include <unistd.h>
+#include <iostream>
+#include <set>
+
 #include "../lightcouch/couchDB.h"
 
 #include "test_common.h"
+#include "testClass.h"
 
-#include "lightspeed/base/containers/set.tcc"
-
-#include "lightspeed/mt/thread.h"
 namespace LightCouch {
-using namespace LightSpeed;
-using namespace BredyHttpClient;
+
+using namespace json;
 
 
 
-static void genFastUUIDS(PrintTextA &print) {
+static void genFastUUIDS(std::ostream &print) {
 
-	Set<String> uuidmap;
+	std::set<String> uuidmap;
 	CouchDB db(getTestCouch());
-	ConsoleA out;
 
 	for (std::size_t i = 0; i < 50; i++) {
-		String uuid = Value(db.genUID("test-"));
-		out.print("%1\n") << convStr(uuid);
+		String uuid = db.genUID("test-");
+		std::cout << uuid << std::endl;
 		uuidmap.insert(uuid);
-		Thread::sleep(100);
+		usleep(100000);
 	}
-	print("%1") << uuidmap.size();
+	print << uuidmap.size();
 }
 
 
-
-defineTest test_genfastuuids("couchdb.genfastuid","50",&genFastUUIDS);
+void testUUIDs(TestSimple &tst) {
+	tst.test("couchdb.genfastuid","50") >> &genFastUUIDS;
+}
 }

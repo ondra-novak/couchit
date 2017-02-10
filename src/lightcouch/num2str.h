@@ -1,19 +1,21 @@
 #pragma once
 
-static inline char *unsignedToStringImpl(char *str, std::size_t number, std::size_t count, bool fixedLen = true, std::size_t base = 10) {
+template<typename Output>
+static inline std::size_t unsignedToStringImpl(Output out, std::size_t number, std::size_t count, bool fixedLen = true, std::size_t base = 10) {
 	if (count && (fixedLen || number)) {
-		str = unsignedToStringImpl(str,number/base, count-1, base);
+		std::size_t r = unsignedToStringImpl(out,number/base, count-1, base);
 		std::size_t p = number%base;
-		if (p < 10) *str = '0' + p;
-		else if (p < 36) *str = 'A'+(p-10);
-		else *str = 'a' + (p - 36);
-		return str+1;
+		if (p < 10) out((char)('0' + p));
+		else if (p < 36) out((char)('A'+(p-10)));
+		else  out((char)('a' + (p - 36)));
+		return r+1;
 	} else{
-		return str;
+		return 0;
 	}
 }
 
-static inline char *unsignedToString(char *str, std::size_t number, std::size_t limit, std::size_t base = 10) {
-	if (number == 0) return unsignedToStringImpl(str,number,1,true,base);
-	else return unsignedToStringImpl(str,number,limit,false,base);
+template<typename Output>
+static inline std::size_t unsignedToString(Output out, std::size_t number, std::size_t limit, std::size_t base = 10) {
+	if (number == 0) return unsignedToStringImpl(out,number,1,true,base);
+	else return unsignedToStringImpl(out,number,limit,false,base);
 }

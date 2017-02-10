@@ -12,4 +12,4 @@ add_compile_options(-std=c++11)
 add_custom_target( test bin/couchity_test DEPENDS bin/couchity_test)
 cmake_policy(POP) 
 
- 
+  

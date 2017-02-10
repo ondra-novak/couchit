@@ -30,7 +30,7 @@ protected:
 
 	std::vector<char> buffer;
 
-	void addNumRec(std::size_t value);
+	void addKey(const StrViewA &key);
 
 
 };

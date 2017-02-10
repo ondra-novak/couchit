@@ -26,7 +26,7 @@ Revision::Revision(std::size_t revId, StrViewA tag):revId(revId),tagsize(tag.len
 String Revision::toString() const {
 	return String(21+tagsize, [&](char *c){
 		char *s = c;
-		c = unsignedToString(c,revId,20,10);
+		unsignedToString([&](char x){*c++=x;},revId,20,10);
 		*c++='-';
 		std::copy(tag,tag+tagsize,c);
 		c+=tagsize;

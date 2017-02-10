@@ -8,6 +8,7 @@
 #include "urlBuilder.h"
 
 #include "minihttp/urlencode.h"
+#include "num2str.h"
 
 namespace LightCouch {
 
@@ -36,39 +37,52 @@ void LightCouch::UrlBuilder::init(StrViewA basicUrl, StrViewA dbname, StrViewA r
 	curSep = '/';
 }
 
+namespace {
+class PutToBuffer {
+public:
+	std::vector<char> &buffer;
+	PutToBuffer(std::vector<char> &buffer):buffer(buffer) {}
+	void operator()(char c) {buffer.push_back(c);}
+};
+}
 UrlBuilder &LightCouch::UrlBuilder::add(StrViewA path) {
 	UrlEncoder enc;
-	enc(json::fromString(path),[&](char c) {buffer.push_back(c);});
+	enc(json::fromString(path), PutToBuffer(buffer));
 	return *this;
 }
 
 UrlBuilder &LightCouch::UrlBuilder::add(StrViewA key, StrViewA value) {
-	if (curSep == '/') curSep = '?'; else curSep = '&';
+	addKey(key);
 	UrlEncoder enc;
-	auto wr = [&](char c) {buffer.push_back(c);};
-	buffer.push_back(curSep);
-	enc(json::fromString(key),wr);
-	buffer.push_back('=');
-	enc(json::fromString(value),wr);
+	enc(json::fromString(value), PutToBuffer(buffer));
 	return *this;
 }
 
 UrlBuilder &LightCouch::UrlBuilder::addJson(StrViewA key, Value value) {
-	if (curSep == '/') curSep = '?'; else curSep = '&';
-	auto wr = [&](char c) {buffer.push_back(c);};
-	buffer.push_back(curSep);
+	addKey(key);
 	UrlEncoder enc;
-	enc(json::fromString(key),wr);
-	buffer.push_back('=');
 	value.serialize(json::emitUtf8, [&](char c) {
-		enc(json::oneCharStream(c), wr);
+		enc(json::oneCharStream(c), PutToBuffer(buffer));
 	});
 	return *this;
 }
 
 void UrlBuilder::init() {
+
 }
 
+UrlBuilder& UrlBuilder::add(StrViewA key, std::size_t value) {
+	addKey(key);
+	unsignedToString( PutToBuffer(buffer),value,21,10);
+}
+
+void UrlBuilder::addKey(const StrViewA& key) {
+	if (curSep == '/') curSep = '?'; else curSep = '&';
+	UrlEncoder enc;
+	buffer.push_back(curSep);
+	enc(json::fromString(key), PutToBuffer(buffer));
+	buffer.push_back('=');
+}
 
 
 

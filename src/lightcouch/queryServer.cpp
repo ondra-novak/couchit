@@ -549,7 +549,7 @@ Value createVersionedRef(StrViewA name, std::size_t ver) {
 		char *s = c;
 		for (char x: name) *c++ = x;
 		*c++='@';
-		c = unsignedToString(c,ver,20,10);
+		unsignedToString([&](char x){*c++=x;},ver,20,10);
 		return c-s;
 	});
 }

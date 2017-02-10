@@ -44,6 +44,9 @@ Validator::Result Validator::validateDoc(const Value& document) const {
 ValidationFailedException::~ValidationFailedException() throw () {
 }
 
+String ValidationFailedException::getWhatMsg() const throw () {
+	return {"Validation failed on: '", res.failedName,"' - details: '", res.details, "'."};
+}
 
 
 } /* namespace LightCouch */
