@@ -23,9 +23,9 @@ public:
 	void serialize(const json::Value &v) {
 
 
-		json::String method = v["_method"];
-		json::String uri = v["_uri"];
-		json::String version = v["_version"];
+		json::String method (v["_method"]);
+		json::String uri (v["_uri"]);
+		json::String version (v["_version"]);
 
 		writeString(method);
 		out(' ');
@@ -34,7 +34,7 @@ public:
 		writeString(version);
 		writeNL();
 
-		for (auto &&c:v) {
+		for (auto c:v) {
 
 			json::StringView<char> key = c.getKey();
 			if (key.empty() || key[0] == '_') continue;

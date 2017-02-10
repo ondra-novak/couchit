@@ -188,7 +188,7 @@ private:
 	Value commandDDoc(const Value &req, std::istream &input, std::ostream &output);
 
 	Value commandShow(const Value &fn, const Value &args);
-	Value commandList(const Value &fn, std::istream &input, std::ostream &output);
+	Value commandList(const Value &fn, const Value &args, std::istream &input, std::ostream &output);
 	Value commandUpdate(const Value &fn, const Value &args);
 	Value commandView(const Value &fn, const Value &args);
 	Value commandFilter(const Value &fn, const Value &args);

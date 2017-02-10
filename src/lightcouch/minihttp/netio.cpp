@@ -6,20 +6,19 @@
  */
 
 
+#include <cstring>
 #include <poll.h>
 #include "netio.h"
 
 #include <errno.h>
 #include <fcntl.h>
 #include <imtjson/json.h>
-#include <lightspeed/base/types.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include "../json.h"
 
-using LightSpeed::atomic;
 namespace LightCouch {
 
 class LinuxCancel: public ICancelWait {
@@ -64,10 +63,9 @@ protected:
 
 NetworkConnection* LightCouch::NetworkConnection::connect(const StrViewA &addr_ddot_port, int defaultPort) {
 
-	using namespace LightSpeed;
 
 	struct addrinfo req;
-	memset(&req,0,sizeof(req));
+	std::memset(&req,0,sizeof(req));
 	req.ai_family = AF_UNSPEC;
 	req.ai_socktype = SOCK_STREAM;
 

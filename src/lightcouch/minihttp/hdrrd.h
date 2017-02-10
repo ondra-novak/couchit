@@ -9,7 +9,6 @@
 #define LIGHTCOUCH_MINIHTTP_HDRRD_H_
 
 
-#include <lightspeed/base/types.h>
 #include "../json.h"
 
 namespace LightCouch {
@@ -38,7 +37,6 @@ protected:
 template<typename Fn>
 inline json::Value LightCouch::HeaderRead<Fn>::parseHeaders() {
 
-	using namespace LightSpeed;
 	json::Object collect;
 	bool stline = false;
 	do {
@@ -48,7 +46,7 @@ inline json::Value LightCouch::HeaderRead<Fn>::parseHeaders() {
 			else continue;
 		}
 
-		std::size_t pos = line.find(':');
+		std::size_t pos = line.indexOf(":",0);
 		if (pos != ((std::size_t)-1)) {
 			StrViewA field = line.substr(0,pos);
 			StrViewA value = line.substr(pos+1);
@@ -60,13 +58,13 @@ inline json::Value LightCouch::HeaderRead<Fn>::parseHeaders() {
 				String strline(line);
 				Value starr = strline.split(" ",3);
 				int pos = 0;
-				starr = starr.map([&](const String &v) -> Value {
+				starr = starr.map([&](const Value &v) -> Value {
 					if (v.empty())
 						return Value(json::undefined);
 					pos++;
 					if (pos == 2)
 						try {
-							return Value::fromString(v);
+							return Value::fromString(v.getString());
 						} catch (...) {
 							return v;
 						}
@@ -91,7 +89,8 @@ inline StrViewA HeaderRead<Fn>::readLine() {
 	while (i != -1) {
 		linebuff.push_back((char)i);
 		StrViewA l(linebuff);
-		if (StrViewA(l.tail(2)) == StrViewA("\r\n")) return l.crop(0,2);
+		if (StrViewA(l.substr(l.length-2,2)) == StrViewA("\r\n"))
+			return l.substr(0,l.length-2);
 		i = input();
 	}
 	return StrViewA("EOF");
@@ -100,8 +99,8 @@ inline StrViewA HeaderRead<Fn>::readLine() {
 template<typename Fn>
 inline StrViewA HeaderRead<Fn>::crop(const StrViewA &str) {
 	std::size_t p1 = 0;
-	while (p1<str.length() && isspace(str[p1])) p1++;
-	std::size_t p2 = str.length();
+	while (p1<str.length && isspace(str[p1])) p1++;
+	std::size_t p2 = str.length;
 	while (p2>0 && isspace(str[p2-1])) p2--;
 	return str.substr(p1,p2-p1);
 

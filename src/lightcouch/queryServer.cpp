@@ -12,6 +12,7 @@
 
 #include "changeset.h"
 #include "namedEnum.h"
+#include "num2str.h"
 
 namespace LightCouch {
 
@@ -335,20 +336,20 @@ Value QueryServer::commandDDoc(const Value& req, std::istream &input, std::ostre
 	} else {
 		Value doc = ddcache[docid];
 		if (!doc.defined())
-			throw QueryServerError(THISLOCATION,"not_found",StringA(StrViewA("The document '")+(docid)+StrViewA("' is not cached at the query server")));
+			throw QueryServerError("not_found",{"The document '",docid,"' is not cached at the query server"});
 		Value fn = doc;
 		Value path = req[2];
 		for (std::size_t i = 0, cnt = path.size(); i < cnt; i++) {
 			fn = fn[path[i].getString()];
 			if (!fn.defined())
-				throw QueryServerError(THISLOCATION,"not_found",StringA(StrViewA("Path not found'")+convStr(path.toString())+StrViewA("'")));
+				QueryServerError("not_found",{"Path not found'",path.toString(),"'"});
 		}
 		Value arguments = req[3];
-		DDocCommand cmd = ddocCommands[convStr(path[0].getString())];
+		DDocCommand cmd = ddocCommands[path[0].getString()];
 		Value resp;
 		switch(cmd){
 			case ddcmdShows: resp = commandShow(fn,arguments);break;
-			case ddcmdLists: resp = commandList(fn,arguments, stream);break;
+			case ddcmdLists: resp = commandList(fn, arguments, input, output);break;
 			case ddcmdFilters: resp = commandFilter(fn,arguments);break;
 			case ddcmdUpdates: resp = commandUpdate(fn,arguments);break;
 			case ddcmdViews: resp = commandView(fn,arguments);break;
@@ -363,14 +364,14 @@ Value QueryServer::commandShow(const Value& fn, const Value& args) {
 	return {"resp",resp};
 }
 
-Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutStream& stream) {
+Value QueryServer::commandList(const Value& fn, const Value& args, std::istream &input, std::ostream &output) {
 
 	class ListCtx: public IListContext {
 	public:
-		SeqFileInput requests;
-		SeqFileOutput responses;
-		ListCtx(const PInOutStream &stream, Value viewHeader)
-			: requests(PInOutStream(stream)), responses(PInOutStream(stream))
+		std::istream &requests;
+		std::ostream &responses;
+		ListCtx(std::istream &requests,std::ostream &responses, Value viewHeader)
+			: requests(requests), responses(responses)
 			,viewHeader(viewHeader)
 			,eof(false),headerSent(false) {
 		}
@@ -384,17 +385,18 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 			} else {
 				resp = {"chunks" ,chunks};
 			}
-			resp.serialize([&](char c){responses.write(c);});
-			responses.write('\n');
+			resp.toStream(responses);
+			responses.put('\n');
 			chunks.clear();
-			Value req = Value::parse([&](){return requests.getNext();});
+			Value req = Value::fromStream(requests);
+
 			if (req[0].getString() == "list_row") {
 				return req[1];
 			} else if (req[0].getString() == "list_end") {
 				eof = true;
 				return null;
 			} else {
-				throw QueryServerError(THISLOCATION,"protocol_error",StringA(StrViewA("Expects list_row or list_end, got:")+(convStr(req[0].getString()))));
+				throw QueryServerError("protocol_error",{"Expects list_row or list_end, got:",req[0].getString()});
 			}
 		}
 
@@ -429,7 +431,7 @@ Value QueryServer::commandList(const Value& fn, const Value& args, const PInOutS
 
 	AbstractListBase &listFn = dynamic_cast<const FnCallValue<AbstractListBase> &>(*fn.getHandle()->unproxy()).getFunction();
 
-	ListCtx listCtx(stream,args[0]);
+	ListCtx listCtx(input,output,args[0]);
 	listFn.run(listCtx,args[1]);
 	return listCtx.finish();
 
@@ -492,37 +494,37 @@ Value QueryServer::commandFilter(const Value& fn, const Value& args) {
 	return {true,results};
 }
 
-void QueryServer::regView(StringA viewName, AbstractViewBase* impl) {
-	views.insert(StrKey(viewName),impl);
+void QueryServer::regView(String viewName, AbstractViewBase* impl) {
+	views.insert(std::make_pair(StrKey(viewName),impl));
 }
 
-void QueryServer::regList(StringA listName, AbstractListBase* impl) {
-	lists.insert(StrKey(listName),impl);
+void QueryServer::regList(String listName, AbstractListBase* impl) {
+	lists.insert(std::make_pair(StrKey(listName),impl));
 }
 
-void QueryServer::regShow(StringA showName, AbstractShowBase* impl) {
-	shows.insert(StrKey(showName),impl);
+void QueryServer::regShow(String showName, AbstractShowBase* impl) {
+	shows.insert(std::make_pair(StrKey(showName),impl));
 }
 
-void QueryServer::regUpdateFn(StringA updateName, AbstractUpdateFnBase* impl) {
-	updates.insert(StrKey(updateName),impl);
+void QueryServer::regUpdateFn(String updateName, AbstractUpdateFnBase* impl) {
+	updates.insert(std::make_pair(StrKey(updateName),impl));
 }
 
-void QueryServer::regFilter(StringA filterName, AbstractFilterBase* impl) {
-	filters.insert(StrKey(filterName),impl);
+void QueryServer::regFilter(String filterName, AbstractFilterBase* impl) {
+	filters.insert(std::make_pair(StrKey(filterName),impl));
 }
 
 
 Value QueryServer::createDesignDocument(Object &container, StrViewA fnName, StrViewA &suffix) {
-	std::size_t pos = fnName.find('/');
+	std::size_t pos = fnName.indexOf("/",0);
 	StrViewA docName;
 
 	if (pos== ((std::size_t)-1)) {
 		docName = qserverName;
 		suffix = fnName;
 	} else {
-		docName = fnName.head(pos);
-		suffix = fnName.offset(pos+1);
+		docName = fnName.substr(0,pos);
+		suffix = fnName.substr(pos+1);
 	}
 
 	StrViewA strDocName(docName);
@@ -531,7 +533,7 @@ Value QueryServer::createDesignDocument(Object &container, StrViewA fnName, StrV
 	if (!doc.defined()) {
 		Object obj;
 		obj("_id",Value(String("_design/")+String(strDocName)))
-			("language",convStr(qserverName));
+			("language",qserverName);
 		doc = obj;
 		container.set(strDocName,doc);
 		///pick name object
@@ -543,28 +545,29 @@ Value QueryServer::createDesignDocument(Object &container, StrViewA fnName, StrV
 }
 
 Value createVersionedRef(StrViewA name, std::size_t ver) {
-	TextFormatBuff<char, SmallAlloc<256 >> fmt;
-	fmt("%1@%2") << name << ver;
-	return Value(convStr(StrViewA(fmt.write())));
+	return String(21+name.length,[&](char *c) {
+		char *s = c;
+		for (char x: name) *c++ = x;
+		*c++='@';
+		c = unsignedToString(c,ver,20,10);
+		return c-s;
+	});
 }
 
 Value QueryServer::generateDesignDocuments() {
 	Object ddocs;
-
-
-	for(RegView::Iterator iter = views.getFwIter(); iter.hasItems();) {
-		const RegView::KeyValue &kv = iter.getNext();
+	for (auto &&kv : views) {
 		StrViewA itemName;
-		Value ddoc = createDesignDocument(ddocs,kv.key, itemName);
+		Value ddoc = createDesignDocument(ddocs,kv.first, itemName);
 		Object ddocobj(ddoc);
 		{
 			auto sub1 = ddocobj.object("views");
-			auto view = sub1.object(convStr(itemName));
-			view("map",createVersionedRef(kv.key,kv.value->version()));
-			switch (kv.value->reduceMode()) {
+			auto view = sub1.object(itemName);
+			view("map",createVersionedRef(kv.first,kv.second->version()));
+			switch (kv.second->reduceMode()) {
 			case AbstractViewBase::rmNone:break;
 			case AbstractViewBase::rmFunction:
-				view("reduce",convStr(kv.key));break;
+				view("reduce",kv.first);break;
 			case AbstractViewBase::rmSum:
 				view("reduce","_sum");break;
 			case AbstractViewBase::rmCount:
@@ -576,42 +579,37 @@ Value QueryServer::generateDesignDocuments() {
 		ddocs.set(StrViewA(ddoc.getKey()), ddocobj);
 	}
 
-	for (RegListFn::Iterator iter = lists.getFwIter(); iter.hasItems();) {
-		const RegListFn::KeyValue &kv = iter.getNext();
+	for (auto &&kv : lists) {
 		StrViewA itemName;
-		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
+		Value ddoc = createDesignDocument(ddocs,kv.first,itemName);
 		Object e(ddoc);
-		e.object("lists")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
+		e.object("lists")(itemName, createVersionedRef(kv.first,kv.second->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
-	for (RegShowFn::Iterator iter = shows.getFwIter(); iter.hasItems();) {
-		const RegShowFn::KeyValue &kv = iter.getNext();
+	for (auto &&kv : shows) {
 		StrViewA itemName;
-		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
+		Value ddoc = createDesignDocument(ddocs,kv.first,itemName);
 		Object e(ddoc);
-		e.object("shows")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
+		e.object("shows")(itemName, createVersionedRef(kv.first,kv.second->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
-	for (RegUpdateFn::Iterator iter = updates.getFwIter(); iter.hasItems();) {
-		const RegUpdateFn::KeyValue &kv = iter.getNext();
+	for (auto &&kv : updates) {
 		StrViewA itemName;
-		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
+		Value ddoc = createDesignDocument(ddocs,kv.first,itemName);
 		Object e(ddoc);
-		e.object("updates")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
+		e.object("updates")(itemName, createVersionedRef(kv.first,kv.second->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
-	for (RegFilterFn::Iterator iter = filters.getFwIter(); iter.hasItems();) {
-		const RegFilterFn::KeyValue &kv = iter.getNext();
+	for (auto &&kv : filters) {
 		StrViewA itemName;
-		Value ddoc = createDesignDocument(ddocs,kv.key,itemName);
+		Value ddoc = createDesignDocument(ddocs,kv.first,itemName);
 		Object e(ddoc);
-		e.object("filters")(convStr(itemName), createVersionedRef(kv.key,kv.value->version()));
+		e.object("filters")(itemName, createVersionedRef(kv.first,kv.second->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
-
 	Value ddocv = ddocs;
 	Array output;
 
@@ -637,16 +635,6 @@ void QueryServer::syncDesignDocuments(Value designDocuments, CouchDB& couch, Cou
 
 
 
-}
-
-
-
-QueryServerApp::QueryServerApp(StrViewA name, integer priority):LightSpeed::App(priority), QueryServer(name, ConstStrW()) {
-}
-
-
-void VersionMistmatch::message(ExceptionMsg& msg) const {
-	msg("version mistmatch");
 }
 
 } /* namespace LightCouch */

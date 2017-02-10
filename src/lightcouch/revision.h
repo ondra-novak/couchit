@@ -7,35 +7,44 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_REVISION_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_REVISION_H_
-#include "lightspeed/base/memory/staticAlloc.h"
-#include "lightspeed/base/compare.h"
-#include "lightspeed/base/containers/autoArray.h"
-#include "lightspeed/base/containers/string.h"
+#include "collation.h"
+#include "json.h"
+
+
 namespace LightCouch {
 
-using namespace LightSpeed;
 
-class Revision: public Comparable<Revision> {
+
+class Revision {
 public:
 	Revision();
-	Revision(std::size_t revId, ConstStrA tag);
-	Revision(ConstStrA revStr);
+	Revision(std::size_t revId, StrViewA tag);
+	Revision(StrViewA revStr);
 
 	std::size_t getRevId() const {return revId;}
-	ConstStrA getTag() const {return tag;}
+	StrViewA getTag() const {return StrViewA(tag,tagsize);}
 
-	static std::size_t getRevId(ConstStrA rev);
-	static ConstStrA getTag(ConstStrA rev);
+	static std::size_t getRevId(StrViewA rev);
+	static StrViewA getTag(StrViewA rev);
 
 
-	StringA toString() const;
+	String toString() const;
 
 
 	CompareResult compare(const Revision &other) const;
 
+	bool operator == (const Revision &other) const {return compare(other) == 0;}
+	bool operator >= (const Revision &other) const {return compare(other) >= 0;}
+	bool operator <= (const Revision &other) const {return compare(other) <= 0;}
+	bool operator != (const Revision &other) const {return compare(other) != 0;}
+	bool operator > (const Revision &other) const {return compare(other) > 0;}
+	bool operator < (const Revision &other) const {return compare(other) < 0;}
+
 protected:
 	std::size_t revId;
-	AutoArray<char, StaticAlloc<32> > tag;
+	std::size_t tagsize;
+	char tag[33];
+
 
 };
 

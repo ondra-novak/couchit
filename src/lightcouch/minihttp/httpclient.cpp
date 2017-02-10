@@ -7,11 +7,7 @@
 
 #include "httpclient.h"
 
-#include <lightspeed/base/containers/convertString.h>
-#include <lightspeed/base/iter/iterConvBytes.h>
-#include <lightspeed/base/types.h>
-#include <lightspeed/utils/base64.h>
-#include <lightspeed/base/containers/autoArray.tcc>
+
 
 #include "chunked.h"
 #include "hdrrd.h"
@@ -126,7 +122,7 @@ int LightCouch::HttpClient::send() {
 }
 
 int LightCouch::HttpClient::send(const StrViewA& body) {
-	return send(body.data(),body.length());
+	return send(body.data,body.length);
 }
 
 int LightCouch::HttpClient::send(const void* body, std::size_t body_length) {
@@ -210,13 +206,16 @@ void HttpClient::initRequest(bool haveBody, std::size_t contentLength) {
 	}
 
 	if (!auth.empty()) {
-		LightSpeed::ConverterChain<
-			LightSpeed::BinaryConvert<char, unsigned char>,
-			LightSpeed::ByteToBase64Convert > conv;
-		LightSpeed::StringCore<char> base = LightSpeed::convertString(conv,
-				LightSpeed::ConstStrA(StrViewA(auth)));
-		json::String val({"Basic ",StrViewA(base)});
-		hdr("Authorization", val);
+		String authstr((auth.length()+2)*4/3+7,[&](char *c) {
+			char *s = c;
+			StrViewA basic("Basic ");
+			for (auto x: basic) *c++ = x;
+			json::base64->encodeBinaryValue(BinaryView(auth.str()),[&](StrViewA z){
+				for (auto x: z) *c++=x;
+			});
+			return c - s;
+		});
+		hdr("Authorization", authstr);
 	}
 
 	OutputStream stream(conn);
@@ -311,12 +310,12 @@ void HttpClient::connectTarget() {
 
 json::String HttpClient::crackURL(StrViewA urlWithoutProtocol) {
 	json::String newTarget;
-	std::size_t p1 = urlWithoutProtocol.find('/');
-	if (p1 != LightSpeed::((std::size_t)-1)) {
+	std::size_t p1 = urlWithoutProtocol.indexOf("/",0);
+	if (p1 != urlWithoutProtocol.npos) {
 		StrViewA adom = urlWithoutProtocol.substr(0,p1);
 		StrViewA path = urlWithoutProtocol.substr(p1);
-		std::size_t p2 = adom.find('@');
-		if (p2 != LightSpeed::((std::size_t)-1)) {
+		std::size_t p2 = adom.indexOf("@",0);
+		if (p2 != adom.npos) {
 			auth = adom.substr(0,p2);
 			newTarget = adom.substr(p2+1);
 		} else {
@@ -341,7 +340,7 @@ int HttpClient::getStatus() {
 }
 
 json::String HttpClient::getStatusMessage() {
-	return responseHeaders["_message"];
+	return String(responseHeaders["_message"]);
 }
 
 json::String HttpClient::custromPotocol(StrViewA) {

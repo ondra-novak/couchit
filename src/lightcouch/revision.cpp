@@ -5,57 +5,62 @@
  *      Author: ondra
  */
 
-#include <lightspeed/base/exceptions/invalidNumberFormat.h>
-#include <lightspeed/base/text/textParser.h>
 #include "revision.h"
-#include "lightspeed/base/text/toString.tcc"
 
-#include "lightspeed/base/exceptions/invalidParamException.h"
-
-#include "lightspeed/base/text/textParser.tcc"
+#include "num2str.h"
 namespace LightCouch {
 
-Revision::Revision():revId(0) {
+Revision::Revision():revId(0),tagsize(0) {
 }
 
-Revision::Revision(std::size_t revId, ConstStrA tag):revId(revId),tag(tag) {
+Revision::Revision(std::size_t revId, StrViewA tag):revId(revId),tagsize(tag.length) {
+	if (tag.length>sizeof(this->tag)) {
+		String s({"Revision tag is too long:", tag});
+		throw std::runtime_error(s.c_str());
+	}
+
+	std::copy(tag.begin(),tag.end(), this->tag);
 
 }
 
-StringA Revision::toString() const {
-	ToString<std::size_t> strRev(revId);
-	StringA ret;
-	StringA::WriteIterator iter = ret.createBufferIter(strRev.length()+1+tag.length());
-	iter.blockWrite(strRev, true);
-	iter.write('-');
-	iter.blockWrite(tag, true);
-	return ret;
+String Revision::toString() const {
+	return String(21+tagsize, [&](char *c){
+		char *s = c;
+		c = unsignedToString(c,revId,20,10);
+		*c++='-';
+		std::copy(tag,tag+tagsize,c);
+		c+=tagsize;
+		return c-s;
+	});
 }
 
-Revision::Revision(ConstStrA revStr):revId(getRevId(revStr)),tag(getTag(revStr)) {
-}
+Revision::Revision(StrViewA revStr) {
+	std::size_t p = revStr.indexOf("-",0);
+	if (p = revStr.npos) {
+		String s({"Invalid revision:", revStr});
+		throw std::runtime_error(s.c_str());
+	}
+	std::size_t r = std::strtod(revStr.data,0);
+	this->revId = r;
 
-std::size_t Revision::getRevId(ConstStrA rev) {
-	std::size_t dash = rev.find('-');
-	if (dash == ((std::size_t)-1)) throw InvalidParamException(THISLOCATION,1,"Argument is not correct CouchDB revision id");
-	ConstStrA numbPart(rev.head(dash));
-	ConstStrA::Iterator iter = numbPart.getFwIter();
-	std::size_t out;
-	if (!parseUnsignedNumber(iter,out,10) || iter.hasItems())
-		throw InvalidNumberFormatException(THISLOCATION, numbPart);
-	return out;
-}
+	p++;
+	StrViewA tagStr = revStr.substr(p);
+	if (tagStr.length > sizeof(tag)) {
+		String s({"Revision tag is too long:", revStr});
+		throw std::runtime_error(s.c_str());
+	}
+	std::copy(tagStr.begin(), tagStr.end(), tag);
+	tagsize = tagStr.length;
 
-ConstStrA Revision::getTag(ConstStrA rev) {
-	std::size_t dash = rev.find('-');
-	return rev.offset(dash+1);
 }
 
 CompareResult Revision::compare(const Revision& other) const {
 	if (revId < other.revId) return cmpResultLess;
 	if (revId > other.revId) return cmpResultGreater;
-	if (tag < other.tag) return cmpResultLess;
-	if (tag > other.tag) return cmpResultGreater;
+	StrViewA mtag(tag,tagsize);
+	StrViewA otag(other.tag, other.tagsize);
+	if (mtag < otag) return cmpResultLess;
+	if (mtag > otag) return cmpResultGreater;
 	return cmpResultEqual;
 }
 
