@@ -63,6 +63,8 @@ struct Config {
 	 */
 	std::size_t iotimeout = 30000;
 
+	///Defines, how long is connection to the database keep alive. Older connections are closed
+	std::size_t keepAliveTimeout = 3000;
 };
 
 

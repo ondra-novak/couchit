@@ -6,6 +6,7 @@ namespace LightCouch {
 
 	void runMiniHttpTests(TestSimple &tst) ;
 	void testUUIDs(TestSimple &tst) ;
+	void runTestBasics(TestSimple &tst);
 
 }
 
@@ -14,6 +15,8 @@ int main(int argc, char *argv[]) {
 
 	LightCouch::runMiniHttpTests(tst);
 	LightCouch::testUUIDs(tst);
+	LightCouch::runTestBasics(tst);
+
 
 	return tst.didFail()?1:0;
 

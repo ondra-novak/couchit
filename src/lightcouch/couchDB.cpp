@@ -38,6 +38,8 @@ std::size_t CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 CouchDB::CouchDB(const Config& cfg)
 	:baseUrl(cfg.baseUrl)
 	,cache(cfg.cache)
+	,validator(cfg.validator)
+	,connPoolTm(cfg.keepAliveTimeout)
 	,uidGen(cfg.uidgen == nullptr?DefaultUIDGen::getInstance():*cfg.uidgen)
 	,http("LightCouch mini http")
 	,queryable(*this)
@@ -417,6 +419,7 @@ Upload CouchDB::uploadAttachment(const Value &document, const StrViewA &attachme
 
 					}
 					http.close();
+					lock.unlock();
 					StrViewA url(*urlline);
 					throw RequestError(url,status, http.getStatusMessage(), errorVal);
 				} else {
@@ -478,12 +481,10 @@ Value CouchDB::genUIDValue(StrViewA prefix) {
 
 
 Document CouchDB::newDocument() {
-	LockGuard _(lock);
 	return Document(genUID(),StrViewA());
 }
 
 Document CouchDB::newDocument(const StrViewA &prefix) {
-	LockGuard _(lock);
 	return Document(genUID(StrViewA(prefix)),StrViewA());
 }
 
@@ -1051,7 +1052,7 @@ CouchDB::PUrlBuilder CouchDB::getUrlBuilder(StrViewA resourcePath) {
 
 	PUrlBuilder b(nullptr);
 	if (urlBldPool.empty()) {
-		PUrlBuilder p(new UrlBuilder, Deleter(*this));
+		PUrlBuilder p(new UrlBuilder, Deleter(this));
 		b = std::move(p);
 	} else {
 		b = std::move(urlBldPool.top());
@@ -1084,6 +1085,219 @@ void CouchDB::updateDocument(Document& doc) {
 }
 
 
+
+CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath) {
+	LockGuard _(lock);
+
+	if (database.empty() && resourcePath.substr(0,1) != StrViewA("/"))
+		throw std::runtime_error("No database selected");
+
+
+	PConnection b(nullptr);
+	if (connPool.empty()) {
+		b = PConnection(new Connection, ConnectionDeleter(this));
+	} else {
+		b = std::move(connPool[connPool.size()-1]);
+		auto dur = SysClock::now() - b->lastUse;
+		if (dur > std::chrono::milliseconds(this->connPoolTm)) {
+			connPool.clear();
+			b = PConnection(new Connection, ConnectionDeleter(this));
+		} else {
+			connPool.pop_back();
+		}
+	}
+	b->init(baseUrl,database,resourcePath);
+	return std::move(b);
+}
+
+void CouchDB::releaseConnection(Connection* b) {
+	b->lastUse = SysClock::now();
+	connPool.push_back(PConnection(b));
+}
+
+void CouchDB::handleUnexpectedStatus(PConnection& conn) {
+
+	Value errorVal;
+	try{
+		errorVal = Value::parse(BufferedRead<InputStream>(conn->http.getResponse()));
+	} catch (...) {
+
+	}
+	http.close();
+	throw RequestError(conn->getUrl(),conn->http.getStatus(), conn->http.getStatusMessage(), errorVal);
+}
+
+
+Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) {
+
+	bool usecache = (flags & flgDisableCache) == 0 && cache != nullptr;
+
+	StrViewA path = conn->getUrl();
+	StrViewA cacheKey;
+
+	if (usecache) {
+		std::size_t baseUrlLen = baseUrl.length();
+		std::size_t databaseLen = database.length();
+		std::size_t prefixLen = baseUrlLen+databaseLen+1;
+
+		if (path.substr(0,baseUrlLen) != baseUrl
+			|| path.substr(baseUrlLen, databaseLen) != database) {
+			usecache = false;
+		} else {
+			cacheKey = path.substr(prefixLen);
+		}
+	}
+
+
+	//there will be stored cached item
+	QueryCache::CachedItem cachedItem;
+
+	if (usecache) {
+		cachedItem = cache->find(cacheKey);
+	}
+
+	HttpClient &http = conn->http;
+	http.open(path,"GET",true);
+	bool redirectRetry = false;
+
+	int status;
+
+    do {
+    	redirectRetry = false;
+    	Object hdr(headers?*headers:Value());
+		hdr("Accept","application/json");
+		if (cachedItem.isDefined()) {
+			hdr("If-None-Match", cachedItem.etag);
+		}
+
+		status = http.setHeaders(hdr).send();
+		if (status == 304 && cachedItem.isDefined()) {
+			http.close();
+			return cachedItem.value;
+		}
+		if (status == 301 || status == 302 || status == 303 || status == 307) {
+			json::Value val = http.getHeaders()["Location"];
+			if (!val.defined()) {
+				http.abort();
+				throw RequestError(path,http.getStatus(),http.getStatusMessage(), Value("Redirect without Location"));
+			}
+			http.close();
+			http.open(val.getString(), "GET",true);
+			redirectRetry = true;
+		}
+    }
+	while (redirectRetry);
+
+
+	if (status/100 != 2) {
+		handleUnexpectedStatus(conn);
+		throw;
+	} else {
+		Value v = parseResponse();
+		if (usecache) {
+			Value fld = http.getHeaders()["ETag"];
+			if (fld.defined()) {
+				cache->set(cacheKey, QueryCache::CachedItem(fld.getString(), v));
+			}
+		}
+		if (flags & flgStoreHeaders && headers != nullptr) {
+			*headers = http.getHeaders();
+		}
+		http.close();
+		return v;
+	}
+}
+
+Value CouchDB::requestPOST(PConnection& conn,
+		const Value& postData, Value* headers, std::size_t flags) {
+	return jsonPUTPOST(conn,true,postData,headers,flags);
+}
+
+Value CouchDB::requestPUT(PConnection& conn, const Value& postData,
+		Value* headers, std::size_t flags) {
+	return jsonPUTPOST(conn,false,postData,headers,flags);
+}
+
+Value CouchDB::requestDELETE(PConnection& conn, Value* headers,
+		std::size_t flags) {
+
+	HttpClient &http = conn->http;
+	StrViewA path = conn->getUrl();
+
+	http.open(path,"DELETE",true);
+	Object hdr(headers?*headers:Value());
+	hdr("Accept","application/json");
+
+	int status = http.setHeaders(hdr).send();
+	if (status/100 != 2) {
+		handleUnexpectedStatus(conn);
+		throw;
+	} else {
+		Value v = parseResponse();
+		if (flags & flgStoreHeaders && headers != nullptr) {
+			*headers = http.getHeaders();
+		}
+		http.close();
+		return v;
+	}
+}
+
+Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
+		Value data, Value* headers, std::size_t flags) {
+	typedef std::uint8_t byte;
+
+	HttpClient &http = conn->http;
+	StrViewA path = conn->getUrl();
+
+
+	http.open(path,methodPost?"POST":"PUT",true);
+	Object hdr(headers?*headers:Value());
+	hdr("Accept","application/json");
+	hdr("Content-Type","application/json");
+	http.setHeaders(hdr);
+
+	int status;
+	if (data.type() == json::undefined) {
+		status = http.send(StrViewA());
+	} else {
+		bool hdrSent = false;
+		byte buffer[4096];
+		int bpos = 0;
+		OutputStream outstr(nullptr);
+
+
+		data.serialize([&](int i) {
+			buffer[bpos++] = (byte)i;
+			if (bpos == sizeof(buffer)) {
+				if (!hdrSent) {
+					outstr = http.beginBody();
+					hdrSent = true;
+				}
+				outstr(buffer,bpos,0);
+				bpos = 0;
+			}
+		});
+		if (bpos && hdrSent) {
+			outstr(buffer,bpos);
+		}
+		outstr = nullptr;
+		status = http.send(buffer,bpos);
+	}
+
+
+
+
+	if (status/100 != 2) {
+		handleUnexpectedStatus(conn);
+		throw;
+	} else {
+		Value v = parseResponse();
+		if (flags & flgStoreHeaders && headers != nullptr) {
+			*headers = http.getHeaders();
+		}
+		http.close();
+		return v;
+	}
+}
+
 } /* namespace assetex */
-
-

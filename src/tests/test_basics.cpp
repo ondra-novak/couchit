@@ -1,51 +1,48 @@
 /*
  * test_basics.cpp
+
  *
  *  Created on: 19. 3. 2016
  *      Author: ondra
  */
+#include <iostream>
+#include <set>
+#include <vector>
+#include <thread>
+#include <chrono>
+#include <condition_variable>
 #include "../lightcouch/attachment.h"
 #include "../lightcouch/document.h"
 #include "../lightcouch/queryCache.h"
 #include "../lightcouch/changeset.h"
-#include <lightspeed/base/text/textstream.tcc>
 #include "../lightcouch/couchDB.h"
 #include "../lightcouch/query.h"
 #include "../lightcouch/changes.h"
-#include "lightspeed/base/framework/testapp.h"
-
-#include "test_common.h"
-
-#include "lightspeed/base/containers/autoArray.tcc"
-
-#include "lightspeed/base/containers/set.tcc"
-
-#include "lightspeed/base/countof.h"
-
-#include "lightspeed/mt/thread.h"
 #include "../lightcouch/json.h"
+#include "../lightcouch/num2str.h"
+#include "test_common.h"
+#include "testClass.h"
+
 namespace LightCouch {
-using namespace LightSpeed;
-using namespace BredyHttpClient;
 
 #define DATABASENAME "lightcouch_unittest"
 
-static void couchConnect(PrintTextA &print) {
+static void couchConnect(std::ostream &print) {
 
 	CouchDB db(getTestCouch());
 
 	Value v = db.requestGET("/");
-	print("%1") << v["couchdb"].getString();
+	print << v["couchdb"].getString();
 }
 
 
-static void rawCreateDB(PrintTextA &) {
+static void rawCreateDB(std::ostream &) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 	db.createDatabase();
 }
 
-static void deleteDB(PrintTextA &) {
+static void deleteDB(std::ostream &) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 	db.deleteDatabase();
@@ -61,10 +58,10 @@ static const char *strdata="[[\"Kermit Byrd\",76,184],[\"Odette Hahn\",44,181],"
 
 static const char *designs[]={
 		"{\"_id\":\"_design/testview\",\"language\":\"javascript\",\"views\":{"
-		"\"by_name\":{\"map\":function (doc) {emit([doc.name], [doc.age,doc.height]);}},"
-		"\"by_age\":{\"map\":function (doc) {emit(doc.age, doc.name);\n\t\t\t\t}},"
-		"\"by_age_group\":{\"map\":function (doc) {emit([Math.floor(doc.age/10)*10, doc.age], doc.name);}},"
-		"\"age_group_height\":{\"map\":function (doc) {emit([Math.floor(doc.age/10)*10, doc.age], doc.height);},\"reduce\":\"_stats\"}},"
+		"\"by_name\":{\"map\":function (doc) {if (doc.name) emit([doc.name], [doc.age,doc.height]);}},"
+		"\"by_age\":{\"map\":function (doc) {if (doc.name) emit(doc.age, doc.name);\n\t\t\t\t}},"
+		"\"by_age_group\":{\"map\":function (doc) {if (doc.name) emit([Math.floor(doc.age/10)*10, doc.age], doc.name);}},"
+		"\"age_group_height\":{\"map\":function (doc) {if (doc.name) emit([Math.floor(doc.age/10)*10, doc.age], doc.height);},\"reduce\":\"_stats\"}},"
 		"\"dummy\":false}"
 };
 
@@ -74,13 +71,20 @@ static View by_age_group("_design/testview/_view/by_age_group");
 static View by_age("_design/testview/_view/by_age");
 static View age_group_height("_design/testview/_view/age_group_height");
 
+json::String UIntToStr(std::size_t id, int base) {
+	return String(21, [&](char *c) {
+		return unsignedToStringImpl([&](char z) {
+			*c++ = z;
+		},id,8,true,base);
+	});
+}
 
-static void couchLoadData(PrintTextA &print) {
+static void couchLoadData(std::ostream &print) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
 
-	AutoArray<Document, SmallAlloc<50> > savedDocs;
+	std::vector<Document> savedDocs;
 
 	Changeset chset(db.createChangeset());
 	std::size_t id=10000;
@@ -92,22 +96,22 @@ static void couchLoadData(PrintTextA &print) {
 			("height",item[2])
 			("_id",UIntToStr(id,16));
 		id+=14823;
-		savedDocs.add(doc);
+		savedDocs.push_back(doc);
 		chset.update(doc);
 	}
 
 	chset.commit(false);
-	Set<String> uuidmap;
+	std::set<String> uuidmap;
 
-	for (std::size_t i = 0; i < savedDocs.length(); i++) {
+	for (std::size_t i = 0; i < savedDocs.size(); i++) {
 		StrViewA uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
-	print("%1") << uuidmap.size();
+	print << uuidmap.size();
 
 }
 
-static void couchConflicted(PrintTextA &print) {
+static void couchConflicted(std::ostream &print) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -115,13 +119,14 @@ static void couchConflicted(PrintTextA &print) {
 	try {
 		couchLoadData(print);
 	} catch (UpdateException &e) {
-		print("conflicts-%1") << e.getErrors().length();
+		print << "conflicts-" << e.getErrors().length;
 	}
 
 }
 
+#define countof(x) (sizeof(x)/sizeof(x[0]))
 
-static void couchLoadDesign(PrintTextA &) {
+static void couchLoadDesign(std::ostream &) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -137,7 +142,7 @@ static void couchLoadDesign(PrintTextA &) {
 
 }
 
-static void couchFindWildcard(PrintTextA &a) {
+static void couchFindWildcard(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
@@ -146,13 +151,13 @@ static void couchFindWildcard(PrintTextA &a) {
 	Result res = q.prefixString({"K"}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1,%2,%3 ") << row.key[0].getString()
-				<<row.value[0].getUInt()
-				<<row.value[1].getUInt();
+		a  << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
 	}
 }
 
-static void couchFindGroup(PrintTextA &a) {
+static void couchFindGroup(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
@@ -161,11 +166,11 @@ static void couchFindGroup(PrintTextA &a) {
 	Result res = q.prefixKey(40).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value.getString();
+		a << row.value.getString() << " ";
 	}
 }
 
-static void couchFindRange(PrintTextA &a) {
+static void couchFindRange(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
@@ -174,11 +179,11 @@ static void couchFindRange(PrintTextA &a) {
 	Result res = q.range(20,40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value.getString();
+		a << row.value.getString() << " ";
 	}
 }
 
-static void couchFindKeys(PrintTextA &a) {
+static void couchFindKeys(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
@@ -191,13 +196,13 @@ static void couchFindKeys(PrintTextA &a) {
 					}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1,%2,%3 ") << row.key[0].getString()
-				<<row.value[0].getUInt()
-				<<row.value[1].getUInt();
+		a << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
 	}
 }
 
-static void couchCaching(PrintTextA &a) {
+static void couchCaching(std::ostream &a) {
 
 	QueryCache cache;
 	Config cfg = getTestCouch();
@@ -217,10 +222,10 @@ static void couchCaching(PrintTextA &a) {
 		Result res(r);
 		while (res.hasItems()) {
 			Row row = res.getNext();
-			a("%1,%2,%3:%4 ") << row.key[0].getString()
-					<<row.value[0].getUInt()
-					<<row.value[1].getUInt()
-					<< cached;
+			a << row.key[0].getString() << ","
+					<<row.value[0].getUInt() << ","
+					<<row.value[1].getUInt() << ":"
+					<< cached << " ";
 
 		}
 		v = r.getHandle();
@@ -228,7 +233,7 @@ static void couchCaching(PrintTextA &a) {
 
 }
 /*
-static void couchCaching2(PrintTextA &a) {
+static void couchCaching2(std::ostream &a) {
 
 	QueryCache cache;
 	Config cfg = getTestCouch();
@@ -276,7 +281,7 @@ static void couchCaching2(PrintTextA &a) {
 }
 */
 
-static void couchReduce(PrintTextA &a) {
+static void couchReduce(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
@@ -286,15 +291,15 @@ static void couchReduce(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0].getUInt()
-				<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
+		a << row.key[0].getUInt() << ":"
+				<<(row.value["sum"].getUInt()/row.value["count"].getUInt()) << " ";
 	}
 }
 
 
 static Value lastId;
 
-static void couchChangeSetOneShot(PrintTextA &a) {
+static void couchChangeSetOneShot(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
@@ -307,14 +312,14 @@ static void couchChangeSetOneShot(PrintTextA &a) {
 		count++;
 	}
 
-	a("%1") << (count > 10);
+	a << (count > 10);
 }
 
 static void loadSomeDataThread(StrViewA locId) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
-	Thread::sleep(1000);
+	std::this_thread::sleep_for(std::chrono::seconds(1));
 	Changeset chset = db.createChangeset();
 	Document doc;
 	doc("_id",locId)
@@ -323,14 +328,13 @@ static void loadSomeDataThread(StrViewA locId) {
 	chset.commit(db);
 }
 
-static void couchChangeSetWaitForData(PrintTextA &a) {
+static void couchChangeSetWaitForData(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
 	StrViewA uid = db.genUID();
 
-	Thread thr;
-	thr.start(ThreadFunction::create(&loadSomeDataThread,uid));
+	std::thread thr([&]{loadSomeDataThread(uid);});
 
 	ChangesSink chsink (db.createChangesSink());
 	chsink.setTimeout(10000);
@@ -338,17 +342,35 @@ static void couchChangeSetWaitForData(PrintTextA &a) {
 	try {
 		chsink >> [&](const ChangedDoc &doc) {
 			if (doc.id == uid && !doc.deleted) {
-				throw CanceledException(THISLOCATION);
+				throw CanceledException();
 
 			}
 		};
-		a("fail");
+		a << "fail";
 	} catch (CanceledException &) {
-		a("ok");
+		a << "ok";
 	}
+	thr.join();
 }
 
-static void loadSomeDataThread3(String locId) {
+class Event {
+	std::condition_variable condVar;
+	std::mutex mutex;
+	bool ready = false;
+public:
+	void wait() {
+		std::unique_lock<std::mutex> _(mutex);
+		condVar.wait(_, [&]{return ready;});
+		ready = false;
+	}
+	void notify() {
+		std::unique_lock<std::mutex> _(mutex);
+		ready = true;
+		condVar.notify_one();
+	}
+};
+
+static void loadSomeDataThread3(String locId, Event &event) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -359,19 +381,20 @@ static void loadSomeDataThread3(String locId) {
 		   ("aaa",100);
 		chset.update(doc);
 		chset.commit(db);
-		Thread::sleep(nil);
+		event.wait();
 	}
 }
 
-static void couchChangeSetWaitForData3(PrintTextA &a) {
+static void couchChangeSetWaitForData3(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
 	String uid = db.genUID();
 	int counter=0;
 
-	Thread thr;
-	thr.start(ThreadFunction([&uid](){loadSomeDataThread3(uid);}));
+	Event event;
+
+	std::thread thr([&]{loadSomeDataThread3(uid, event);});
 
 	ChangesSink chsink (db.createChangesSink());
 	chsink.setTimeout(10000);
@@ -380,57 +403,57 @@ static void couchChangeSetWaitForData3(PrintTextA &a) {
 		chsink >> [&](const ChangedDoc &doc) {
 			if (doc.id == uid && !doc.deleted) {
 				counter++;
-				thr.wakeUp();
+				event.notify();
 			} else if (counter) {
 				counter++;
-				thr.wakeUp();
-				if (counter == 3) throw CanceledException(THISLOCATION);
+				event.notify();
+				if (counter == 3) throw CanceledException();
 			}
 		};
-		a("fail");
+		a << "fail";
 	} catch (CanceledException &e) {
-		a("ok");
+		a << "ok";
 	}
-
+	thr.join();
 
 
 }
 
-static void couchChangesStopWait(PrintTextA &a) {
+static void couchChangesStopWait(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
-	Thread thr;
 
 	ChangesSink chsink (db.createChangesSink());
 	chsink.setTimeout(10000);
 
 
-	thr.start(ThreadFunction::create([&chsink]() {
-		Thread::sleep(1000);
+	std::thread thr([&chsink]() {
+		std::this_thread::sleep_for(std::chrono::seconds(1));
 		chsink.cancelWait();
-	}));
+	});
 
 	try {
 		chsink >> [](const ChangedDoc &) {};
-		a("fail");
+		a << "fail";
 	} catch (CanceledException &) {
 		Value v = db.requestGET("/");
-		a("%1") << v["couchdb"].getString();
+		a << v["couchdb"].getString();
 	}
+	thr.join();
 
 }
 
-static void couchGetSeqNumber(PrintTextA &a) {
+static void couchGetSeqNumber(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 	Value cnt = db.getLastSeqNumber();
 
-	a("%1") << (cnt != null ?"ok":"failed");
+	a << (cnt != null ?"ok":"failed");
 
 }
 
-static void couchRetrieveDocument(PrintTextA &a) {
+static void couchRetrieveDocument(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
@@ -441,17 +464,17 @@ static void couchRetrieveDocument(PrintTextA &a) {
 	Document doc = db.retrieveDocument(row.id.getString(), CouchDB::flgSeqNumber);
 	//this is random - cannot be tested
 	doc.unset("_id").unset("_rev");
-	a("%1") << convStr(Value(doc).toString());
+	a << Value(doc).toString();
 }
 
-static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
+static void couchStoreAndRetrieveAttachment(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.use(DATABASENAME);
 
 	Document doc = db.newDocument("data-");
 	Upload upl = db.uploadAttachment(doc,"testAttachment","text/plain");
-	ConstStrA sentence("The quick brown fox jumps over the lazy dog");
-	upl.write(sentence.data(),sentence.length());
+	StrViewA sentence("The quick brown fox jumps over the lazy dog");
+	upl.write(sentence.data,sentence.length);
 	upl.finish();
 
 	Document doc2 = db.retrieveDocument(doc.getID());
@@ -459,33 +482,36 @@ static void couchStoreAndRetrieveAttachment(PrintTextA &a) {
 
 	AttachmentData data = db.downloadAttachment(doc2,"testAttachment");
 
-	a("%1-%2") << data.contentType
-			<< ConstStrA(reinterpret_cast<const char *>(data.data()),data.length());
+	a << data.contentType << "-" << StrViewA(data);
 
 
 }
 
-defineTest test_couchConnect("couchdb.connect","Welcome",&couchConnect);
-defineTest test_couchCreateDB("couchdb.createDB","",&rawCreateDB);
-defineTest test_couchLoadData("couchdb.loadData","12",&couchLoadData);
-defineTest test_couchLoadDesign("couchdb.loadDesign","",&couchLoadDesign);
-defineTest test_couchConflict("couchdb.detectConflict","conflicts-12",&couchConflicted);
-defineTest test_couchFindWildcard("couchdb.findWildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ",&couchFindWildcard);
-defineTest test_couchFindGroup("couchdb.findGroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ",&couchFindGroup);
-defineTest test_couchFindRange("couchdb.findRange","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRange);
-defineTest test_couchFindKeys("couchdb.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&couchFindKeys);
-defineTest test_couchRetrieveDocument("couchdb.retrieveDoc","{\"_local_seq\":8,\"age\":76,\"height\":184,\"name\":\"Kermit Byrd\"}",&couchRetrieveDocument);
-defineTest test_couchCaching("couchdb.caching","Kermit Byrd,76,184:0 Owen Dillard,80,151:0 Nicole Jordan,75,150:0 Kermit Byrd,76,184:1 Owen Dillard,80,151:1 Nicole Jordan,75,150:1 Kermit Byrd,76,184:1 Owen Dillard,80,151:1 Nicole Jordan,75,150:1 ",&couchCaching);
-defineTest test_couchReduce("couchdb.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce);
+void runTestBasics(TestSimple &tst) {
+
+tst.test("couchdb.connect","Welcome") >> &couchConnect;
+tst.test("couchdb.createDB","") >> &rawCreateDB;
+tst.test("couchdb.loadData","12") >> &couchLoadData;
+tst.test("couchdb.loadDesign","") >> &couchLoadDesign;
+tst.test("couchdb.detectConflict","conflicts-12") >> &couchConflicted;
+tst.test("couchdb.findWildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ") >> &couchFindWildcard;
+tst.test("couchdb.findGroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ") >> &couchFindGroup;
+tst.test("couchdb.findRange","Daniel Cochran Ramona Lang Urielle Pennington ") >> &couchFindRange;
+tst.test("couchdb.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &couchFindKeys;
+tst.test("couchdb.retrieveDoc","{\"_local_seq\":1,\"age\":76,\"height\":184,\"name\":\"Kermit Byrd\"}") >> &couchRetrieveDocument;
+tst.test("couchdb.caching","Kermit Byrd,76,184:0 Owen Dillard,80,151:0 Nicole Jordan,75,150:0 Kermit Byrd,76,184:1 Owen Dillard,80,151:1 Nicole Jordan,75,150:1 Kermit Byrd,76,184:1 Owen Dillard,80,151:1 Nicole Jordan,75,150:1 ") >> &couchCaching;
+tst.test("couchdb.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ") >>  &couchReduce;
 //defineTest test_couchCaching2("couchdb.caching2","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,76,184 Nicole Jordan,75,150 ",&couchCaching2);
-defineTest test_couchChangesOneShot("couchdb.changesOneShot","1",&couchChangeSetOneShot);
-defineTest test_couchChangesWaiting("couchdb.changesWaiting","ok",&couchChangeSetWaitForData);
-defineTest test_couchChangesWaiting3("couchdb.changesWaitingForThree","ok",&couchChangeSetWaitForData3);
-defineTest test_couchChangesStopWait("couchdb.changesStopWait","Welcome",&couchChangesStopWait);
-defineTest test_couchGetSeqNumber("couchdb.getSeqNumber","ok",&couchGetSeqNumber);
-defineTest test_couchAttachments("couchdb.attachments","text/plain-The quick brown fox jumps over the lazy dog",&couchStoreAndRetrieveAttachment);
-defineTest test_couchDeleteDB("couchdb.deleteDB","",&deleteDB);
+tst.test("couchdb.changesOneShot","1") >> &couchChangeSetOneShot;
+tst.test("couchdb.changesWaiting","ok") >> &couchChangeSetWaitForData;
+tst.test("couchdb.changesWaitingForThree","ok") >> &couchChangeSetWaitForData3;
+tst.test("couchdb.changesStopWait","Welcome") >> &couchChangesStopWait;
+tst.test("couchdb.getSeqNumber","ok") >> &couchGetSeqNumber;
+tst.test("couchdb.attachments","text/plain-The quick brown fox jumps over the lazy dog") >> &couchStoreAndRetrieveAttachment;
+tst.test("couchdb.deleteDB","") >> &deleteDB;
 }
 
 
 
+
+}

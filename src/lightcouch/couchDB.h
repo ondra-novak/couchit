@@ -523,6 +523,7 @@ public:
 	void updateDocument(Document &doc);
 
 
+
 protected:
 
 	std::mutex lock;
@@ -535,9 +536,10 @@ protected:
 
 	String baseUrl;
 	String database;
-	std::size_t lastStatus;
-	QueryCache *cache;
-	Validator *validator;
+	std::size_t lastStatus = 0;
+	QueryCache *cache = nullptr;
+	Validator *validator = nullptr;
+	std::size_t connPoolTm;
 	std::vector<char> uidBuffer;
 	IIDGen& uidGen;
 
@@ -569,10 +571,13 @@ protected:
 	class Deleter {
 	public:
 		CouchDB *owner;
-		Deleter() {}
-		Deleter(CouchDB &owner):owner(&owner) {}
+		Deleter():owner(nullptr) {}
+		Deleter(CouchDB *owner):owner(owner) {}
 		void operator()(UrlBuilder *b) {
-			owner->releaseUrlBuilder(b);
+			if (owner)
+				owner->releaseUrlBuilder(b);
+			else
+				delete b;
 		}
 	};
 
@@ -593,7 +598,94 @@ protected:
 
 public:
 
+	typedef std::chrono::system_clock SysClock;
+	typedef std::chrono::time_point<SysClock> SysTime;
 
+
+
+	class Connection: public UrlBuilder {
+	public:
+		HttpClient http;
+
+		StrViewA getUrl() const {return UrlBuilder::operator json::StringView<char>();}
+	protected:
+		friend class CouchDB;
+		SysTime lastUse;
+	};
+
+	class ConnectionDeleter {
+	public:
+		CouchDB *owner;
+		ConnectionDeleter():owner(nullptr) {}
+		ConnectionDeleter(CouchDB *owner):owner(owner) {}
+		void operator()(Connection *b) {
+			if (owner)
+				owner->releaseConnection(b);
+			else
+				delete b;
+		}
+	};
+
+	typedef std::unique_ptr<Connection, ConnectionDeleter> PConnection;
+	typedef std::vector<PConnection> ConnPool;
+
+	ConnPool connPool;
+	PConnection getConnection(StrViewA resourcePath = StrViewA());
+	void releaseConnection(Connection *b);
+
+	///Perform GET request from the database
+	/** GET request can be cached or complete returned from the cache
+	 *
+	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
+	 * @param headers optional argument, headers sent with the request as key-value structure.
+	 *    if flag storeHeaders is set, function will store response's headers into
+	 *    object referenced by the argument. If object already contains a data,
+	 *    they will be deleted.
+	 * @param flags various flags that controls caching or behaviour
+	 * @return parsed response
+	 */
+	Value requestGET(PConnection &conn, Value *headers = nullptr, std::size_t flags = 0);
+	///Performs POST request from the database
+	/** POST request are not cached.
+	 *
+	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
+	 * @param postData JSON data to send to the server
+	 * @param headers optional argument, headers sent with the request as key-value structure.
+	 *    if flag storeHeaders is set, function will store response's headers into
+	 *    object referenced by the argument. If object already contains a data,
+	 *    they will be deleted.
+	 * @param flags various flags that controls behaviour
+	 * @return parsed response
+	 */
+	Value requestPOST(PConnection &conn, const Value &postData, Value *headers = nullptr, std::size_t flags = 0);
+	///Performs PUT request from the database
+	/** PUT request are not cached.
+	 *
+	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
+	 * @param postData JSON data to send to the server
+	 * @param headers optional argument, headers sent with the request as key-value structure.
+	 *    if flag storeHeaders is set, function will store response's headers into
+	 *    object referenced by the argument. If object already contains a data,
+	 *    they will be deleted.
+	 * @param flags various flags that controls behaviour
+	 * @return parsed response
+	 */
+	Value requestPUT(PConnection &conn, const Value &postData, Value *headers = nullptr, std::size_t flags = 0);
+
+	///Performs DELETE request at database
+	/**
+	 *
+	 * @param path absolute path to the resource to delete
+	 * @param headers aditional headers
+	 * @param flags flags that controls behaviour
+	 * @return
+	 */
+	Value requestDELETE(PConnection &conn, Value *headers = nullptr, std::size_t flags = 0);
+
+
+	Value jsonPUTPOST(PConnection &conn, bool methodPost, Value data, Value *headers, std::size_t flags);
+
+	void handleUnexpectedStatus(PConnection& conn);
 };
 
 

@@ -46,6 +46,7 @@ public:
 };
 }
 UrlBuilder &LightCouch::UrlBuilder::add(StrViewA path) {
+	buffer.push_back(curSep);
 	UrlEncoder enc;
 	enc(json::fromString(path), PutToBuffer(buffer));
 	return *this;
