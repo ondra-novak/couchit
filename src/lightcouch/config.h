@@ -65,6 +65,9 @@ struct Config {
 
 	///Defines, how long is connection to the database keep alive. Older connections are closed
 	std::size_t keepAliveTimeout = 3000;
+
+	///Allows to limit maximum connections per client instance. Default is unlimited
+	std::size_t maxConnections = (std::size_t)-1;
 };
 
 

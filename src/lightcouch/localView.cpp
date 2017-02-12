@@ -263,7 +263,7 @@ Value LocalView::searchKeys(const Value &keys, std::size_t groupLevel) const {
 	} else {
 		Array rows;
 		for (auto &&key : keys) {
-			for (auto &kv : iterRange(keyToValueMap.lower_bound(KeyAndDocId(key, Query::minString)),
+			for (auto &&kv : iterRange(keyToValueMap.lower_bound(KeyAndDocId(key, Query::minString)),
 						   keyToValueMap.upper_bound(KeyAndDocId(key, Query::maxString)))) {
 
 				rows.add(Object("key",kv.first.key)

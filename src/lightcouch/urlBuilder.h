@@ -16,6 +16,7 @@ namespace LightCouch {
 class UrlBuilder {
 public:
 
+
 	void init(StrViewA basicUrl, StrViewA dbname, StrViewA resourcePath);
 	void init();
 	UrlBuilder &add(StrViewA path);

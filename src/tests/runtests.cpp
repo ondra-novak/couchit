@@ -7,12 +7,15 @@ namespace LightCouch {
 	void runMiniHttpTests(TestSimple &tst) ;
 	void testUUIDs(TestSimple &tst) ;
 	void runTestBasics(TestSimple &tst);
+	void runTestLocalview(TestSimple &tst);
+
 
 }
 
 int main(int argc, char *argv[]) {
 	TestSimple tst;
 
+	LightCouch::runTestLocalview(tst);
 	LightCouch::runMiniHttpTests(tst);
 	LightCouch::testUUIDs(tst);
 	LightCouch::runTestBasics(tst);

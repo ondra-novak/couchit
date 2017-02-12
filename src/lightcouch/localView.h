@@ -254,10 +254,10 @@ protected:
 
 	///Contains for each document set of keys
 	/** It is used to easy find keys to erase during update */
-	typedef btree::btree_multimap<String, Value> DocToKey;
+	typedef std::multimap<String, Value> DocToKey;
 	///Contains keys mapped to documents
 	/** Key contains the key itself and documentId to easyly handle duplicated keys */
-	typedef btree::btree_map<KeyAndDocId, ValueAndDoc, CmpKeyAndDocId> KeyToValue;
+	typedef std::map<KeyAndDocId, ValueAndDoc, CmpKeyAndDocId> KeyToValue;
 
 	///Contains map where documendID is key and view's key is value
 	/** This helps to search all keys for selected document. The documentID string can

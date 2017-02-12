@@ -11,6 +11,7 @@
 #include <functional>
 #include <stack>
 #include <mutex>
+#include <condition_variable>
 
 #include "json.h"
 
@@ -120,56 +121,6 @@ public:
 
 	CouchDB(const Config &cfg);
 	~CouchDB();
-
-
-	///Perform GET request from the database
-	/** GET request can be cached or complete returned from the cache
-	 *
-	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
-	 * @param headers optional argument, headers sent with the request as key-value structure.
-	 *    if flag storeHeaders is set, function will store response's headers into
-	 *    object referenced by the argument. If object already contains a data,
-	 *    they will be deleted.
-	 * @param flags various flags that controls caching or behaviour
-	 * @return parsed response
-	 */
-	Value requestGET(const StrViewA &path, Value *headers = nullptr, std::size_t flags = 0);
-	///Performs POST request from the database
-	/** POST request are not cached.
-	 *
-	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
-	 * @param postData JSON data to send to the server
-	 * @param headers optional argument, headers sent with the request as key-value structure.
-	 *    if flag storeHeaders is set, function will store response's headers into
-	 *    object referenced by the argument. If object already contains a data,
-	 *    they will be deleted.
-	 * @param flags various flags that controls behaviour
-	 * @return parsed response
-	 */
-	Value requestPOST(const StrViewA& path, const Value &postData, Value *headers = nullptr, std::size_t flags = 0);
-	///Performs PUT request from the database
-	/** PUT request are not cached.
-	 *
-	 * @param path absolute or relative path to the database. Absolute path must start with a slash '/'
-	 * @param postData JSON data to send to the server
-	 * @param headers optional argument, headers sent with the request as key-value structure.
-	 *    if flag storeHeaders is set, function will store response's headers into
-	 *    object referenced by the argument. If object already contains a data,
-	 *    they will be deleted.
-	 * @param flags various flags that controls behaviour
-	 * @return parsed response
-	 */
-	Value requestPUT(const StrViewA &path, const Value &postData, Value *headers = nullptr, std::size_t flags = 0);
-
-	///Performs DELETE request at database
-	/**
-	 *
-	 * @param path absolute path to the resource to delete
-	 * @param headers aditional headers
-	 * @param flags flags that controls behaviour
-	 * @return
-	 */
-	Value requestDELETE(const StrViewA &path, Value *headers = nullptr, std::size_t flags = 0);
 
 
 
@@ -527,6 +478,7 @@ public:
 protected:
 
 	std::mutex lock;
+	std::condition_variable connRelease;
 	typedef std::lock_guard<std::mutex> LockGuard;
 
 
@@ -540,12 +492,12 @@ protected:
 	QueryCache *cache = nullptr;
 	Validator *validator = nullptr;
 	std::size_t connPoolTm;
+	std::size_t maxConnections;
+	std::size_t curConnections;
 	std::vector<char> uidBuffer;
 	IIDGen& uidGen;
 
-	String lastConnectError;
 
-	HttpClient http;
 
 
 
@@ -568,33 +520,10 @@ protected:
 
 	};
 
-	class Deleter {
-	public:
-		CouchDB *owner;
-		Deleter():owner(nullptr) {}
-		Deleter(CouchDB *owner):owner(owner) {}
-		void operator()(UrlBuilder *b) {
-			if (owner)
-				owner->releaseUrlBuilder(b);
-			else
-				delete b;
-		}
-	};
-
-	typedef std::unique_ptr<UrlBuilder, Deleter> PUrlBuilder;
-	typedef std::stack<PUrlBuilder> UrlBldPool;
-
-	PUrlBuilder getUrlBuilder(StrViewA resourcePath);
-	void releaseUrlBuilder(UrlBuilder *bld);
-	UrlBldPool urlBldPool;
-
 
 	Queryable queryable;
 
-	Download downloadAttachmentCont(PUrlBuilder &urlline, const StrViewA &etag);
 
-	void handleUnexpectedStatus(StrViewA path);
-	Value parseResponse();
 
 public:
 
@@ -608,6 +537,8 @@ public:
 		HttpClient http;
 
 		StrViewA getUrl() const {return UrlBuilder::operator json::StringView<char>();}
+		String lastConnectError;
+
 	protected:
 		friend class CouchDB;
 		SysTime lastUse;
@@ -627,11 +558,41 @@ public:
 	};
 
 	typedef std::unique_ptr<Connection, ConnectionDeleter> PConnection;
-	typedef std::vector<PConnection> ConnPool;
 
-	ConnPool connPool;
+	///Retrieve connection to perform direct requests
+	/** Direct requests such as requestGET and requestPUT need
+	 * to be called with connection object. The object also
+	 * provides url builder
+	 *
+	 * @param resourcePath path to the resource relative to current database.
+	 * If the path starts by slash '/', then the path refers to
+	 * the whole couchDB server. Otherwise (without the slash) the path
+	 * refers current database.
+	 *
+	 * @return Function returns connection object along with url builder.
+	 * You should release the connection object as soon as possible.
+	 *
+	 * @note If you want to reuse connection, call setUrl()
+	 *
+	 * Note, the function is MT safe, but the connection itself not. This
+	 * allows to use CouchDB instance by multiple threads, where each
+	 * thread acquired connection
+	 */
 	PConnection getConnection(StrViewA resourcePath = StrViewA());
-	void releaseConnection(Connection *b);
+
+	///Allows to reuse connection to additional request
+	/** Function just sets the url of the connection to be in relation
+	 * with the current database
+	 *
+	 * @param conn opened connection (see getConnection() )
+	 * @param resourcePath path to the resource relative to current database.
+	 * If the path starts by slash '/', then the path refers to
+	 * the whole couchDB server. Otherwise (without the slash) the path
+	 * refers current database.
+	 *
+	 */
+	void setUrl(PConnection &conn, StrViewA resourcePath = StrViewA());
+
 
 	///Perform GET request from the database
 	/** GET request can be cached or complete returned from the cache
@@ -683,9 +644,18 @@ public:
 	Value requestDELETE(PConnection &conn, Value *headers = nullptr, std::size_t flags = 0);
 
 
+protected:
+	typedef std::vector<PConnection> ConnPool;
+	ConnPool connPool;
+
 	Value jsonPUTPOST(PConnection &conn, bool methodPost, Value data, Value *headers, std::size_t flags);
 
 	void handleUnexpectedStatus(PConnection& conn);
+	Download downloadAttachmentCont(PConnection &conn, const StrViewA &etag);
+	Value parseResponse(PConnection &conn);
+	void releaseConnection(Connection *b);
+
+
 };
 
 

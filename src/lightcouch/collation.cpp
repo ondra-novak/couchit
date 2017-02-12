@@ -17,7 +17,7 @@ namespace LightCouch {
 
 template<typename Fn>
 inline unsigned int getWideFromUtf8(Fn &fn) {
-	unsigned int rdchr;
+	unsigned int rdchr = json::eof;
 	bool stop = false;
 	json::Utf8ToWide conv;
 	conv([&]()->int {if (stop) return json::eof;else return fn();},
@@ -32,14 +32,14 @@ CompareResult compareStringsUnicode(StrViewA str1, StrViewA str2) {
 
 	int c1 = getWideFromUtf8(iter1);
 	int c2 = getWideFromUtf8(iter2);
-	while (c1 > 0 && c2 > 0) {
+	while (c1 != json::eof && c2 !=json::eof) {
 		if (c1 < c2) return cmpResultLess;
 		if (c1 > c2) return cmpResultGreater;
 		c1 = getWideFromUtf8(iter1);
 		c2 = getWideFromUtf8(iter2);
 	}
-	if (c1 != 0) return cmpResultGreater;
-	if (c2 != 0) return cmpResultLess;
+	if (c1 != json::eof) return cmpResultGreater;
+	if (c2 != json::eof) return cmpResultLess;
 	return cmpResultEqual;
 }
 

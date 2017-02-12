@@ -31,7 +31,8 @@ static void couchConnect(std::ostream &print) {
 
 	CouchDB db(getTestCouch());
 
-	Value v = db.requestGET("/");
+	CouchDB::PConnection conn = db.getConnection("/");
+	Value v = db.requestGET(conn);
 	print << v["couchdb"].getString();
 }
 
@@ -315,9 +316,7 @@ static void couchChangeSetOneShot(std::ostream &a) {
 	a << (count > 10);
 }
 
-static void loadSomeDataThread(StrViewA locId) {
-	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+static void loadSomeDataThread(CouchDB &db,StrViewA locId) {
 
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	Changeset chset = db.createChangeset();
@@ -334,7 +333,7 @@ static void couchChangeSetWaitForData(std::ostream &a) {
 
 	StrViewA uid = db.genUID();
 
-	std::thread thr([&]{loadSomeDataThread(uid);});
+	std::thread thr([&]{loadSomeDataThread(db,uid);});
 
 	ChangesSink chsink (db.createChangesSink());
 	chsink.setTimeout(10000);
@@ -370,9 +369,7 @@ public:
 	}
 };
 
-static void loadSomeDataThread3(String locId, Event &event) {
-	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+static void loadSomeDataThread3(CouchDB &db, String locId, Event &event) {
 
 	for (std::size_t i = 0; i < 3; i++) {
 		Changeset chset = db.createChangeset();
@@ -394,7 +391,7 @@ static void couchChangeSetWaitForData3(std::ostream &a) {
 
 	Event event;
 
-	std::thread thr([&]{loadSomeDataThread3(uid, event);});
+	std::thread thr([&]{loadSomeDataThread3(db,uid, event);});
 
 	ChangesSink chsink (db.createChangesSink());
 	chsink.setTimeout(10000);
@@ -436,7 +433,8 @@ static void couchChangesStopWait(std::ostream &a) {
 		chsink >> [](const ChangedDoc &) {};
 		a << "fail";
 	} catch (CanceledException &) {
-		Value v = db.requestGET("/");
+		CouchDB::PConnection conn = db.getConnection("/");
+		Value v = db.requestGET(conn);
 		a << v["couchdb"].getString();
 	}
 	thr.join();

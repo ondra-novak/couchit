@@ -8,10 +8,9 @@
 #include "../lightcouch/document.h"
 #include "../lightcouch/localView.h"
 #include "../lightcouch/defaultUIDGen.h"
-#include "lightspeed/base/framework/testapp.h"
 
 #include "test_common.h"
-#include <lightspeed/base/text/textstream.tcc>
+#include "testClass.h"
 
 namespace LightCouch {
 
@@ -67,9 +66,9 @@ public:
 static void loadData(LocalView &view) {
 
 	DefaultUIDGen &gen = DefaultUIDGen::getInstance();
-	AutoArray<char> buffer;
+	std::vector<char> buffer;
 
-	AutoArray<Document, SmallAlloc<50> > savedDocs;
+	std::vector<Document> savedDocs;
 
 	Value data = Value::fromString(strdata);
 	for (auto &&kv: data) {
@@ -83,7 +82,7 @@ static void loadData(LocalView &view) {
 
 }
 
-static void localView_ByName(PrintTextA &print) {
+static void localView_ByName(std::ostream &print) {
 
 	LocalViewByName view;
 	loadData(view);
@@ -96,14 +95,14 @@ static void localView_ByName(PrintTextA &print) {
 			}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		print("%1,%2,%3 ") << row.key[0].getString()
-				<<row.value[0].getUInt()
-				<<row.value[1].getUInt();
+		print << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
 	}
 }
 
 
-static void localView_wildcard(PrintTextA &print) {
+static void localView_wildcard(std::ostream &print) {
 	LocalViewByName view;
 	loadData(view);
 
@@ -111,14 +110,14 @@ static void localView_wildcard(PrintTextA &print) {
 	Result res = q.prefixString({"K"}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		print("%1,%2,%3 ") << row.key[0].getString()
-				<<row.value[0].getUInt()
-				<<row.value[1].getUInt();
+		print << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
 	}
 
 }
 
-static void localView_FindGroup(PrintTextA &a) {
+static void localView_FindGroup(std::ostream &a) {
 
 	LocalViewAgeByGroup view;
 	loadData(view);
@@ -127,11 +126,11 @@ static void localView_FindGroup(PrintTextA &a) {
 	Result res = q.prefixKey(40).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value.getString();
+		a << row.value.getString() << " ";
 	}
 }
 
-static void localView_FindRange(PrintTextA &a) {
+static void localView_FindRange(std::ostream &a) {
 
 	LocalViewByAge view;
 	loadData(view);
@@ -140,11 +139,11 @@ static void localView_FindRange(PrintTextA &a) {
 	Result res = q.range(20,40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value.getString();
+		a << row.value.getString() << " ";
 	}
 }
 
-static void localView_couchReduce(PrintTextA &a) {
+static void localView_couchReduce(std::ostream &a) {
 
 	LocalView_age_group_height view;
 	loadData(view);
@@ -154,12 +153,12 @@ static void localView_couchReduce(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0].getUInt()
-				<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
+		a << row.key[0].getUInt() << ":"
+				<<(row.value["sum"].getUInt()/row.value["count"].getUInt()) << " ";
 	}
 }
 
-static void localView_couchReduceAll(PrintTextA &a) {
+static void localView_couchReduceAll(std::ostream &a) {
 
 	LocalView_age_group_height view;
 	loadData(view);
@@ -169,21 +168,22 @@ static void localView_couchReduceAll(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0].getUInt()
-				<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
+		a << row.key[0].getUInt() << ":"
+				<<(row.value["sum"].getUInt()/row.value["count"].getUInt()) << " ";
 	}
 }
 
+void runTestLocalview(TestSimple &tst) {
+
+	tst.test("couchdb.localview.byName","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ")>>&localView_ByName;
+	tst.test("couchdb.localview.wildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ")>>&localView_wildcard;
+	tst.test("couchdb.localview.findgroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ")>>&localView_FindGroup;
+	tst.test("couchdb.localview.findrange","Daniel Cochran Ramona Lang Urielle Pennington ")>>&localView_FindRange;
+	tst.test("couchdb.localview.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ")>>&localView_couchReduce;
+	tst.test("couchdb.localview.reduceAll","0:169 ")>>&localView_couchReduceAll;
 
 
-defineTest test_localView_byName("couchdb.localview.byName","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&localView_ByName);
-defineTest test_localView_wildcard("couchdb.localview.wildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ",&localView_wildcard);
-defineTest test_localView_findgroup("couchdb.localview.findgroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ",&localView_FindGroup);
-defineTest test_localView_findrange("couchdb.localview.findrange","Daniel Cochran Ramona Lang Urielle Pennington ",&localView_FindRange);
-defineTest test_localview_couchReduce("couchdb.localview.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&localView_couchReduce);
-defineTest test_localview_couchReduceAll("couchdb.localview.reduceAll","0:169 ",&localView_couchReduceAll);
-
-
+}
 }
 
 

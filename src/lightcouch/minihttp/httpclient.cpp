@@ -16,7 +16,7 @@ namespace LightCouch {
 
 
 LightCouch::HttpClient::HttpClient()
-	:userAgent("LightCouch mini-http client"),curTimeout(70000)
+	:curTimeout(70000)
 {
 }
 
