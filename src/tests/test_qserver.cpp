@@ -4,30 +4,19 @@
  *  Created on: 19. 3. 2016
  *      Author: ondra
  */
-#include "../lightcouch/attachment.h"
-#include "../lightcouch/document.h"
-#include "../lightcouch/queryCache.h"
-#include "../lightcouch/changeset.h"
-#include <lightspeed/base/text/textstream.tcc>
-#include "../lightcouch/couchDB.h"
-#include "../lightcouch/query.h"
-#include "../lightcouch/queryServer.tcc"
-#include "lightspeed/base/framework/testapp.h"
 
-#include "test_common.h"
-
-#include "lightspeed/base/containers/autoArray.tcc"
-
-#include "lightspeed/base/containers/set.tcc"
-
-#include "lightspeed/base/countof.h"
-
-#include "lightspeed/mt/thread.h"
+#include <set>
 
 #include "../lightcouch/changes.h"
+
+#include "../lightcouch/couchDB.h"
+#include "../lightcouch/changeset.h"
+#include "../lightcouch/num2str.h"
+#include "test_common.h"
+#include "../lightcouch/queryServer.h"
+#include "testClass.h"
+
 namespace couchit {
-using namespace LightSpeed;
-using namespace BredyHttpClient;
 
 #define DATABASENAME "lightcouch_unittest"
 
@@ -125,16 +114,16 @@ static void prepareQueryServer(QueryServer &qserver) {
 }
 
 
-static void rawCreateDB(PrintTextA &) {
+static void rawCreateDB(std::ostream &) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 	db.createDatabase();
-	QueryServer qserver(DATABASENAME,AppBase::current().getAppPathname());
+	QueryServer qserver(DATABASENAME);
 	prepareQueryServer(qserver);
 	qserver.syncDesignDocuments(qserver.generateDesignDocuments(),db);
 }
 
-static void deleteDB(PrintTextA &) {
+static void deleteDB(std::ostream &) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 	db.deleteDatabase();
@@ -142,7 +131,7 @@ static void deleteDB(PrintTextA &) {
 
 
 void runQueryServer() {
-	QueryServer qserver(DATABASENAME,AppBase::current().getAppPathname());
+	QueryServer qserver(DATABASENAME);
 	prepareQueryServer(qserver);
 	qserver.runDispatchStdIO();
 }
@@ -167,12 +156,14 @@ static Filter age_range("_design/testview/young",0);
 static View age_range_view("_design/testview/_view/young",0);
 
 
-static void couchLoadData(PrintTextA &print) {
+
+
+static void couchLoadData(std::ostream &print) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 
 
-	AutoArray<Document, SmallAlloc<50> > savedDocs;
+	std::vector<Document> savedDocs;
 
 	Changeset chset(db.createChangeset());
 	std::size_t id=10000;
@@ -184,23 +175,23 @@ static void couchLoadData(PrintTextA &print) {
 			("height",item[2])
 			("_id",UIntToStr(id,16));
 		id+=14823;
-		savedDocs.add(doc);
+		savedDocs.push_back(doc);
 		chset.update(doc);
 	}
 
 	chset.commit(false);
-	Set<String> uuidmap;
+	std::set<String> uuidmap;
 
-	for (std::size_t i = 0; i < savedDocs.length(); i++) {
+	for (std::size_t i = 0; i < savedDocs.size(); i++) {
 		StrViewA uuid = savedDocs[i]["_id"].getString();
 		uuidmap.insert(uuid);
 	}
-	print("%1") << uuidmap.size();
+	print << uuidmap.size();
 
 }
 
 
-static void couchFindWildcard(PrintTextA &a) {
+static void couchFindWildcard(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -209,13 +200,13 @@ static void couchFindWildcard(PrintTextA &a) {
 	Result res = q.prefixString({"K"}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1,%2,%3 ") << row.key[0].getString()
-				<<row.value[0].getUInt()
-				<<row.value[1].getUInt();
+		a << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
 	}
 }
 
-static void couchFindGroup(PrintTextA &a) {
+static void couchFindGroup(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -224,11 +215,11 @@ static void couchFindGroup(PrintTextA &a) {
 	Result res = q.prefixKey(40).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value.getString();
+		a << row.value.getString() << " ";
 	}
 }
 
-static void couchFindRange(PrintTextA &a) {
+static void couchFindRange(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -237,11 +228,11 @@ static void couchFindRange(PrintTextA &a) {
 	Result res = q.range(20,40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value.getString();
+		a << row.value.getString() << " ";
 	}
 }
 
-static void couchFindRangeList(PrintTextA &a) {
+static void couchFindRangeList(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -250,11 +241,11 @@ static void couchFindRangeList(PrintTextA &a) {
 	Result res = q.range(20,40).reversedOrder().exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1 ") << row.value.getString();
+		a << row.value.getString() << " ";
 	}
 }
 
-static void couchFindKeys(PrintTextA &a) {
+static void couchFindKeys(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -267,13 +258,13 @@ static void couchFindKeys(PrintTextA &a) {
 					}).exec();
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1,%2,%3 ") << row.key[0].getString()
-				<<row.value[0].getUInt()
-				<<row.value[1].getUInt();
+		a << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
 	}
 }
 
-static void couchReduce(PrintTextA &a) {
+static void couchReduce(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -283,12 +274,12 @@ static void couchReduce(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0].getUInt()
-				<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
+		a << row.key[0].getUInt() << ":"
+				<<(row.value["sum"].getUInt()/row.value["count"].getUInt()) << " ";
 	}
 }
 
-static void couchReduce2(PrintTextA &a) {
+static void couchReduce2(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -298,13 +289,13 @@ static void couchReduce2(PrintTextA &a) {
 
 	while (res.hasItems()) {
 		Row row = res.getNext();
-		a("%1:%2 ") << row.key[0].getUInt()
-					<<(row.value["sum"].getUInt()/row.value["count"].getUInt());
+		a << row.key[0].getUInt()<<":"
+					<<(row.value["sum"].getUInt()/row.value["count"].getUInt()) << " ";
 	}
 }
 
 
-static void couchFilterView(PrintTextA &a) {
+static void couchFilterView(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -313,10 +304,10 @@ static void couchFilterView(PrintTextA &a) {
 	chsink.setFilter(Filter(age_range_view,false));
 	Changes changes = chsink.exec();
 
-	a("%1") << changes.length();
+	a << changes.length();
 }
 
-static void couchFilter(PrintTextA &a) {
+static void couchFilter(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
@@ -325,23 +316,25 @@ static void couchFilter(PrintTextA &a) {
 	chsink.setFilter(age_range).arg("agemin",40).arg("agemax",60);
 	Changes changes = chsink.exec();
 
-	a("%1") << changes.length();
+	a << changes.length();
+}
+
+void runTestQueryServer(TestSimple &tst) {
+
+	tst.test("couchdb.qserver.createDB","") >> &rawCreateDB;
+	tst.test("couchdb.qserver.loadData","12") >> &couchLoadData;
+	tst.test("couchdb.qserver.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &couchFindKeys;
+	tst.test("couchdb.qserver.findWildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ") >> &couchFindWildcard;
+	tst.test("couchdb.qserver.findGroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ") >> &couchFindGroup;
+	tst.test("couchdb.qserver.findRange","Daniel Cochran Ramona Lang Urielle Pennington ") >> &couchFindRange;
+	tst.test("couchdb.qserver.findRangeList","Daniel Cochran Ramona Lang Urielle Pennington ") >> &couchFindRangeList;
+	tst.test("couchdb.qserver.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ") >> &couchReduce;
+	tst.test("couchdb.qserver.reduce2","20:178 30:170 40:171 50:165 70:167 80:151 ") >> &couchReduce2;
+	tst.test("couchdb.qserver.filterView","3") >> &couchFilterView;
+	tst.test("couchdb.qserver.filter","6") >> &couchFilter;
+	tst.test("couchdb.qserver.deleteDB","") >> &deleteDB;
 }
 
 
-defineTest qtest_couchCreateDB("couchdb.qserver.createDB","",&rawCreateDB);
-defineTest qtest_couchLoadData("couchdb.qserver.loadData","12",&couchLoadData);
-defineTest qtest_couchFindKeys("couchdb.qserver.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ",&couchFindKeys);
-defineTest qtest_couchFindWildcard("couchdb.qserver.findWildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ",&couchFindWildcard);
-defineTest qtest_couchFindGroup("couchdb.qserver.findGroup","Kenneth Meyer Scarlett Frazier Odette Hahn Pascale Burt Bevis Bowen ",&couchFindGroup);
-defineTest qtest_couchFindRange("couchdb.qserver.findRange","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRange);
-defineTest qtest_couchFindRangeList("couchdb.qserver.findRangeList","Daniel Cochran Ramona Lang Urielle Pennington ",&couchFindRangeList);
-defineTest qtest_couchReduce("couchdb.qserver.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce);
-defineTest qtest_couchReduce2("couchdb.qserver.reduce2","20:178 30:170 40:171 50:165 70:167 80:151 ",&couchReduce2);
-defineTest qtest_couchFilterView("couchdb.qserver.filterView","3",&couchFilterView);
-defineTest qtest_couchFilter("couchdb.qserver.filter","6",&couchFilter);
-defineTest qtest_couchDeleteDB("couchdb.qserver.deleteDB","",&deleteDB);
+
 }
-
-
-

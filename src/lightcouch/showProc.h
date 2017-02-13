@@ -11,7 +11,7 @@
 
 namespace couchit {
 
-///Contains result of external update procesude
+///Contains result of external show procedude
 class ShowResult {
 public:
 	ShowResult();

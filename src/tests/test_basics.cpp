@@ -19,7 +19,6 @@
 #include "../lightcouch/query.h"
 #include "../lightcouch/changes.h"
 #include "../lightcouch/json.h"
-#include "../lightcouch/num2str.h"
 #include "test_common.h"
 #include "testClass.h"
 
@@ -72,13 +71,6 @@ static View by_age_group("_design/testview/_view/by_age_group");
 static View by_age("_design/testview/_view/by_age");
 static View age_group_height("_design/testview/_view/age_group_height");
 
-json::String UIntToStr(std::size_t id, int base) {
-	return String(21, [&](char *c) {
-		return unsignedToStringImpl([&](char z) {
-			*c++ = z;
-		},id,8,true,base);
-	});
-}
 
 static void couchLoadData(std::ostream &print) {
 	CouchDB db(getTestCouch());

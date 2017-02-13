@@ -91,7 +91,7 @@ int couchit::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
 			}
 			resp.toStream(out);
 		} catch (QueryServerError &e) {
-			Value resp({"error",e.getType(),e.getExplain()});
+			Value resp({"error",e.type,e.explain});
 			resp.toStream(out);
 		} catch (VersionMistmatch &m) {
 			Value resp({"error","try_again","restarting query server, please try again"});
@@ -633,8 +633,14 @@ void QueryServer::syncDesignDocuments(Value designDocuments, CouchDB& couch, Cou
 		return false;
 	});
 
+}
 
+String QueryServerError::getWhatMsg() const throw() {
+	return String({"Query server error: ", type,": ",explain});
+}
 
+String VersionMistmatch::getWhatMsg() const throw() {
+	return String("Version mistmatch.");
 }
 
 } /* namespace couchit */

@@ -13,6 +13,8 @@ namespace couchit {
 
 Config getTestCouch();
 
+
+json::String UIntToStr(std::size_t id, int base);
 }
 
 

@@ -282,16 +282,14 @@ public:
 
 	QueryServerError(const String &type, const String &explain)
 		:type(type),explain(explain) {}
-	const String &getType() const;
-	const String &getExplain() const;
+	const String type;
+	const String explain;
 protected:
-	String type, explain;
 	virtual String getWhatMsg() const throw();
 };
 
 class VersionMistmatch: public Exception {
 public:
-
 
 	VersionMistmatch(){}
 protected:
