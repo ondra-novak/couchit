@@ -14,7 +14,7 @@
 
 #include "reducerow.h"
 
-namespace LightCouch {
+namespace couchit {
 
 using namespace LightSpeed;
 
@@ -31,14 +31,14 @@ public:
 	/**
 	 * @param key key value. You can emit multiple documents under single key. You can use
 	 * multicollum keys (emit as an array). You can also use object as key, however be careful,
-	 * because LightCouch doesn't maintain order of fields. Fields are always ordered.
+	 * because couchit doesn't maintain order of fields. Fields are always ordered.
 	 */
 	virtual void operator()(const Value &key) = 0;
 	///Emit current document under specified key with a value
 	/**
 	 * @param key key value. You can emit multiple documents under single key. You can use
 	 * multicollum keys (emit as an array). You can also use object as key, however be careful,
-	 * because LightCouch doesn't maintain order of fields. Fields are always ordered.
+	 * because couchit doesn't maintain order of fields. Fields are always ordered.
 	 * @param value value.
 	 */
 	virtual void operator()(const Value &key, const Value &value) = 0;

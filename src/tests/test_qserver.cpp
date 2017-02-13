@@ -25,7 +25,7 @@
 #include "lightspeed/mt/thread.h"
 
 #include "../lightcouch/changes.h"
-namespace LightCouch {
+namespace couchit {
 using namespace LightSpeed;
 using namespace BredyHttpClient;
 
@@ -127,7 +127,7 @@ static void prepareQueryServer(QueryServer &qserver) {
 
 static void rawCreateDB(PrintTextA &) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 	db.createDatabase();
 	QueryServer qserver(DATABASENAME,AppBase::current().getAppPathname());
 	prepareQueryServer(qserver);
@@ -136,7 +136,7 @@ static void rawCreateDB(PrintTextA &) {
 
 static void deleteDB(PrintTextA &) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 	db.deleteDatabase();
 }
 
@@ -169,7 +169,7 @@ static View age_range_view("_design/testview/_view/young",0);
 
 static void couchLoadData(PrintTextA &print) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 
 	AutoArray<Document, SmallAlloc<50> > savedDocs;
@@ -203,7 +203,7 @@ static void couchLoadData(PrintTextA &print) {
 static void couchFindWildcard(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
 	Result res = q.prefixString({"K"}).exec();
@@ -218,7 +218,7 @@ static void couchFindWildcard(PrintTextA &a) {
 static void couchFindGroup(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_age_group));
 	Result res = q.prefixKey(40).exec();
@@ -231,7 +231,7 @@ static void couchFindGroup(PrintTextA &a) {
 static void couchFindRange(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_age));
 	Result res = q.range(20,40).reversedOrder().exec();
@@ -244,7 +244,7 @@ static void couchFindRange(PrintTextA &a) {
 static void couchFindRangeList(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_age_list));
 	Result res = q.range(20,40).reversedOrder().exec();
@@ -257,7 +257,7 @@ static void couchFindRangeList(PrintTextA &a) {
 static void couchFindKeys(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
 	Result res = q.keys({
@@ -276,7 +276,7 @@ static void couchFindKeys(PrintTextA &a) {
 static void couchReduce(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(age_group_height));
 	Result res = q.groupLevel(1).exec();
@@ -291,7 +291,7 @@ static void couchReduce(PrintTextA &a) {
 static void couchReduce2(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(age_group_height2));
 	Result res = q.groupLevel(1).exec();
@@ -307,7 +307,7 @@ static void couchReduce2(PrintTextA &a) {
 static void couchFilterView(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	ChangesSink chsink(db.createChangesSink());
 	chsink.setFilter(Filter(age_range_view,false));
@@ -319,7 +319,7 @@ static void couchFilterView(PrintTextA &a) {
 static void couchFilter(PrintTextA &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	ChangesSink chsink(db.createChangesSink());
 	chsink.setFilter(age_range).arg("agemin",40).arg("agemax",60);

@@ -10,7 +10,7 @@
 #include "view.h"
 #include "json.h"
 
-namespace LightCouch {
+namespace couchit {
 
 enum QueryMode {
 

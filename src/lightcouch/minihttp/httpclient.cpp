@@ -12,20 +12,20 @@
 #include "chunked.h"
 #include "hdrrd.h"
 #include "hdrwr.h"
-namespace LightCouch {
+namespace couchit {
 
 
-LightCouch::HttpClient::HttpClient()
+couchit::HttpClient::HttpClient()
 	:curTimeout(70000)
 {
 }
 
-LightCouch::HttpClient::HttpClient(StrViewA userAgent)
+couchit::HttpClient::HttpClient(StrViewA userAgent)
 	:userAgent(userAgent),curTimeout(70000)
 {
 }
 
-HttpClient& LightCouch::HttpClient::open(StrViewA url, StrViewA method, bool keepAlive) {
+HttpClient& couchit::HttpClient::open(StrViewA url, StrViewA method, bool keepAlive) {
 	this->keepAlive = keepAlive;
 
 	curStatus = 0;
@@ -50,7 +50,7 @@ HttpClient& LightCouch::HttpClient::open(StrViewA url, StrViewA method, bool kee
 	return *this;
 }
 
-HttpClient& LightCouch::HttpClient::setHeaders(Value headers) {
+HttpClient& couchit::HttpClient::setHeaders(Value headers) {
 	customHeaders = headers;
 	return *this;
 
@@ -73,7 +73,7 @@ bool HttpClient::handleSendError() {
 
 }
 
-OutputStream LightCouch::HttpClient::beginBody() {
+OutputStream couchit::HttpClient::beginBody() {
 
 	class ChunkedStream: public IOutputStream {
 	public:
@@ -111,7 +111,7 @@ OutputStream LightCouch::HttpClient::beginBody() {
 	}
 }
 
-int LightCouch::HttpClient::send() {
+int couchit::HttpClient::send() {
 	if (!headersSent) {
 		initRequest(false,0);
 	}
@@ -121,11 +121,11 @@ int LightCouch::HttpClient::send() {
 	return readResponse();
 }
 
-int LightCouch::HttpClient::send(const StrViewA& body) {
+int couchit::HttpClient::send(const StrViewA& body) {
 	return send(body.data,body.length);
 }
 
-int LightCouch::HttpClient::send(const void* body, std::size_t body_length) {
+int couchit::HttpClient::send(const void* body, std::size_t body_length) {
 	if (!headersSent) {
 		initRequest(true,body_length);
 		if (handleSendError()) {
@@ -140,11 +140,11 @@ int LightCouch::HttpClient::send(const void* body, std::size_t body_length) {
 	return readResponse();
 }
 
-Value LightCouch::HttpClient::getHeaders() {
+Value couchit::HttpClient::getHeaders() {
 	return responseHeaders;
 }
 
-InputStream LightCouch::HttpClient::getResponse() {
+InputStream couchit::HttpClient::getResponse() {
 
 	class EmptyStream: public IInputStream {
 	public:
@@ -160,11 +160,11 @@ InputStream LightCouch::HttpClient::getResponse() {
 	}
 }
 
-bool LightCouch::HttpClient::waitForData(unsigned int timeout) {
+bool couchit::HttpClient::waitForData(unsigned int timeout) {
 	return conn->waitForInput(timeout);
 }
 
-void LightCouch::HttpClient::discardResponse() {
+void couchit::HttpClient::discardResponse() {
 	if (responseData != nullptr) {
 		std::size_t p = 0;
 		responseData->read(0,&p);

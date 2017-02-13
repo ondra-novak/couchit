@@ -11,7 +11,7 @@
 #include "string.h"
 
 #include "json.h"
-namespace LightCouch {
+namespace couchit {
 
 
 ///Contains attachment data as reference

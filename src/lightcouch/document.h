@@ -11,7 +11,7 @@
 #include "json.h"
 
 #include "exception.h"
-namespace LightCouch {
+namespace couchit {
 
 class AttachmentDataRef;
 
@@ -156,7 +156,7 @@ protected:
 };
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 
 
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_DOCUMENT_H_ */

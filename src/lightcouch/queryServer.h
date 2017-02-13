@@ -14,7 +14,7 @@
 
 #include "queryServerIfc.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 using namespace LightSpeed;
@@ -204,7 +204,7 @@ private:
 };
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 
 #endif /* LIGHTCOUCH_QUERYSERVER_H_09888912AE57CCE472 */
 

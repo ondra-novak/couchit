@@ -10,7 +10,7 @@
 #include "minihttp/urlencode.h"
 #include "num2str.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 template<typename V, typename X>
@@ -20,7 +20,7 @@ static std::vector<V> &operator+=(std::vector<V> &v, const X &x) {
 	}
 }
 
-void LightCouch::UrlBuilder::init(StrViewA basicUrl, StrViewA dbname, StrViewA resourcePath) {
+void couchit::UrlBuilder::init(StrViewA basicUrl, StrViewA dbname, StrViewA resourcePath) {
 	buffer.clear();
 	if (resourcePath.empty()) {
 		buffer += basicUrl;
@@ -45,21 +45,21 @@ public:
 	void operator()(char c) {buffer.push_back(c);}
 };
 }
-UrlBuilder &LightCouch::UrlBuilder::add(StrViewA path) {
+UrlBuilder &couchit::UrlBuilder::add(StrViewA path) {
 	buffer.push_back(curSep);
 	UrlEncoder enc;
 	enc(json::fromString(path), PutToBuffer(buffer));
 	return *this;
 }
 
-UrlBuilder &LightCouch::UrlBuilder::add(StrViewA key, StrViewA value) {
+UrlBuilder &couchit::UrlBuilder::add(StrViewA key, StrViewA value) {
 	addKey(key);
 	UrlEncoder enc;
 	enc(json::fromString(value), PutToBuffer(buffer));
 	return *this;
 }
 
-UrlBuilder &LightCouch::UrlBuilder::addJson(StrViewA key, Value value) {
+UrlBuilder &couchit::UrlBuilder::addJson(StrViewA key, Value value) {
 	addKey(key);
 	UrlEncoder enc;
 	value.serialize(json::emitUtf8, [&](char c) {
@@ -88,5 +88,5 @@ void UrlBuilder::addKey(const StrViewA& key) {
 
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 

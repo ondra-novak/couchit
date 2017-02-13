@@ -19,7 +19,7 @@
 
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 
@@ -247,7 +247,7 @@ protected:
 
 
 template<typename T>
-inline ChangesSink& LightCouch::ChangesSink::arg(StrViewA key, T value) {
+inline ChangesSink& couchit::ChangesSink::arg(StrViewA key, T value) {
 
 	filterArgs.set(key, value);
 	return *this;
@@ -255,7 +255,7 @@ inline ChangesSink& LightCouch::ChangesSink::arg(StrViewA key, T value) {
 }
 
 template<typename Fn>
-inline void LightCouch::ChangesSink::operator >>(const Fn& fn) {
+inline void couchit::ChangesSink::operator >>(const Fn& fn) {
 	bool repeat;
 	do {
 		repeat = false;

@@ -2,7 +2,7 @@
 
 #include "iqueryable.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 class Query {

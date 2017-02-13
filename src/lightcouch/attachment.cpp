@@ -10,7 +10,7 @@
 #include <imtjson/binary.h>
 #include <imtjson/stringValue.h>
 
-namespace LightCouch {
+namespace couchit {
 
 
 String AttachmentDataRef::toBase64() const {

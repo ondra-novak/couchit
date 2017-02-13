@@ -13,7 +13,7 @@
 #include "json.h"
 #include "queryServerIfc.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 template<typename T>
@@ -154,8 +154,8 @@ void LocalView::eraseDocLk(const String &docId) {
 }
 
 void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
-	LightCouch::Query q = db.createQuery(view);
-	LightCouch::Result res = q.exec();
+	couchit::Query q = db.createQuery(view);
+	couchit::Result res = q.exec();
 
 	Exclusive _(lock);
 
@@ -544,5 +544,5 @@ Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 

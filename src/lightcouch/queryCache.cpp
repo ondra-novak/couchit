@@ -9,7 +9,7 @@
 
 #include "fnv.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 std::size_t QueryCache::maxlru = 4;
@@ -74,5 +74,5 @@ QueryCache::~QueryCache() {
 
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 

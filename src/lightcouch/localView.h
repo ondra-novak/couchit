@@ -17,7 +17,7 @@
 
 #include "document.h"
 #include "reducerow.h"
-namespace LightCouch {
+namespace couchit {
 
 
 
@@ -299,7 +299,7 @@ protected:
 };
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 
 
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_LOCALVIEW_H_ */

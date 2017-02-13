@@ -16,7 +16,7 @@
 #include "cancelFunction.h"
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 using json::StrViewA;

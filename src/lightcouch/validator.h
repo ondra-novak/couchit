@@ -10,7 +10,7 @@
 #include "json.h"
 #include "exception.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 ///Validates document before it is put to the database
@@ -123,6 +123,6 @@ inline Validator::IValidationFn* Validator::add(const Fn &fn,const String &name)
 }
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_VALIDATOR_H_ */

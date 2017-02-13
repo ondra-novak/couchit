@@ -12,7 +12,7 @@
 
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 template<typename Fn>

@@ -10,7 +10,7 @@
 #include <vector>
 #include "json.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 class UrlBuilder {
@@ -36,6 +36,6 @@ protected:
 
 };
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 
 #endif /* LIGHTCOUCH_URLBUILDER_H_ */

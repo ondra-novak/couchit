@@ -11,7 +11,7 @@
 #include <imtjson/json.h>
 #include <imtjson/stringview.h>
 
-namespace LightCouch {
+namespace couchit {
 
 using namespace json;
 

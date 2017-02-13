@@ -13,7 +13,7 @@
 #include "iidgen.h"
 
 
-namespace LightCouch {
+namespace couchit {
 
 ///Default UID generator
 /** The UID consists from three parts
@@ -63,6 +63,7 @@ public:
 	static DefaultUIDGen &getInstance();
 
 	virtual String operator()(const StrViewA &prefix) override;
+	DefaultUIDGen();
 
 protected:
 	std::size_t counter;
@@ -74,6 +75,6 @@ protected:
 
 };
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 
 #endif /* LIGHTCOUCH_DEFAULTUIDGEN_H_ */

@@ -14,7 +14,7 @@
 #include "localView.h"
 #include "validator.h"
 //#include "validator.h"
-namespace LightCouch {
+namespace couchit {
 
 Changeset::Changeset(CouchDB &db):db(db) {
 

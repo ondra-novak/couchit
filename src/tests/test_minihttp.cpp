@@ -8,7 +8,7 @@
 #include "testClass.h"
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 void runMiniHttpTests(TestSimple &tst) {
@@ -46,14 +46,14 @@ tst.test("couchdb.minihttp.serializeHeaders",
 		"Connection: close\r\n"
 		"Content-Length: 123412\r\n"
 		"Host: www.example.com\r\n"
-		"User-Agent: LightCouch MiniHttp\r\n"
+		"User-Agent: couchit MiniHttp\r\n"
 		"\r\n") >> [](std::ostream &print){
 
 	Object hdr;
 	hdr("_method","POST")
 	  ("_uri","/example/path/site.html")
 	  ("_version","HTTP/1.1")
-	  ("User-Agent","LightCouch MiniHttp")
+	  ("User-Agent","couchit MiniHttp")
 	  ("Accept","*/*")
 	  ("Host","www.example.com")
 	  ("Connection","close")

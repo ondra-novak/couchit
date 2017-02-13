@@ -9,7 +9,7 @@
 #define LIBS_LIGHTCOUCH_SRC_TESTS_TEST_COMMON_H_
 #include "../lightcouch/couchDB.h"
 
-namespace LightCouch {
+namespace couchit {
 
 Config getTestCouch();
 

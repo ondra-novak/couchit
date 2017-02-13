@@ -11,7 +11,7 @@
 #include "json.h"
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 

@@ -8,7 +8,7 @@
 #include "changes.h"
 
 #include "couchDB.h"
-namespace LightCouch {
+namespace couchit {
 
 
 

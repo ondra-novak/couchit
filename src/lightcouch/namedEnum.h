@@ -1,6 +1,6 @@
 
 #pragma once
-namespace LightCouch {
+namespace couchit {
 
 namespace _details {
 	template<typename T>

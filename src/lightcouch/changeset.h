@@ -10,7 +10,7 @@
 #include "couchDB.h"
 
 
-namespace LightCouch {
+namespace couchit {
 
 class LocalView;
 

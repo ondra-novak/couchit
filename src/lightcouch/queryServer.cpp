@@ -14,7 +14,7 @@
 #include "namedEnum.h"
 #include "num2str.h"
 
-namespace LightCouch {
+namespace couchit {
 
 QueryServer::QueryServer(const StrViewA &name):qserverName(name) {}
 
@@ -66,7 +66,7 @@ static NamedEnumDef<DDocCommand> ddocCommandsDef[] = {
 static NamedEnum<DDocCommand> ddocCommands(ddocCommandsDef);
 
 
-int LightCouch::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
+int couchit::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
 	int r;
 
 	while (!in.eof()) {
@@ -629,7 +629,7 @@ void QueryServer::syncDesignDocuments(Value designDocuments, CouchDB& couch, Cou
 	Changeset chset = couch.createChangeset();
 
 	designDocuments.forEach([&](Value doc) {
-		couch.uploadDesignDocument(doc,updateRule);
+		couch.putDesignDocument(doc,updateRule);
 		return false;
 	});
 
@@ -637,5 +637,5 @@ void QueryServer::syncDesignDocuments(Value designDocuments, CouchDB& couch, Cou
 
 }
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 

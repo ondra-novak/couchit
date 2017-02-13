@@ -9,7 +9,7 @@
 #include "couchDB.h"
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 Document::Document(const Value& base):json::Object(base) {
@@ -115,5 +115,5 @@ bool Document::isDeleted() const {
 }
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 

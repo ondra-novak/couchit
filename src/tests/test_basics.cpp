@@ -23,7 +23,7 @@
 #include "test_common.h"
 #include "testClass.h"
 
-namespace LightCouch {
+namespace couchit {
 
 #define DATABASENAME "lightcouch_unittest"
 
@@ -39,13 +39,13 @@ static void couchConnect(std::ostream &print) {
 
 static void rawCreateDB(std::ostream &) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 	db.createDatabase();
 }
 
 static void deleteDB(std::ostream &) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 	db.deleteDatabase();
 }
 
@@ -82,7 +82,7 @@ json::String UIntToStr(std::size_t id, int base) {
 
 static void couchLoadData(std::ostream &print) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 
 	std::vector<Document> savedDocs;
@@ -114,7 +114,7 @@ static void couchLoadData(std::ostream &print) {
 
 static void couchConflicted(std::ostream &print) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 
 	try {
@@ -129,16 +129,16 @@ static void couchConflicted(std::ostream &print) {
 
 static void couchLoadDesign(std::ostream &) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 
 	for (std::size_t i = 0; i < countof(designs); i++) {
-		db.uploadDesignDocument(designs[i],strlen(designs[i]));
+		db.putDesignDocument(designs[i],strlen(designs[i]));
 	}
 
 	//try twice
 	for (std::size_t i = 0; i < countof(designs); i++) {
-		db.uploadDesignDocument(designs[i],strlen(designs[i]));
+		db.putDesignDocument(designs[i],strlen(designs[i]));
 	}
 
 }
@@ -146,7 +146,7 @@ static void couchLoadDesign(std::ostream &) {
 static void couchFindWildcard(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
 	Result res = q.prefixString({"K"}).exec();
@@ -161,7 +161,7 @@ static void couchFindWildcard(std::ostream &a) {
 static void couchFindGroup(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_age_group));
 	Result res = q.prefixKey(40).exec();
@@ -174,7 +174,7 @@ static void couchFindGroup(std::ostream &a) {
 static void couchFindRange(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_age));
 	Result res = q.range(20,40).reversedOrder().exec();
@@ -187,7 +187,7 @@ static void couchFindRange(std::ostream &a) {
 static void couchFindKeys(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
 	Result res = q.keys({
@@ -209,7 +209,7 @@ static void couchCaching(std::ostream &a) {
 	Config cfg = getTestCouch();
 	cfg.cache = &cache;
 	CouchDB db(cfg);
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 	json::PValue v;
 
 	for (std::size_t i = 0; i < 3; i++) {
@@ -285,7 +285,7 @@ static void couchCaching2(std::ostream &a) {
 static void couchReduce(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(age_group_height));
 	Result res = q.groupLevel(1).exec();
@@ -303,7 +303,7 @@ static Value lastId;
 static void couchChangeSetOneShot(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	ChangesSink chsink (db.createChangesSink());
 	Changes chngs = chsink.exec();
@@ -329,7 +329,7 @@ static void loadSomeDataThread(CouchDB &db,StrViewA locId) {
 
 static void couchChangeSetWaitForData(std::ostream &a) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	StrViewA uid = db.genUID();
 
@@ -384,7 +384,7 @@ static void loadSomeDataThread3(CouchDB &db, String locId, Event &event) {
 
 static void couchChangeSetWaitForData3(std::ostream &a) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	String uid = db.genUID();
 	int counter=0;
@@ -418,7 +418,7 @@ static void couchChangeSetWaitForData3(std::ostream &a) {
 
 static void couchChangesStopWait(std::ostream &a) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	ChangesSink chsink (db.createChangesSink());
 	chsink.setTimeout(10000);
@@ -444,7 +444,7 @@ static void couchChangesStopWait(std::ostream &a) {
 static void couchGetSeqNumber(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 	Value cnt = db.getLastSeqNumber();
 
 	a << (cnt != null ?"ok":"failed");
@@ -453,13 +453,13 @@ static void couchGetSeqNumber(std::ostream &a) {
 
 static void couchRetrieveDocument(std::ostream &a) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Query q(db.createQuery(by_name));
 	Result res = q.key({"Kermit Byrd"}).exec();
 	Row row = res.getNext();
 
-	Document doc = db.retrieveDocument(row.id.getString(), CouchDB::flgSeqNumber);
+	Document doc = db.get(row.id.getString(), CouchDB::flgSeqNumber);
 	//this is random - cannot be tested
 	doc.unset("_id").unset("_rev");
 	a << Value(doc).toString();
@@ -467,18 +467,18 @@ static void couchRetrieveDocument(std::ostream &a) {
 
 static void couchStoreAndRetrieveAttachment(std::ostream &a) {
 	CouchDB db(getTestCouch());
-	db.use(DATABASENAME);
+	db.setCurrentDB(DATABASENAME);
 
 	Document doc = db.newDocument("data-");
-	Upload upl = db.uploadAttachment(doc,"testAttachment","text/plain");
+	Upload upl = db.putAttachment(doc,"testAttachment","text/plain");
 	StrViewA sentence("The quick brown fox jumps over the lazy dog");
 	upl.write(sentence.data,sentence.length);
 	upl.finish();
 
-	Document doc2 = db.retrieveDocument(doc.getID());
+	Document doc2 = db.get(doc.getID());
 
 
-	AttachmentData data = db.downloadAttachment(doc2,"testAttachment");
+	AttachmentData data = db.getAttachment(doc2,"testAttachment");
 
 	a << data.contentType << "-" << StrViewA(data);
 

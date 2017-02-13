@@ -13,7 +13,7 @@
 
 #pragma once
 
-namespace LightCouch {
+namespace couchit {
 
 class HttpClient {
 public:

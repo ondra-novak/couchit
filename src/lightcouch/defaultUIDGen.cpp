@@ -9,7 +9,7 @@
 
 #include "defaultUIDGen.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 
@@ -62,5 +62,9 @@ String DefaultUIDGen::operator()(const StrViewA &prefix) {
 	return operator()(buff, prefix);
 }
 
-} /* namespace LightCouch */
+DefaultUIDGen::DefaultUIDGen() {
+	counter = rgn();
+}
+
+} /* namespace couchit */
 

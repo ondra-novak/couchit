@@ -9,7 +9,7 @@
 #define LIGHTCOUCH_REDUCEROW_H_
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 class ReducedRow {

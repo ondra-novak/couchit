@@ -10,7 +10,7 @@
 #include <functional>
 #include "json.h"
 
-namespace LightCouch {
+namespace couchit {
 
 class CouchDB;
 
@@ -136,6 +136,6 @@ public:
 
 };
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_VIEW_H_ */

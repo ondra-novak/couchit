@@ -9,7 +9,7 @@
 #define LIBS_LIGHTCOUCH_SRC_EXCEPTION_H_
 #include "json.h"
 
-namespace LightCouch {
+namespace couchit {
 
 class Exception: public virtual std::exception {
 public:

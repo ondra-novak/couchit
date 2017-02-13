@@ -1,7 +1,7 @@
 #include "testClass.h"
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 	void runMiniHttpTests(TestSimple &tst) ;
@@ -15,10 +15,10 @@ namespace LightCouch {
 int main(int argc, char *argv[]) {
 	TestSimple tst;
 
-	LightCouch::runTestLocalview(tst);
-	LightCouch::runMiniHttpTests(tst);
-	LightCouch::testUUIDs(tst);
-	LightCouch::runTestBasics(tst);
+	couchit::runTestLocalview(tst);
+	couchit::runMiniHttpTests(tst);
+	couchit::testUUIDs(tst);
+	couchit::runTestBasics(tst);
 
 
 	return tst.didFail()?1:0;
@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
 
 #if 0
 
-namespace LightCouch {
+namespace couchit {
 
 	void runQueryServer();
 

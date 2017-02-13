@@ -12,7 +12,7 @@
 #include "test_common.h"
 #include "testClass.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 static const char *strdata="[[\"Kermit Byrd\",76,184],[\"Odette Hahn\",44,181],"

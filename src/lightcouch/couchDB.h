@@ -28,7 +28,7 @@ namespace LightSpeed {
 class PoolAlloc;
 }
 
-namespace LightCouch {
+namespace couchit {
 
 using namespace LightSpeed;
 using namespace BredyHttpClient;
@@ -43,6 +43,8 @@ class Validator;
 class Changes;
 class ChangesSink;
 class Validator;
+class UpdateResult;
+class ShowResult;
 
 ///Client connection to CouchDB server
 /** Each instance can keep only one connection at time. However, you can create
@@ -61,23 +63,26 @@ class CouchDB {
 public:
 
 	///Contains name of key which holds time of document's last update
-	/** Note that timestamping is optional feature supported only by LightCouch. If document
+	/** Note that timestamping is optional feature supported only by couchit. If document
 	 * is updated by other way, the timestamp don't need to be updated. Timestamping
 	 * is supported by Changeset class
 	 */
 	static StrViewA fldTimestamp;
 	///Contains ID of previous revision
-	/** Note this feature is optional and supported only by LightCouch. The class Changeset
+	/** Note this feature is optional and supported only by couchit. The class Changeset
 	 * will put there id of previous revision.
 	 */
 	static StrViewA fldPrevRevision;
+
+
+	typedef std::size_t Flags;
 
 	/**Maximal length of serialized form of keys to use GET request. Longer
 	 * keys are send through POST. Queries sent by POST cannot be cached. However if you
 	 * increase the number, it can also generate a lot of cache entries, because whole
 	 * requests are cached, not separate keys. Default value is 1024
 	 */
-	static std::size_t maxSerializedKeysSizeForGETRequest;
+	static Flags maxSerializedKeysSizeForGETRequest;
 
 	///Download flag - disable cache while retrieving resule
 	/** Downloader will not include etag into header, so database will return complete response
@@ -85,7 +90,7 @@ public:
 	 * to retrieve content which will be used only once. For example when
 	 * url contains a random number.
 	 */
-	static const std::size_t flgDisableCache = 1;
+	static const Flags flgDisableCache = 1;
 	///Download flag - refresh cache with new value
 	/** Cache can quess, whether there is chance that content of URL has been updated. If
 	 * cache doesn't detect such condition, no request is generated and result is
@@ -93,29 +98,29 @@ public:
 	 * is always generated but eTags will be used. So cache can still be used when
 	 * server returns state 304. If there is changed content, cache is also updated.
 	 */
-	static const std::size_t flgRefreshCache = 2;
+	static const Flags flgRefreshCache = 2;
 	///Download flag - store headers to the argument
 	/** You have to supply empty object as header field (if you don't need to send
 	 * headers with the request) Function will store response headers to the object.
 	 */
-	static const std::size_t flgStoreHeaders = 4;
+	static const Flags flgStoreHeaders = 4;
 
 	///Retrieve all revision IDs
-	static const std::size_t flgRevisions = 8;
+	static const Flags flgRevisions = 8;
 	///Retrieve revision info
-	static const std::size_t flgRevisionsInfo = 0x10;
+	static const Flags flgRevisionsInfo = 0x10;
 	///Retrieve update seq
-	static const std::size_t flgSeqNumber = 0x40;
+	static const Flags flgSeqNumber = 0x40;
 	///Retrieve attachments
-	static const std::size_t flgAttachments = 0x80;
+	static const Flags flgAttachments = 0x80;
 	///Retrieve attachment encoding info
-	static const std::size_t flgAttEncodingInfo = 0x100;
+	static const Flags flgAttEncodingInfo = 0x100;
 	///Retrieve all conflicts
-	static const std::size_t flgConflicts = 0x200;
+	static const Flags flgConflicts = 0x200;
 	///Retrieve all deleted conflicts
-	static const std::size_t flgDeletedConflicts = 0x400;
+	static const Flags flgDeletedConflicts = 0x400;
 	///create new document when requesting document doesn't exists
-	static const std::size_t flgCreateNew = 0x1000;
+	static const Flags flgCreateNew = 0x1000;
 
 
 
@@ -166,7 +171,7 @@ public:
 
 
 	///Changes current database
-	void use(String database);
+	void setCurrentDB(String database);
 	///Retrieves current database name
 	String getCurrentDB() const;
 
@@ -204,7 +209,7 @@ public:
 	 * @param viewFlags flags defined in View.
 	 * @return
 	 */
-	Query createQuery(std::size_t viewFlags);
+	Query createQuery(Flags viewFlags);
 
 	///Creates changeset
 	/** Changeset will use this database connection to update document
@@ -232,7 +237,7 @@ public:
 	 * @note if sequence numbers are tracked, function disables caching, because
 	 * sequence numbers are not updated when local document is stored
 	 */
-	Value retrieveLocalDocument(const StrViewA &localId, std::size_t flags = 0);
+	Value getLocal(const StrViewA &localId, Flags flags = 0);
 
 	///Retrieves document (by its id)
 	/**
@@ -244,7 +249,7 @@ public:
 	 * @note Retrieveing many documents using this method is slow. You should use Query
 	 * to retrieve multiple documents. However, some document properties are not available through the Query
 	 */
-	Value retrieveDocument(const StrViewA &docId, std::size_t flags = 0);
+	Value get(const StrViewA &docId, Flags flags = 0);
 
 
 	///Retrieves other revision of the document
@@ -254,7 +259,7 @@ public:
 	 * @param flags can be only flgDisableCache or zero. The default value is recommended.
 	 * @return json with document
 	 */
-	Value retrieveDocument(const StrViewA &docId, const StrViewA &revId, std::size_t flags = flgDisableCache);
+	Value get(const StrViewA &docId, const StrViewA &revId, Flags flags = flgDisableCache);
 
 	///Creates new document
 	/**
@@ -278,45 +283,13 @@ public:
 	 */
 	Validator *getValidator() const {return validator;}
 
-	class UpdateResult: public Value {
-	public:
-		UpdateResult(Value v, const String &newRev):Value(v),newRev(newRev) {}
-
-		const String newRev;
-	};
 
 	///Calls update handler to update document using server-side function
-	/** Server side function must be defined in design documents. You have to know relative path to
-	 * the database root.
+	/** Server side function must be defined in design documents.
 	 *
-	 * @param updateHandlerPath relative path to the update handler
-	 * @param documentId document id to update. If you need to create new document, you have to supply newly
-	 * generated ID. LightCouch doesn't support POST requests without document id.
-	 * @param arguments optional arguments (can be NULL)passed as object which is transformed to the key=value structure. Arguments are converted to strings (without quotes). Objects and arrays are serialized
-	 * @return Response of the function. Response has following format
-	 *
-	 * @code
-	 * {
-	 *    "content":"...",
-	 *    "content-type":"...",
-	 *    "rev":"...",
-	 *    "id":"..."
-	 * }
-	 * @endcode
-	 *
-	 * @b content - string or binary or parsed json value if possible.
-	 * @b content-type - content type. If you need to parse response as json, specify application/json here.
-	 * @b rev - revision id of the update.
-	 * @b id - id of the document
-	 *
-	 *
-	 * @note contenr can be binary string. It is not valid in json, however, in C++ it is simply
-	 *  a string, which can contain a binary information
-	 *
-	 *
-	 *  @exception RequestError if function returns any other status then 200 or 201
+	 * See: UpdateProc
 	 */
-	UpdateResult updateDoc(StrViewA updateHandlerPath, StrViewA documentId, Value arguments);
+	UpdateResult execUpdateProc(StrViewA updateHandlerPath, StrViewA documentId, Value arguments);
 
 
 	///Calls show handler.
@@ -348,7 +321,7 @@ public:
 	 *
 	 * @exception RequestError if function returns any other status then 200 or 201
 	 */
-	Value showDoc(const StrViewA &showHandlerPath, const StrViewA &documentId, const Value &arguments, std::size_t flags = 0);
+	ShowResult execShowProc(const StrViewA &showHandlerPath, const StrViewA &documentId, const Value &arguments, Flags flags = 0);
 
 
 	///Uploads attachment with specified document
@@ -360,7 +333,7 @@ public:
 	 * @note The returned object should not be stored for long way, because it blocks whole Couchdb instance
 	 * until the upload is finished
 	 */
-	Upload uploadAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType);
+	Upload putAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType);
 
 	///Uploads attachment with specified document
 	/**
@@ -371,7 +344,7 @@ public:
 	 * @param attachmentData content of attachment
 	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	String uploadAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData);
+	String putAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData);
 
 	///Downloads attachment
 	/**
@@ -379,14 +352,7 @@ public:
 	 * @param attachmentName name of attachment to retrieve
 	 * @param etag if not empty, function puts string as "if-none-match" header.
 	 */
-	Download downloadAttachment(const Value &document, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
-	///Downloads attachment
-	/**
-	 * @param document document. The document don't need to be complete, only _id and _rev must be there.
-	 * @param attachmentName name of attachment to retrieve
-	 * @param etag if not empty, function puts string as "if-none-match" header.
-	 */
-	Download downloadAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
+	Download getAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
 
 	///Downloads latest attachments
 	/** Allows to easily download the latest attachment by given docId an dattachmentName
@@ -396,10 +362,7 @@ public:
 	 * @param etag (optional) etag, if not empty, then it is put to the header and result can be notModified
 	 * @return download object
 	 */
-	Download downloadAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
-	Download downloadAttachment(const String docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA()) {
-		return downloadAttachment((StrViewA)docId,attachmentName, etag);
-	}
+	Download getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
 
 
 	///For function updateDesignDocument
@@ -430,7 +393,7 @@ public:
 	 * the document (under _id key)
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	bool uploadDesignDocument(const Value &content, DesignDocUpdateRule updateRule = ddurOverwrite);
+	bool putDesignDocument(const Value &content, DesignDocUpdateRule updateRule = ddurOverwrite);
 
 	///Uploads design document from the file
 	/**
@@ -447,7 +410,7 @@ public:
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 *
 	 */
-	bool uploadDesignDocument(const std::string &pathname, DesignDocUpdateRule updateRule = ddurOverwrite);
+	bool putDesignDocument(const std::string &pathname, DesignDocUpdateRule updateRule = ddurOverwrite);
 
 	///Uploads design document from the resource
 	/**
@@ -462,7 +425,7 @@ public:
 	 * @retval false design document unchanged
 	 * @exception UpdateException document cannot be updated because it already exists and it is different
 	 */
-	bool uploadDesignDocument(const char *content, std::size_t contentLen, DesignDocUpdateRule updateRule = ddurOverwrite);
+	bool putDesignDocument(const char *content, std::size_t contentLen, DesignDocUpdateRule updateRule = ddurOverwrite);
 
 
 	///Updates single document
@@ -471,7 +434,7 @@ public:
 	 * @exception UpdateException Update is not possible (exception contains one item)
 	 * @exception RequestException Other error
 	 */
-	void updateDocument(Document &doc);
+	void put(Document &doc);
 
 
 
@@ -501,7 +464,7 @@ protected:
 
 
 
-	Value jsonPUTPOST(bool methodPost, const StrViewA &path, Value data, Value *headers, std::size_t flags);
+	Value jsonPUTPOST(bool methodPost, const StrViewA &path, Value data, Value *headers, Flags flags);
 
 
 	friend class ChangesSink;
@@ -605,7 +568,7 @@ public:
 	 * @param flags various flags that controls caching or behaviour
 	 * @return parsed response
 	 */
-	Value requestGET(PConnection &conn, Value *headers = nullptr, std::size_t flags = 0);
+	Value requestGET(PConnection &conn, Value *headers = nullptr, Flags flags = 0);
 	///Performs POST request from the database
 	/** POST request are not cached.
 	 *
@@ -618,7 +581,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	Value requestPOST(PConnection &conn, const Value &postData, Value *headers = nullptr, std::size_t flags = 0);
+	Value requestPOST(PConnection &conn, const Value &postData, Value *headers = nullptr, Flags flags = 0);
 	///Performs PUT request from the database
 	/** PUT request are not cached.
 	 *
@@ -631,7 +594,7 @@ public:
 	 * @param flags various flags that controls behaviour
 	 * @return parsed response
 	 */
-	Value requestPUT(PConnection &conn, const Value &postData, Value *headers = nullptr, std::size_t flags = 0);
+	Value requestPUT(PConnection &conn, const Value &postData, Value *headers = nullptr, Flags flags = 0);
 
 	///Performs DELETE request at database
 	/**
@@ -641,20 +604,20 @@ public:
 	 * @param flags flags that controls behaviour
 	 * @return
 	 */
-	Value requestDELETE(PConnection &conn, Value *headers = nullptr, std::size_t flags = 0);
+	Value requestDELETE(PConnection &conn, Value *headers = nullptr, Flags flags = 0);
 
 
 protected:
 	typedef std::vector<PConnection> ConnPool;
 	ConnPool connPool;
 
-	Value jsonPUTPOST(PConnection &conn, bool methodPost, Value data, Value *headers, std::size_t flags);
+	Value jsonPUTPOST(PConnection &conn, bool methodPost, Value data, Value *headers, Flags flags);
 
 	void handleUnexpectedStatus(PConnection& conn);
 	Download downloadAttachmentCont(PConnection &conn, const StrViewA &etag);
 	Value parseResponse(PConnection &conn);
 	void releaseConnection(Connection *b);
-
+	Value postRequest(PConnection &conn, const StrViewA &cacheKey, Value *headers, Flags flags);
 
 };
 

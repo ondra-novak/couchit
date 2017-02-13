@@ -7,7 +7,7 @@
 
 #include "test_common.h"
 
-namespace LightCouch {
+namespace couchit {
 
 Config getTestCouch() {
 	Config cfg;

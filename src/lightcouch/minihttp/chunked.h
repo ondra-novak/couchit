@@ -10,7 +10,7 @@
 
 #include "buffered.h"
 
-namespace LightCouch {
+namespace couchit {
 
 ///
 /**

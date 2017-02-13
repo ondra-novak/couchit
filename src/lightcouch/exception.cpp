@@ -7,7 +7,7 @@
 
 #include "exception.h"
 
-namespace LightCouch {
+namespace couchit {
 
 RequestError::RequestError(const String &url, unsigned int code, const String& message, const Value &extraInfo)
 	:HttpStatusException(url,code,message), extraInfo(extraInfo)

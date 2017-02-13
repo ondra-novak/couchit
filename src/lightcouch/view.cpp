@@ -7,7 +7,7 @@
 
 #include "view.h"
 
-namespace LightCouch {
+namespace couchit {
 
 View::View(String viewPath)
 	:viewPath(viewPath),flags(0)
@@ -41,4 +41,4 @@ Filter::Filter(String filter):View(filter) {
 }
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */

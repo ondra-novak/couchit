@@ -8,13 +8,15 @@
 #include <unistd.h>
 #include <iostream>
 #include <set>
+#include <chrono>
+#include <thread>
 
 #include "../lightcouch/couchDB.h"
 
 #include "test_common.h"
 #include "testClass.h"
 
-namespace LightCouch {
+namespace couchit {
 
 using namespace json;
 
@@ -29,7 +31,7 @@ static void genFastUUIDS(std::ostream &print) {
 		String uuid = db.genUID("test-");
 		std::cout << uuid << std::endl;
 		uuidmap.insert(uuid);
-		usleep(100000);
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 	print << uuidmap.size();
 }

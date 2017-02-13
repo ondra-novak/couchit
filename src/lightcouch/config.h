@@ -13,8 +13,8 @@ namespace BredyHttpClient {
 	class IHttpProxyProvider;
 }
 
-///LightCouch namespace
-namespace LightCouch {
+///couchit namespace
+namespace couchit {
 
 class QueryCache;
 class Validator;

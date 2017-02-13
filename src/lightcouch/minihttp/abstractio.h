@@ -12,7 +12,7 @@
 
 #pragma once
 
-namespace LightCouch {
+namespace couchit {
 
 class IInputStream: public virtual json::RefCntObj {
 public:

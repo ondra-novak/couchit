@@ -9,7 +9,7 @@
 
 
 
-namespace LightCouch {
+namespace couchit {
 
 
 Validator& Validator::add(IValidationFn* fn) {
@@ -49,5 +49,5 @@ String ValidationFailedException::getWhatMsg() const throw () {
 }
 
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 

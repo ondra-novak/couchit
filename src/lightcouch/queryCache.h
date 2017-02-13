@@ -12,7 +12,7 @@
 #include <mutex>
 
 #include "json.h"
-namespace LightCouch {
+namespace couchit {
 
 
 ///Query cache stores results of various queries to the CouchDB
@@ -97,6 +97,6 @@ protected:
 	typedef std::lock_guard<std::mutex> Sync;
 };
 
-} /* namespace LightCouch */
+} /* namespace couchit */
 
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_QUERYCACHE_H_ */

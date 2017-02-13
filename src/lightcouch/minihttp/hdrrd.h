@@ -11,7 +11,7 @@
 
 #include "../json.h"
 
-namespace LightCouch {
+namespace couchit {
 
 
 template<typename Fn>
@@ -35,7 +35,7 @@ protected:
 };
 
 template<typename Fn>
-inline json::Value LightCouch::HeaderRead<Fn>::parseHeaders() {
+inline json::Value couchit::HeaderRead<Fn>::parseHeaders() {
 
 	json::Object collect;
 	bool stline = false;

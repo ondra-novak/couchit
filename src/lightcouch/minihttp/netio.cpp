@@ -19,7 +19,7 @@
 
 #include "../json.h"
 
-namespace LightCouch {
+namespace couchit {
 
 class LinuxCancel: public ICancelWait {
 public:
@@ -62,7 +62,7 @@ protected:
 };
 
 
-NetworkConnection* LightCouch::NetworkConnection::connect(const StrViewA &addr_ddot_port, int defaultPort) {
+NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot_port, int defaultPort) {
 
 
 	struct addrinfo req;
@@ -107,7 +107,7 @@ NetworkConnection* LightCouch::NetworkConnection::connect(const StrViewA &addr_d
 	return new NetworkConnection(socket);
 }
 
-LightCouch::NetworkConnection::NetworkConnection(int socket)
+couchit::NetworkConnection::NetworkConnection(int socket)
 	:socket(socket)
 	,buffUsed(0)
 	,rdPos(0)
@@ -248,7 +248,7 @@ bool NetworkConnection::waitForOutput(int  timeout_in_ms) {
 	} while (true);
 }
 
-bool LightCouch::NetworkConnection::write(const unsigned char* buffer, std::size_t size, std::size_t *written) {
+bool couchit::NetworkConnection::write(const unsigned char* buffer, std::size_t size, std::size_t *written) {
 	if (lastSendError) return false;
 	if (written) {
 		int sent = send(socket,buffer,size,0);

@@ -11,7 +11,7 @@
 #include "query.h"
 
 #include <lightspeed/base/containers/sort.tcc>
-namespace LightCouch {
+namespace couchit {
 
 
 template<typename Fn>
@@ -27,7 +27,7 @@ struct SortResultCmp {
 };
 
 template<typename Fn>
-Result LightCouch::Result::sort(Fn compareRowsFunction,	bool descending) const {
+Result couchit::Result::sort(Fn compareRowsFunction,	bool descending) const {
 
 
 	AutoArray<Value> sortingRows;
@@ -47,7 +47,7 @@ Result LightCouch::Result::sort(Fn compareRowsFunction,	bool descending) const {
 }
 
 template<typename CmpFn, typename ReduceFn>
-inline Result LightCouch::Result::group(CmpFn compareRowsFunction,
+inline Result couchit::Result::group(CmpFn compareRowsFunction,
 		ReduceFn reduceFn, bool descending) const {
 
 	AutoArray<Value> sortingRows;
@@ -81,7 +81,7 @@ inline Result LightCouch::Result::group(CmpFn compareRowsFunction,
 }
 
 template<typename MergeFn>
-inline Result LightCouch::Result::merge(const Result& other, MergeFn mergeFn) const {
+inline Result couchit::Result::merge(const Result& other, MergeFn mergeFn) const {
 
 	std::size_t leftPos = 0;
 	std::size_t rightPos = 0;
@@ -137,7 +137,7 @@ struct ResultJoinHlp {
 };
 
 template<typename BindFn>
-inline Result LightCouch::Result::join(QueryBase& q, const StrViewA &name, std::size_t flags,  BindFn bindFn)
+inline Result couchit::Result::join(QueryBase& q, const StrViewA &name, std::size_t flags,  BindFn bindFn)
 {
 	typedef MultiMap<Value, ResultJoinHlp, JsonIsLess> ResultMap;
 	ResultMap map;

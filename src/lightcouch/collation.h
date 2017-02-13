@@ -12,7 +12,7 @@
 
 
 
-namespace LightCouch {
+namespace couchit {
 
 typedef int CompareResult;
 static const int cmpResultLess = -1;

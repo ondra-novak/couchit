@@ -8,7 +8,7 @@
 #include "revision.h"
 
 #include "num2str.h"
-namespace LightCouch {
+namespace couchit {
 
 Revision::Revision():revId(0),tagsize(0) {
 }

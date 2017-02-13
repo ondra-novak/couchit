@@ -9,7 +9,7 @@
 #define LIGHTCOUCH_MINIHTTP_CANCELFUNCTION_H_
 #include <imtjson/refcnt.h>
 
-namespace LightCouch {
+namespace couchit {
 
 class ICancelWait: public json::RefCntObj {
 public:
