@@ -7,6 +7,9 @@
 
 #include "queryServer.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include <imtjson/abstractValue.h>
 
 
@@ -67,7 +70,6 @@ static NamedEnum<DDocCommand> ddocCommands(ddocCommandsDef);
 
 
 int couchit::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
-	int r;
 
 	while (!in.eof()) {
 		Value req = Value::fromStream(in);
@@ -78,8 +80,8 @@ int couchit::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
 			Value resp;
 			switch (cmd) {
 				case cmdReset:
-					r = checkAppUpdate();
-					if (r) return r;
+					if (rrule != nullptr && rrule())
+						return 100;
 					resp=commandReset(req);
 					break;
 				case cmdAddLib: resp=commandAddLib(req);break;
@@ -109,7 +111,6 @@ int couchit::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
 }
 
 Value QueryServer::commandReset(const Value& ) {
-	checkAppUpdate();
 	preparedMaps.clear();
 	return true;
 }
@@ -348,19 +349,23 @@ Value QueryServer::commandDDoc(const Value& req, std::istream &input, std::ostre
 		Value arguments = req[3];
 		DDocCommand cmd = ddocCommands[path[0].getString()];
 		Value resp;
-		switch(cmd){
-			case ddcmdShows: resp = commandShow(fn,arguments);break;
-			case ddcmdLists: resp = commandList(fn, arguments, input, output);break;
-			case ddcmdFilters: resp = commandFilter(fn,arguments);break;
-			case ddcmdUpdates: resp = commandUpdate(fn,arguments);break;
-			case ddcmdViews: resp = commandView(fn,arguments);break;
+		try {
+			switch(cmd){
+				case ddcmdShows: resp = commandShow(fn,arguments);break;
+				case ddcmdLists: resp = commandList(fn, arguments, input, output);break;
+				case ddcmdFilters: resp = commandFilter(fn,arguments);break;
+				case ddcmdUpdates: resp = commandUpdate(fn,arguments);break;
+				case ddcmdViews: resp = commandView(fn,arguments);break;
+			}
+			return resp;
+		} catch (std::bad_cast) {
+			throw QueryServerError("compile error",{"Error to execute compiled function: ", typeid(*fn.getHandle()->unproxy()).name()});
 		}
-		return resp;
 	}
 }
 
 Value QueryServer::commandShow(const Value& fn, const Value& args) {
-	AbstractShowBase &showFn = dynamic_cast<const FnCallValue<AbstractShowBase> &>((*fn.getHandle())).getFunction();
+	AbstractShowBase &showFn = dynamic_cast<const FnCallValue<AbstractShowBase> &>((*fn.getHandle()->unproxy())).getFunction();
 	Value resp = showFn.run(Document(args[0]), args[1]);
 	return {"resp",resp};
 }
@@ -515,6 +520,10 @@ void QueryServer::regFilter(String filterName, AbstractFilterBase* impl) {
 	filters.insert(std::make_pair(StrKey(filterName),impl));
 }
 
+void QueryServer::setRestartRule(const RestartRule& rule) {
+	rrule = rule;
+}
+
 
 Value QueryServer::createDesignDocument(Object &container, StrViewA fnName, StrViewA &suffix) {
 	std::size_t pos = fnName.indexOf("/",0);
@@ -644,5 +653,20 @@ String VersionMistmatch::getWhatMsg() const throw() {
 	return String("Version mistmatch.");
 }
 
-} /* namespace couchit */
 
+RestartRuleChangedFile::RestartRuleChangedFile(const String fname):file(fname),mtime(getMTime(fname)) {
+}
+
+bool RestartRuleChangedFile::operator ()() const {
+	std::time_t m = getMTime(file);
+	return m != mtime? 1:0;
+}
+
+std::time_t RestartRuleChangedFile::getMTime(const String& file) {
+	struct stat st;
+	st.st_mtim.tv_sec = 0;
+	stat(file.c_str(), &st);
+	return st.st_mtim.tv_sec;
+}
+
+} /* namespace couchit */

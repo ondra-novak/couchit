@@ -142,7 +142,12 @@ public:
 
 
 
-	virtual int checkAppUpdate() { return 0; }
+
+
+
+	typedef std::function<bool()> RestartRule;
+
+	void setRestartRule(const RestartRule &rule);
 
 
 
@@ -171,6 +176,7 @@ protected:
 	RegFilterFn filters;
 	String qserverName;
 	Object ddcache;
+	RestartRule rrule;
 
 	std::vector<RowWithKey> rowBuffer;
 	std::vector<ReducedRow> valueBuffer;
@@ -201,6 +207,20 @@ private:
 	Value compileDesignSection(T &reg, const Value &section, StrViewA sectionName);
 
 	Value createDesignDocument(Object &container, StrViewA fnName, StrViewA &suffix);
+};
+
+class RestartRuleChangedFile {
+public:
+
+	RestartRuleChangedFile(const String fname);
+	bool operator()() const;
+
+
+protected:
+	String file;
+	std::time_t mtime;
+	static std::time_t getMTime(const String &file);
+
 };
 
 

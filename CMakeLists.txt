@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project (couchity)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/)
-add_subdirectory (src/lightcouch)
+add_subdirectory (src/couchit)
 add_subdirectory (src/tests)
   # The 'test' target runs all but the future tests
   cmake_policy(PUSH)

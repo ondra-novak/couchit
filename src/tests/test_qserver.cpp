@@ -114,11 +114,11 @@ static void prepareQueryServer(QueryServer &qserver) {
 }
 
 
-static void rawCreateDB(std::ostream &) {
+static void rawCreateDB(const StrViewA &lang, std::ostream &) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 	db.createDatabase();
-	QueryServer qserver(DATABASENAME);
+	QueryServer qserver(lang);
 	prepareQueryServer(qserver);
 	qserver.syncDesignDocuments(qserver.generateDesignDocuments(),db);
 }
@@ -130,9 +130,11 @@ static void deleteDB(std::ostream &) {
 }
 
 
-void runQueryServer() {
-	QueryServer qserver(DATABASENAME);
+void runQueryServer(const StrViewA &lang, const StrViewA &chkfile) {
+
+	QueryServer qserver(lang);
 	prepareQueryServer(qserver);
+	qserver.setRestartRule(RestartRuleChangedFile(chkfile));
 	qserver.runDispatchStdIO();
 }
 
@@ -319,9 +321,9 @@ static void couchFilter(std::ostream &a) {
 	a << changes.length();
 }
 
-void runTestQueryServer(TestSimple &tst) {
+void runTestQueryServer(const StrViewA &lang, TestSimple &tst) {
 
-	tst.test("couchdb.qserver.createDB","") >> &rawCreateDB;
+	tst.test("couchdb.qserver.createDB","") >> [&](std::ostream &out){rawCreateDB(lang,out);};
 	tst.test("couchdb.qserver.loadData","12") >> &couchLoadData;
 	tst.test("couchdb.qserver.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &couchFindKeys;
 	tst.test("couchdb.qserver.findWildcard","Kenneth Meyer,42,156 Kermit Byrd,76,184 ") >> &couchFindWildcard;
