@@ -282,8 +282,8 @@ struct btree_common_params {
 
   typedef Alloc allocator_type;
   typedef Key key_type;
-  typedef ssize_t size_type;
-  typedef ptrdiff_t difference_type;
+  typedef std::size_t size_type;
+  typedef std::ptrdiff_t difference_type;
 
   enum {
     kTargetNodeSize = TargetNodeSize,
@@ -891,7 +891,7 @@ class btree : public Params::key_compare {
   };
 
   struct node_stats {
-    node_stats(ssize_t l, ssize_t i)
+    node_stats(std::size_t l, std::size_t i)
         : leaf_nodes(l),
           internal_nodes(i) {
     }
@@ -902,8 +902,8 @@ class btree : public Params::key_compare {
       return *this;
     }
 
-    ssize_t leaf_nodes;
-    ssize_t internal_nodes;
+    std::size_t leaf_nodes;
+	std::size_t internal_nodes;
   };
 
  public:

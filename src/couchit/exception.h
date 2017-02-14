@@ -11,7 +11,7 @@
 
 namespace couchit {
 
-class Exception: public virtual std::exception {
+class Exception: public std::exception {
 public:
 
 	virtual const char *what() const throw() override;

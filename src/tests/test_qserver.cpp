@@ -7,18 +7,18 @@
 
 #include <set>
 
-#include "../lightcouch/changes.h"
+#include "../couchit/changes.h"
 
-#include "../lightcouch/couchDB.h"
-#include "../lightcouch/changeset.h"
-#include "../lightcouch/num2str.h"
+#include "../couchit/couchDB.h"
+#include "../couchit/changeset.h"
+#include "../couchit/num2str.h"
 #include "test_common.h"
-#include "../lightcouch/queryServer.h"
+#include "../couchit/queryServer.h"
 #include "testClass.h"
 
 namespace couchit {
 
-#define DATABASENAME "lightcouch_unittest"
+#define DATABASENAME "couchit_unittest"
 
 
 
@@ -179,7 +179,7 @@ static void couchLoadData(std::ostream &print) {
 		chset.update(doc);
 	}
 
-	chset.commit(false);
+	chset.commit();
 	std::set<String> uuidmap;
 
 	for (std::size_t i = 0; i < savedDocs.size(); i++) {

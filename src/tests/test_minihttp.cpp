@@ -1,10 +1,10 @@
 #include <imtjson/json.h>
 #include <algorithm>
 
-#include "../lightcouch/minihttp/hdrrd.h"
-#include "../lightcouch/minihttp/hdrwr.h"
-#include "../lightcouch/minihttp/chunked.h"
-#include "../lightcouch/minihttp/httpclient.h"
+#include "../couchit/minihttp/hdrrd.h"
+#include "../couchit/minihttp/hdrwr.h"
+#include "../couchit/minihttp/chunked.h"
+#include "../couchit/minihttp/httpclient.h"
 #include "testClass.h"
 
 

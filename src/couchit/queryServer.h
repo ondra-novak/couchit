@@ -142,7 +142,7 @@ public:
 
 
 
-	virtual int checkAppUpdate() {}
+	virtual int checkAppUpdate() { return 0; }
 
 
 

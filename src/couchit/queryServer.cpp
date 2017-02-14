@@ -93,7 +93,7 @@ int couchit::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
 		} catch (QueryServerError &e) {
 			Value resp({"error",e.type,e.explain});
 			resp.toStream(out);
-		} catch (VersionMistmatch &m) {
+		} catch (VersionMistmatch &) {
 			Value resp({"error","try_again","restarting query server, please try again"});
 			resp.toStream(out);
 			out << std::endl;
@@ -105,6 +105,7 @@ int couchit::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
 		out << std::endl;
 
 	}
+	return 0;
 }
 
 Value QueryServer::commandReset(const Value& ) {

@@ -85,7 +85,7 @@ protected:
 		if (num) {
 			char *c = writeHex(buff, num>>4);
 			std::size_t rem = num & 0xF;
-			*c = rem<10?rem+'0':rem+'A'-10;
+			*c = (char)(rem<10?rem+'0':rem+'A'-10);
 			return c+1;
 		} else {
 			return buff;

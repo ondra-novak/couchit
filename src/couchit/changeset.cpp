@@ -5,6 +5,7 @@
  *      Author: ondra
  */
 
+#include <ctime>
 #include "changeset.h"
 
 #include "document.h"
@@ -60,7 +61,7 @@ bool Changeset::docOrder(const X &a, const X &b) {
 	return a.id < b.id;
 }
 
-Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
+Changeset& Changeset::commit(CouchDB& db) {
 	if (scheduledDocs.empty()) return *this;
 
 
@@ -106,7 +107,7 @@ Changeset& Changeset::commit(CouchDB& db,bool all_or_nothing) {
 
 	commitedDocs.clear();
 	scheduledDocs.clear();
-	Value out = db.bulkUpload(docsToCommit, all_or_nothing);
+	Value out = db.bulkUpload(docsToCommit);
 
 	std::vector<UpdateException::ErrorItem> errors;
 
@@ -165,8 +166,8 @@ void Changeset::revert(const StrViewA &docId) {
 }
 
 
-Changeset& Changeset::commit(bool all_or_nothing) {
-	return commit(db,all_or_nothing);
+Changeset& Changeset::commit() {
+	return commit(db);
 }
 
 Changeset& Changeset::erase(const String &docId, const String &revId) {

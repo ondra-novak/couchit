@@ -62,7 +62,7 @@ public:
 	 *
 	 * @return reference to the Changeset to create chains
 	 */
-	Changeset &commit(CouchDB &db, bool all_or_nothing=true);
+	Changeset &commit(CouchDB &db);
 
 
 	///Commits all changes in the database
@@ -78,7 +78,7 @@ public:
 	 *
 	 * @return reference to the Changeset to create chains
 	 */
-	Changeset &commit(bool all_or_nothing=true);
+	Changeset &commit();
 
 
 	///Retrieves revision of the committed document

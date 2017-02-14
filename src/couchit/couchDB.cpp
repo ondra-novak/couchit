@@ -431,7 +431,7 @@ bool CouchDB::putDesignDocument(const Value &content, DesignDocUpdateRule update
 
 
 	try {
-		chset.commit(false);
+		chset.commit();
 	} catch (UpdateException &e) {
 		if (e.getErrors()[0].errorType == "conflict") {
 			return putDesignDocument(content,updateRule);
@@ -830,13 +830,11 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 
 
-Value CouchDB::bulkUpload(const Value docs, bool all_or_nothing) {
+Value CouchDB::bulkUpload(const Value docs) {
 	PConnection b = getConnection("_bulk_docs");
 
 	Object wholeRequest;
 	wholeRequest.set("docs", docs);
-	if (all_or_nothing)
-		wholeRequest.set("all_or_nothing",true);
 
 	return requestPOST(b,wholeRequest,0,0);
 }
@@ -844,7 +842,7 @@ Value CouchDB::bulkUpload(const Value docs, bool all_or_nothing) {
 void CouchDB::put(Document& doc) {
 	Changeset chset = createChangeset();
 	chset.update(doc);
-	chset.commit(false);
+	chset.commit();
 	doc.set("_rev", chset.getCommitRev(doc));
 }
 

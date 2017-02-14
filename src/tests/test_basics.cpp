@@ -11,20 +11,20 @@
 #include <thread>
 #include <chrono>
 #include <condition_variable>
-#include "../lightcouch/attachment.h"
-#include "../lightcouch/document.h"
-#include "../lightcouch/queryCache.h"
-#include "../lightcouch/changeset.h"
-#include "../lightcouch/couchDB.h"
-#include "../lightcouch/query.h"
-#include "../lightcouch/changes.h"
-#include "../lightcouch/json.h"
+#include "../couchit/attachment.h"
+#include "../couchit/document.h"
+#include "../couchit/queryCache.h"
+#include "../couchit/changeset.h"
+#include "../couchit/couchDB.h"
+#include "../couchit/query.h"
+#include "../couchit/changes.h"
+#include "../couchit/json.h"
 #include "test_common.h"
 #include "testClass.h"
 
 namespace couchit {
 
-#define DATABASENAME "lightcouch_unittest"
+#define DATABASENAME "couchit_unittest"
 
 static void couchConnect(std::ostream &print) {
 
@@ -93,7 +93,7 @@ static void couchLoadData(std::ostream &print) {
 		chset.update(doc);
 	}
 
-	chset.commit(false);
+	chset.commit();
 	std::set<String> uuidmap;
 
 	for (std::size_t i = 0; i < savedDocs.size(); i++) {

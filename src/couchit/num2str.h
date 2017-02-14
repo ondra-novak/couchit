@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstddef>
+
 template<typename Output>
 static inline std::size_t unsignedToStringImpl(Output out, std::size_t number, std::size_t count, bool fixedLen = true, std::size_t base = 10) {
-	if (count && (fixedLen || number)) {
-		std::size_t r = unsignedToStringImpl(out,number/base, count-1, base);
+	if (count!=0 && (fixedLen || number != 0)) {
+		std::size_t r = unsignedToStringImpl(out,number/base, count-1, fixedLen, base);
 		std::size_t p = number%base;
 		if (p < 10) out((char)('0' + p));
 		else if (p < 36) out((char)('A'+(p-10)));

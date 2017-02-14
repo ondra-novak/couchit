@@ -5,9 +5,9 @@
  *      Author: ondra
  */
 
-#include "../lightcouch/document.h"
-#include "../lightcouch/localView.h"
-#include "../lightcouch/defaultUIDGen.h"
+#include "../couchit/document.h"
+#include "../couchit/localView.h"
+#include "../couchit/defaultUIDGen.h"
 
 #include "test_common.h"
 #include "testClass.h"

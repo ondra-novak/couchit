@@ -12,8 +12,7 @@
 #include "query.h"
 
 
-
-#include "btree/btree_map.h"
+//#include "btree/btree_map.h"
 
 #include "document.h"
 #include "reducerow.h"

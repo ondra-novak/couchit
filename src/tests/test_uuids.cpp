@@ -5,13 +5,12 @@
  *      Author: ondra
  */
 
-#include <unistd.h>
 #include <iostream>
 #include <set>
 #include <chrono>
 #include <thread>
 
-#include "../lightcouch/couchDB.h"
+#include "../couchit/couchDB.h"
 
 #include "test_common.h"
 #include "testClass.h"

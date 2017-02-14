@@ -18,6 +18,7 @@ static std::vector<V> &operator+=(std::vector<V> &v, const X &x) {
 	for (auto &&a : x) {
 		v.push_back(a);
 	}
+	return v;
 }
 
 void couchit::UrlBuilder::init(StrViewA basicUrl, StrViewA dbname, StrViewA resourcePath) {
@@ -75,6 +76,7 @@ void UrlBuilder::init() {
 UrlBuilder& UrlBuilder::add(StrViewA key, std::size_t value) {
 	addKey(key);
 	unsignedToString( PutToBuffer(buffer),value,21,10);
+	return *this;
 }
 
 void UrlBuilder::addKey(const StrViewA& key) {

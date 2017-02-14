@@ -90,6 +90,7 @@ HttpStatusException::HttpStatusException(const String& url, unsigned int code, c
 String HttpStatusException::getWhatMsg() const throw () {
 	std::ostringstream buff;
 	buff << "Unexpected HTTP status: url=" << url << ", status=" << code << ", message=" << message << ".";
+	return String(buff.str());
 }
 
 }

@@ -40,7 +40,7 @@ Revision::Revision(StrViewA revStr) {
 		String s({"Invalid revision:", revStr});
 		throw std::runtime_error(s.c_str());
 	}
-	std::size_t r = std::strtod(revStr.data,0);
+	std::size_t r = std::strtol(revStr.data,0,10);
 	this->revId = r;
 
 	p++;

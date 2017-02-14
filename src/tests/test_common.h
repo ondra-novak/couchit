@@ -7,7 +7,7 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_TESTS_TEST_COMMON_H_
 #define LIBS_LIGHTCOUCH_SRC_TESTS_TEST_COMMON_H_
-#include "../lightcouch/couchDB.h"
+#include "../couchit/couchDB.h"
 
 namespace couchit {
 

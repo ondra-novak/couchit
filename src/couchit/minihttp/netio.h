@@ -71,6 +71,8 @@ protected:
 	void setNonBlock();
 
 	int socket;
+	
+	void *waitHandle; //<used by some platforms (Windows)
 
 	unsigned char inputBuff[3000];
 	std::size_t buffUsed;

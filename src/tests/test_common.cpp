@@ -5,8 +5,8 @@
  *      Author: ondra
  */
 
-#include "../lightcouch/json.h"
-#include "../lightcouch/num2str.h"
+#include "../couchit/json.h"
+#include "../couchit/num2str.h"
 #include "test_common.h"
 
 namespace couchit {

@@ -185,7 +185,7 @@ public:
 
 
 	///Bulk upload
-	Value bulkUpload(const Value docs, bool all_or_nothing);
+	Value bulkUpload(const Value docs);
 
 
 	///Determines last sequence number
