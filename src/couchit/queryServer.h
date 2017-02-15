@@ -8,6 +8,7 @@
 #ifndef LIGHTCOUCH_QUERYSERVER_H_09888912AE57CCE472
 #define LIGHTCOUCH_QUERYSERVER_H_09888912AE57CCE472
 
+#include <ctime>
 #include "couchDB.h"
 #include "document.h"
 #include "query.h"

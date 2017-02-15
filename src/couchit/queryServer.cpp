@@ -197,7 +197,7 @@ Value QueryServer::commandReduce(const Value& req) {
 	}
 
 	for (auto &&val: fnlist) {
-		StrViewA name = val.getString();
+		StrViewA name = extractVersion(val.getString()).first;
 		auto fniter = views.find(name);
 		if (fniter == views.end() ) {
 			throw QueryServerError("not_found",String({"Reduce Function '",name,"' not found"}));
@@ -222,7 +222,7 @@ Value QueryServer::commandReReduce(const Value& req) {
 	}
 
 	for (auto &&val: fnlist) {
-		StrViewA name = val.getString();
+		StrViewA name = extractVersion(val.getString()).first;
 
 		auto fniter = views.find(name);
 		if (fniter == views.end() ) {
@@ -280,11 +280,19 @@ Value QueryServer::compileDesignDocument(const Value &document) {
 	return compiled;
 }
 
+template<typename T> struct RemoveRef { typedef T Type; };
+template<typename T> struct RemoveRef<T &> { typedef T Type; };
+template<typename T> struct RemoveRef<const T &> { typedef T Type; };
+template<typename T> struct RemoveRef<T &&> { typedef T Type; };
+template<typename T> struct RemoveRef<const T &&> { typedef T Type; };
+
 template<typename T>
 Value createCompiledFnRef(T &fnRef) {
 	typedef decltype(*fnRef) IT;
-	return new FnCallValue<IT>(*fnRef);
+	return new FnCallValue<typename RemoveRef<IT>::Type>(*fnRef);
 }
+
+
 
 template<typename T>
 Value QueryServer::compileDesignSection(T &reg, const Value &section, StrViewA sectionName) {
@@ -435,7 +443,8 @@ Value QueryServer::commandList(const Value& fn, const Value& args, std::istream 
 		bool headerSent;
 	};
 
-	AbstractListBase &listFn = dynamic_cast<const FnCallValue<AbstractListBase> &>(*fn.getHandle()->unproxy()).getFunction();
+	const json::IValue *v = fn.getHandle()->unproxy();
+	AbstractListBase &listFn = dynamic_cast<const FnCallValue<AbstractListBase> &>(*v).getFunction();
 
 	ListCtx listCtx(input,output,args[0]);
 	listFn.run(listCtx,args[1]);
@@ -577,7 +586,7 @@ Value QueryServer::generateDesignDocuments() {
 			switch (kv.second->reduceMode()) {
 			case AbstractViewBase::rmNone:break;
 			case AbstractViewBase::rmFunction:
-				view("reduce",kv.first);break;
+				view("reduce", createVersionedRef(kv.first, kv.second->version()));break;
 			case AbstractViewBase::rmSum:
 				view("reduce","_sum");break;
 			case AbstractViewBase::rmCount:
@@ -663,10 +672,18 @@ bool RestartRuleChangedFile::operator ()() const {
 }
 
 std::time_t RestartRuleChangedFile::getMTime(const String& file) {
+#ifdef _WIN32
+	struct _stat st;
+	st.st_mtime = 0;
+	_stat(file.c_str(), &st);
+	return st.st_mtime;
+
+#else
 	struct stat st;
 	st.st_mtim.tv_sec = 0;
 	stat(file.c_str(), &st);
 	return st.st_mtim.tv_sec;
+#endif
 }
 
 } /* namespace couchit */
