@@ -18,8 +18,6 @@
 namespace couchit {
 
 
-using namespace LightSpeed;
-
 
 
 ///Helps to create query server

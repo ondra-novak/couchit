@@ -16,7 +16,6 @@
 
 namespace couchit {
 
-using namespace LightSpeed;
 
 ///Emit function - object is passed to the map() function and function should call it to emit result to the view
 class IEmitFn {

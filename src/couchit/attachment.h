@@ -26,7 +26,7 @@ public:
 	 * @param data reference to binary data
 	 * @param contenType content type
 	 */
-	AttachmentDataRef(const BinaryView data, const StrViewA &contentType)
+	AttachmentDataRef(const BinaryView &data, const StrViewA &contentType)
 		:BinaryView(data),contentType(contentType) {}
 	const StrViewA contentType;
 

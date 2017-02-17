@@ -9,6 +9,6 @@ add_subdirectory (src/tests)
     cmake_policy(SET CMP0037 OLD)
   endif()
 add_compile_options(-std=c++11)
-add_custom_target( test bin/couchity_test DEPENDS bin/couchity_test)
+add_custom_target( test bin/couchit_test DEPENDS bin/couchit_test)
 cmake_policy(POP) 
  

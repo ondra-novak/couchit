@@ -14,8 +14,6 @@ namespace couchit {
 
 class LocalView;
 
-using namespace LightSpeed;
-
 ///Collects changes and commits them as one request
 class Changeset {
 public:

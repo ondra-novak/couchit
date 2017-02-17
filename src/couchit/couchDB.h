@@ -24,14 +24,9 @@
 #include "attachment.h"
 #include "iqueryable.h"
 #include "urlBuilder.h"
-namespace LightSpeed {
-class PoolAlloc;
-}
 
 namespace couchit {
 
-using namespace LightSpeed;
-using namespace BredyHttpClient;
 
 class UIDIterator;
 class Query;
