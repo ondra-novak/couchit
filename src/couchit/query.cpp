@@ -115,8 +115,8 @@ Query& Query::range(const Value& from, const StrViewA& fromDoc,
 		request.keys.add(to);
 		request.docIdFromGetKey = false;
 	} else {
-		request.keys.add(from.setKey(fromDoc));
-		request.keys.add(to.setKey(toDoc));
+		request.keys.add(Value(fromDoc,from));
+		request.keys.add(Value(toDoc,to));
 		request.docIdFromGetKey = true;
 	}
 	request.exclude_end = exclusiveEnd;

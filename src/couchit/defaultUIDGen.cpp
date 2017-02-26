@@ -14,14 +14,14 @@ namespace couchit {
 
 
 
-StrViewA DefaultUIDGen::operator ()(Buffer &buffer, const StrViewA &prefix) {
+	StrViewA DefaultUIDGen::operator ()(Buffer &buffer, const StrViewA &prefix) {
 
-	Sync _(lock);
-	time_t now;
-	time(&now);
+		Sync _(lock);
+		time_t now;
+		time(&now);
 
-	counter = (counter+1) & 0x7FFFFF;
-	return generateUID(buffer,prefix, now, counter,&rgn, 20);
+		counter = (counter + 1) & 0x7FFFFF;
+		return generateUID(buffer, prefix, (std::size_t)now, counter, &rgn, 20);
 }
 
 static void writeBaseX(IIDGen::Buffer &buffer, std::size_t val, unsigned int digits, unsigned int base) {

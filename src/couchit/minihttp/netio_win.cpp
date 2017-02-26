@@ -85,10 +85,6 @@ public:
 	bool waitForPending(bool &state, unsigned int timeout, ICancelWait *cancel);
 	void writeBuffer(SOCKET s, const unsigned char *buffer, unsigned int length);
 	bool waitForWrite(unsigned int timeout, ICancelWait *cancel);
-	void addRef() { refs++; }
-	void release() {
-		if (refs-- == 0) delete this;
-	}
 };
 
 
@@ -163,7 +159,9 @@ couchit::NetworkConnection::NetworkConnection(int socket)
 NetworkConnection::~NetworkConnection() {
 	::closesocket(socket);	
 	Async &a = Async::get(waitHandle);
-	a.release();
+	while (a.readPending || a.writePending) {
+		SleepEx(0, TRUE);
+	}
 
 }
 
@@ -310,7 +308,6 @@ static void CALLBACK readCompletion(IN DWORD dwError, IN DWORD cbTransferred,
 	async.rcount = cbTransferred;
 	async.rerror = dwError;
 	async.readPending = false;
-	async.release();
 }
 static void CALLBACK writeCompletion(IN DWORD dwError, IN DWORD cbTransferred,
 	IN LPWSAOVERLAPPED lpOverlapped, IN DWORD dwFlags) {
@@ -319,7 +316,6 @@ static void CALLBACK writeCompletion(IN DWORD dwError, IN DWORD cbTransferred,
 	async.wcount = cbTransferred;
 	async.werror = dwError;
 	async.writePending = false;
-	async.release();
 }
 
 Async::Async()
@@ -335,7 +331,6 @@ Async::Async()
 
 void Async::readToBuffer(SOCKET s, unsigned char * buffer, unsigned int length)
 {	
-	addRef();
 	WSABUF b;
 	b.buf = (char *)buffer;
 	b.len = length;	
@@ -350,7 +345,6 @@ void Async::readToBuffer(SOCKET s, unsigned char * buffer, unsigned int length)
 		}
 		else {
 			rerror = err;
-			release();
 			return;
 		}
 	}
@@ -383,7 +377,6 @@ bool Async::waitForPending(bool & state, unsigned int timeout, ICancelWait * can
 
 void Async::writeBuffer(SOCKET s, const unsigned char * buffer, unsigned int length)
 {
-	addRef();
 	WSABUF b;
 	b.buf = (char *)buffer;
 	b.len = length;
@@ -396,7 +389,6 @@ void Async::writeBuffer(SOCKET s, const unsigned char * buffer, unsigned int len
 			writePending = true;
 		else {
 			werror = err;
-			release();
 		}
 	}
 	else {

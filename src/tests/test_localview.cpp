@@ -26,8 +26,8 @@ static const char *strdata="[[\"Kermit Byrd\",76,184],[\"Odette Hahn\",44,181],"
 class LocalViewByName: public LocalView {
 public:
 	virtual void map(const Document &doc) override {
-		Value k ({doc["name"]});
-		Value v ({doc["age"] ,doc["height"]});
+		Value k (array,{doc["name"]});
+		Value v (array, {doc["age"] ,doc["height"]});
 		emit(k,v);
 	}
 
