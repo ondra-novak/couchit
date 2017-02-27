@@ -152,6 +152,9 @@ InputStream couchit::HttpClient::getResponse() {
 			if (readready) *readready = 0;
 			return 0;
 		}
+		virtual json::BinaryView read(std::size_t processed) {
+			return json::BinaryView(nullptr, 0);
+		}
 	};
 	if (responseData == nullptr) {
 		return new EmptyStream;
@@ -167,9 +170,9 @@ bool couchit::HttpClient::waitForData(unsigned int timeout) {
 void couchit::HttpClient::discardResponse() {
 	if (responseData != nullptr) {
 		std::size_t p = 0;
-		responseData->read(0,&p);
-		while (p != 0) {
-			responseData->read(p,&p);
+		BinaryView b = responseData->read(0);
+		while (!b.empty()) {
+			b = responseData->read(b.length);
 		}
 	}
 }
@@ -234,9 +237,10 @@ int HttpClient::readResponse() {
 	class ChunkedStream: public IInputStream {
 	public:
 		ChunkedStream(const InputStream &stream):chread(stream) {}
-		virtual const unsigned char *read(std::size_t processed, std::size_t *readready) {
-			return chread(processed,readready);
+		virtual json::BinaryView read(std::size_t processed) {
+			return chread(processed);
 		}
+
 
 	protected:
 		ChunkedRead<InputStream> chread;
@@ -248,8 +252,8 @@ int HttpClient::readResponse() {
 			:chread(stream) {
 				chread.setLimit(limit);
 		}
-		virtual const unsigned char *read(std::size_t processed, std::size_t *readready) {
-			return chread(processed,readready);
+		virtual json::BinaryView read(std::size_t processed) {
+			return chread(processed);
 		}
 
 	protected:
@@ -299,9 +303,8 @@ int HttpClient::readResponse() {
 }
 
 bool HttpClient::everythingRead(IInputStream* stream) {
-	std::size_t x;
-	stream->read(0,&x);
-	return x == 0;
+	json::BinaryView b = stream->read(0);
+	return b.empty();
 }
 
 void HttpClient::connectTarget() {

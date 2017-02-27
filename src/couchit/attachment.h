@@ -116,7 +116,7 @@ public:
 	public:
 		virtual ~Source() {}
 		virtual std::size_t operator()(void *buffer, std::size_t size) = 0;
-		virtual const unsigned char *operator()(std::size_t processed, std::size_t *ready) = 0;
+		virtual BinaryView operator()(std::size_t processed) = 0;
 	};
 
 	///Reads data from the stream

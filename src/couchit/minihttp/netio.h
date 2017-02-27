@@ -66,6 +66,8 @@ protected:
 	NetworkConnection(int socket);
 	virtual const unsigned char *read(std::size_t processed, std::size_t *readready);
 	virtual bool write(const unsigned char *buffer, std::size_t size, std::size_t *written);
+	virtual json::BinaryView read(std::size_t processed);
+
 
 	bool waitForInputInternal(int timeout_in_ms);
 	void setNonBlock();

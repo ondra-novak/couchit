@@ -89,26 +89,27 @@ template<typename InFn>
 class BufferedRead {
 public:
 
-	BufferedRead(const InFn &fn):inFn(fn),pos(0),bufferSize(0) {}
+	BufferedRead(const InFn &fn):inFn(fn),pos(0),curBuffer(nullptr,0) {}
 	~BufferedRead() {
 		commit();
 	}
 
 
 	void commit() {
-		inFn(pos,0);
-		pos = bufferSize = 0;
+		inFn(pos);
+		pos = 0;
+		curBuffer = json::BinaryView(nullptr, 0);
 	}
 
 	int operator()() {
 		return readNext();
 	}
 
-	const unsigned char *operator()(std::size_t procesed, std::size_t *ready) {
-		if (pos < bufferSize) {
+	json::BinaryView operator()(std::size_t procesed) {
+		if (pos < curBuffer.length) {
 			commit();
 		}
-		return inFn(procesed,ready);
+		return inFn(procesed);
 	}
 
 
@@ -116,19 +117,26 @@ protected:
 
 	InFn inFn;
 
-	const unsigned char *curBuffer;
-	std::size_t pos;
-	std::size_t bufferSize;
+	json::BinaryView curBuffer;
+	std::size_t pos;	
 
 	int readNext() {
-		if (pos < bufferSize) {
+		if (pos < curBuffer.length) {
 			return curBuffer[pos++];
 		} else {
-			curBuffer = inFn(pos,&bufferSize);
-			if (curBuffer && bufferSize) {
+			if (pos > curBuffer.length) 
+				return -1;
+			curBuffer = inFn(pos);
+			if (!curBuffer.empty()) {
 				pos = 0;
 				return curBuffer[pos++];
 			} else {
+				curBuffer = inFn(0);
+				if (!curBuffer.empty()) {
+					pos = 0;
+					return curBuffer[pos++];
+				}
+				pos = 1;
 				return -1;
 			}
 		}
@@ -185,19 +193,13 @@ public:
 		}
 	}
 
-	const unsigned char *operator()(std::size_t processed, std::size_t *ready) {
+	json::BinaryView operator()(std::size_t processed) {
 		limit -= std::min(limit,processed);
 		if (limit) {
-			const unsigned char *b = Super::operator()(processed,ready);
-			if (ready && *ready > limit) {
-				*ready = limit;
-			}
-			return b;
+			json::BinaryView b = Super::operator()(processed);
+			return b.substr(0,limit);
 		} else {
-			if (ready) {
-				*ready = 0;
-			}
-			return reinterpret_cast<const unsigned char *>(this);
+			return json::BinaryView(nullptr, 0);
 		}
 	}
 

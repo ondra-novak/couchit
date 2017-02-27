@@ -78,6 +78,7 @@ public:
 	DWORD rerror;
 	DWORD werror;
 	bool readPending;
+	bool eof;
 	bool writePending;
 	std::atomic<unsigned int> refs;
 
@@ -85,6 +86,10 @@ public:
 	bool waitForPending(bool &state, unsigned int timeout, ICancelWait *cancel);
 	void writeBuffer(SOCKET s, const unsigned char *buffer, unsigned int length);
 	bool waitForWrite(unsigned int timeout, ICancelWait *cancel);
+	bool hasData() const {
+		return eof || rcount;
+	}
+
 };
 
 
@@ -151,8 +156,6 @@ couchit::NetworkConnection::NetworkConnection(int socket)
 {
 	setNonBlock();
 	waitHandle = new Async;
-	Async &a = Async::get(waitHandle);
-	a.rcount = (DWORD)-1;
 
 }
 
@@ -292,6 +295,66 @@ bool couchit::NetworkConnection::write(const unsigned char* buffer, std::size_t 
 	}
 }
 
+json::BinaryView NetworkConnection::read(std::size_t processed)
+{
+	using namespace json;
+
+
+	//calculate remain space
+	std::size_t remain = buffUsed - rdPos;
+	//if processed remain space, reset position and used counters
+	if (remain <= processed) rdPos = buffUsed = 0;
+	//otherwise advance the position
+	else rdPos += processed;
+
+	//if there are still bytes or we recently processed some
+	if (rdPos < buffUsed) {
+		//return rest of buffer, even if there is no buffer at all
+		return BinaryView(inputBuff + rdPos, buffUsed - rdPos);
+	}
+	else if (lastRecvError) {
+		return BinaryView(nullptr, 0);
+	}
+	else if (processed) {
+		//read without blocking
+		Async &async = Async::get(waitHandle);
+		//check whether pending
+		if (async.waitForPending(async.readPending, 0, 0)) {
+			//if not, test whether data
+			if (async.hasData()) {
+				buffUsed = async.rcount;
+				eofFound = async.eof;
+				lastRecvError = async.rerror;
+				async.rcount = 0;
+				//return data
+				return BinaryView(inputBuff, buffUsed);
+			}
+			//no data ready, reade some
+			async.readToBuffer(socket, this->inputBuff, sizeof(this->inputBuff));
+		}
+		//in all cases, return empty buffer
+		return BinaryView(nullptr,0);
+	}
+	else {
+		Async &async = Async::get(waitHandle);
+		while (async.waitForPending(async.readPending, timeoutTime, cancelFunction)) {
+			if (async.hasData()) {
+				buffUsed = async.rcount;
+				eofFound = async.eof;
+				lastRecvError = async.rerror;
+				async.rcount = 0;
+				return BinaryView(inputBuff, buffUsed);
+			}
+			async.readToBuffer(socket, this->inputBuff, sizeof(this->inputBuff));
+		}
+		timeout = true;
+		return BinaryView(nullptr,0);
+	}
+	
+	
+
+}
+
 bool NetworkConnection::waitForInputInternal(int timeout_in_ms) {
 	Async &async = Async::get(waitHandle);
 	return async.waitForPending(async.readPending, timeout_in_ms, cancelFunction);
@@ -308,6 +371,7 @@ static void CALLBACK readCompletion(IN DWORD dwError, IN DWORD cbTransferred,
 	async.rcount = cbTransferred;
 	async.rerror = dwError;
 	async.readPending = false;
+	async.eof = dwError == 0 && cbTransferred == 0;
 }
 static void CALLBACK writeCompletion(IN DWORD dwError, IN DWORD cbTransferred,
 	IN LPWSAOVERLAPPED lpOverlapped, IN DWORD dwFlags) {
@@ -326,7 +390,7 @@ Async::Async()
 	wrovr.hEvent = (HANDLE)this;
 	readPending = false;
 	writePending = false;
-	refs = 1;
+	eof = false;
 }
 
 void Async::readToBuffer(SOCKET s, unsigned char * buffer, unsigned int length)

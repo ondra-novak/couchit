@@ -84,11 +84,11 @@ tst.test("couchdb.minihttp.readChunked", "Wikipedia in\r\n\r\nchunks.-Wikipedia 
 		"\r\n"
 		"Blableblaebalbqeq";
 	std::size_t pos = 0;
-	auto infn = [&data,&pos](std::size_t processed, std::size_t *ready) -> const unsigned char * {
+	auto infn = [&data,&pos](std::size_t processed) -> BinaryView {
 		pos+=processed;
 		std::size_t l = data.length;
-		if (ready) *ready = std::min(l - pos,std::size_t(10));
-		return reinterpret_cast<const unsigned char *>(pos >= l?nullptr:data.data+pos);
+		return BinaryView(reinterpret_cast<const unsigned char *>(pos >= l ? nullptr : data.data + pos),
+			std::min(l - pos, std::size_t(10)));
 	};
 	std::string res;
 	res.reserve(2000);
@@ -107,12 +107,12 @@ tst.test("couchdb.minihttp.readChunked", "Wikipedia in\r\n\r\nchunks.-Wikipedia 
 	 {
 		pos = 0;
 		ChunkedRead<decltype(infn)> chunks(infn);
-		std::size_t rd;
-		const unsigned char *c = chunks(0,&rd);
-		while (c != 0 && rd != 0) {
+		BinaryView c = chunks(0);
+		while (!c.empty()) {
+			std::size_t rd = c.length;
 			if (rd > 4) rd = 4;
-			res2.append(reinterpret_cast<const char *>(c), rd);
-			c = chunks(rd,&rd);
+			res2.append(reinterpret_cast<const char *>(c.data), rd);
+			c = chunks(rd);
 		}
 	}
 

@@ -614,27 +614,23 @@ ChangesSink CouchDB::createChangesSink() {
 class EmptyDownload: public Download::Source {
 public:
 	virtual std::size_t operator()(void *, std::size_t ) {return 0;}
-	virtual const unsigned char *operator()(std::size_t 	, std::size_t *ready) {
-		if (ready) {
-			*ready = 0;
-		}
-		return reinterpret_cast<const unsigned  char *>(this);
+	virtual BinaryView operator()(std::size_t) {
+		return BinaryView(nullptr, 0);
 	}
 };
 
 class StreamDownload: public Download::Source {
 public:
 	StreamDownload(const InputStream &stream,  CouchDB::PConnection &&conn):stream(stream),conn(std::move(conn)) {}
-	virtual std::size_t operator()(void *buffer, std::size_t size) {
-		std::size_t rd;
-		const unsigned char *c = stream(0,&rd);
-		if (size > rd) size = rd;
-		std::memcpy(buffer,c,size);
-		stream(size,0);
+	virtual std::size_t operator()(void *buffer, std::size_t size) override {
+		BinaryView b = stream(0);
+		if (size > b.length) size = b.length;
+		std::memcpy(buffer,b.data,b.length);
+		stream(size);
 		return size;
 	}
-	virtual const unsigned char *operator()(std::size_t processed, std::size_t *ready) {
-		return stream(processed,ready);
+	virtual BinaryView operator()(std::size_t processed) override {
+		return stream(processed);
 	}
 
 	~StreamDownload() {

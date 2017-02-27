@@ -148,74 +148,59 @@ class ChunkedRead {
 
 public:
 
-	ChunkedRead(const InFn &fn):inFn(fn),curChunk(0),state(skipWhite),eof(false),chunkError(false) {}
+	ChunkedRead(const InFn &fn):inFn(fn),curChunk(0),accChunk(0),state(skipWhite),eof(false),eofReported(false),chunkError(false) {}
 
-	const unsigned char *operator()(std::size_t processed, std::size_t *ready) {
-
-		const unsigned char *buff;
-		//we need to prepare next data?
-		if (ready) {
-			//set zero first
-			*ready = 0;
-			//eof reported
-			if (eof) {
-				//set fake buffer ptr (*ready is set to 0 = eof)
-				buff = reinterpret_cast<const unsigned char *>(ready);
-
-			//read whole chunk
-			} else if (processed >= curChunk) {
-				//accept the remaining bytes
-				inFn(curChunk,0);
-				//read chunk header
-				readChunkHeader();
-				//we have empty chunk
-				if (curChunk == 0) {
-					//set fake buffer ptr (*ready is set to 0 = eof)
-					buff = reinterpret_cast<const unsigned char *>(ready);
-					//set eof
-					eof = true;
-				} else {
-					//otherwise prepare output
-					buff = inFn(0,ready);
-				}
-			} else {
-				//chunk is not finished
-				//prepare next data
-				buff = inFn(processed,ready);
-				//decrease remaining bytes
-				curChunk-=processed;
+	json::BinaryView operator()(std::size_t processed) {
+		using json::BinaryView;
+		//when processed == 0, stronger part folllows
+		if (processed == 0) {
+			//if reading while eof,
+			if (eof || chunkError) {
+				//eof already reported, then throw exception
+				if (eofReported) throw std::runtime_error("Reading beyoind the chunk");
+				//mark that we now reporting the eof
+				eofReported = true;
+				//return empty buffer
+				return BinaryView(nullptr, 0);
 			}
-			//limit ready bytes by chunk size
-			if (*ready > curChunk) *ready = curChunk;
-			//return buffer
-			return buff;
-		} else {
-			//we dont need to prepare data
-			//first test, whether processed is equal to chunk
-			if (processed >= curChunk && !eof) {
-				//accept chunk
-				const unsigned char *p = inFn(curChunk,0);
-				//finish cur-chunk
-				curChunk = 0;
-
-				if (p != 0) {
-					readChunkHeaderImpl();
-					if (state == readFinish) {
-						state = skipWhite;
-						if (curChunk == 0) {
-							eof = true;
-						}
-						return inFn(0,0);
-					}
-				}
-				return nullptr;
-			} else {
-				curChunk-=processed;
-				//report processed bytes
-				return inFn(processed,0);
+			//if still any data in chunk
+			if (curChunk) {
+				//read next bytes from the input
+				BinaryView b = inFn(0);
+				//trim up to given chunk
+				return b.substr(0, curChunk);
+			}
+			//no more chunk data
+			else {
+				//prepare next chunk
+				return prepareNext(0);
 			}
 		}
+		//when processed <> 0 weaker part follows
+		else {
+			//if eof or error, return empty buffer - no report is recorded
+			if (eof || chunkError)  return BinaryView(nullptr, 0);
+			//processed whole chunk?
+			if (curChunk <= processed) {
+				//adjust processed
+				processed = curChunk;
+				//finish chunk
+				curChunk = 0;
+				//prepare next chunk
+				return prepareNext(processed);
+			}
+			else {
+				//decrease remaining chunk
+				curChunk -= processed;
+				//read reast of buffer
+				BinaryView b = inFn(processed);
+				//trim up to chunk
+				return b.substr(0, curChunk);
+			}
+
+		}
 	}
+
 
 
 	///Returns true, if error in chunk has encoutered
@@ -233,6 +218,7 @@ protected:
 	std::size_t curChunk,accChunk;
 	State state;
 	bool eof;
+	bool eofReported;
 	bool chunkError;
 
 	bool setChunkError() {
@@ -242,117 +228,53 @@ protected:
 		return true;
 	}
 
-	bool readChunkHeaderImpl() {
-		//we need to read chunk header with respect to currently available characters
+	json::BinaryView prepareNext(std::size_t processed) {
+		BinaryView b = inFn(processed);
+		std::size_t sz = parseChunkHdr(b);
+		b = inFn(sz);
+		if (eof) return BinaryView(nullptr, 0);
+		if (processed == 0 && b.empty()) b = inFn(0);
+		return b.substr(0, curChunk);
 
-		//pointer to buffer
-		const unsigned char *buff;
-
-		do {
-			//ready bytes
-			std::size_t rd;
-			//processed bytes (first initialized to 0
-			std::size_t processed = 0;
-			//read bytes (may block if processed == previous rd)
-			buff = inFn(processed,&rd);
-			//if null returned, then unexpected eof
-			if (buff == 0 || rd == 0) return setChunkError();
-
-			do {
-				//depend on state
-				switch(state) {
-				//we are skipping whites
-				case skipWhite:
-					//until all bytes processed
-					while (processed < rd) {
-						//read byte
-						unsigned char b = buff[processed];
-						//if hex digit
-						if (isxdigit(b)) {
-							//change state
-							state = readNum;
-							accChunk = 0;
-							//break;
-							break;
-						//if it is not space and not hex
-						} else if (!isspace(buff[processed])) {
-							return setChunkError();
-						} else {
-							//process next byte
-							++processed;
-						}
-					}
-					break;
-				case readNum:
-					//until all bytes processed
-					while (processed < rd) {
-						//read byte
-						unsigned char b = buff[processed];
-						//convert hex digit to number
-						if (b >= '0' && b <='9') {
-							accChunk = (accChunk << 4) + (b - '0');
-						} else if (b >= 'A' && b <='F') {
-							accChunk = (accChunk << 4) + (b - 'A' + 10);
-						} else if (b >= 'a' && b <='f') {
-							accChunk = (accChunk << 4) + (b - 'a' + 10);
-						} else {
-							//nonhex character - advance to next state
-							state = readCR;
-							break;
-						}
-						//count processed characters
-						++processed;
-					}
-					break;
-				case readCR:
-					//only /r is expected
-					if (buff[processed] != '\r') return setChunkError();
-					//advance next state
-					state = readLF;
-					//processed
-					++processed;
-					break;
-				case readLF:
-					//only /n is expected
-					if (buff[processed] != '\n') return setChunkError();
-					state = readFinish;
-					//processed
-					++processed;
-
-					break;
-				case readFinish:
-					curChunk = accChunk;
-					inFn(processed,0);
-					return true;
-				}
-
-			}
-			//still left bytes to process? continue
-			while (processed < rd);
-		buff = inFn(processed,0);
-		}
-		while (buff != 0);
-
-		return false;
 	}
 
-	bool readChunkHeaderNonBlock() {
-		if (inFn(0,0)) {
-			readChunkHeaderImpl();
-			if (state == readFinish) {
+	std::size_t parseChunkHdr(const json::BinaryView &data) {
+		for (std::size_t i = 0; i < data.length; ) {
+			unsigned char c = data[i];
+			switch (state) {
+			case skipWhite: if (!isspace(c)) state = readNum;
+							else i++;
+							break;
+			case readNum:	if (isdigit(c)) { accChunk = (accChunk << 4) + (c - '0'); i++; }
+							else if (c >= 'A' && c <= 'F') { accChunk = (accChunk << 4) + (c - 'A' + 10); i++; }
+							else if (c >= 'a' && c <= 'f') { accChunk = (accChunk << 4) + (c - 'a' + 10); i++; }
+							else state = readCR;
+							break;
+			case readCR:   if (c != '\r') {
+				setChunkError();
+			}
+						   else {
+							   i++;
+							   state = readLF;
+						   }
+						   break;
+			case readLF:   if (c != '\n') {
+				setChunkError();
+			}
+						   else {
+							   i++;
+							   state = readFinish;
+						   }
+						   break;
+			case readFinish:
+				if (chunkError) return 0;
+				std::swap(curChunk, accChunk);
+				if (curChunk == 0) eof = true;
 				state = skipWhite;
-				return true;
+				return i;
 			}
 		}
-		return false;
-
-	}
-
-	void readChunkHeader() {
-		while (state != readFinish) {
-			readChunkHeaderImpl();
-		}
-		state = skipWhite;
+		return data.length;
 	}
 
 };
