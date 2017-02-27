@@ -210,7 +210,41 @@ const unsigned char* NetworkConnection::read(std::size_t processed, std::size_t*
 			else return inputBuff;
 		}
 	}
+}
 
+json::BinaryView NetworkConnection::read(std::size_t processed) {
+	//calculate remain space
+	std::size_t remain = buffUsed - rdPos ;
+	//if processed remain space, reset position and used counters
+	if (remain <= processed) rdPos = buffUsed = 0;
+	//otherwise advance the position
+	else rdPos+=processed;
+
+	if (rdPos < buffUsed || eofFound) return json::BinaryView(inputBuff+rdPos, buffUsed - rdPos);
+
+	if (processed) {
+		int x = readToBuff();
+		if (x <= 0) return json::BinaryView(nullptr,0);
+		else return json::BinaryView(inputBuff, x);
+	} else {
+		int x;
+		//no more bytes available - repeatedly read to the buffer
+		while ((x = readToBuff()) == 0) {
+			//when it fails, perform waiting
+			if (!waitForInput(timeoutTime)) {
+				//in case of timeout report error
+				timeout = true;
+				//connection lost
+				eofFound = true;
+				return 0;
+			}
+		}
+		if (x < 0) {
+			return json::BinaryView(nullptr,0);
+		} else {
+			return json::BinaryView(inputBuff,buffUsed);
+		}
+	}
 
 }
 

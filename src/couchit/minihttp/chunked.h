@@ -231,7 +231,7 @@ protected:
 	json::BinaryView prepareNext(std::size_t processed) {
 		BinaryView b = inFn(processed);
 		std::size_t sz = parseChunkHdr(b);
-		b = inFn(sz);
+		if (sz) b = inFn(sz);
 		if (eof) return BinaryView(nullptr, 0);
 		if (processed == 0 && b.empty()) b = inFn(0);
 		return b.substr(0, curChunk);

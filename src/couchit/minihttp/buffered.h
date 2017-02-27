@@ -96,7 +96,7 @@ public:
 
 
 	void commit() {
-		inFn(pos);
+		if (pos) inFn(pos);
 		pos = 0;
 		curBuffer = json::BinaryView(nullptr, 0);
 	}
@@ -131,7 +131,7 @@ protected:
 				pos = 0;
 				return curBuffer[pos++];
 			} else {
-				curBuffer = inFn(0);
+				if (pos) curBuffer = inFn(0);
 				if (!curBuffer.empty()) {
 					pos = 0;
 					return curBuffer[pos++];
