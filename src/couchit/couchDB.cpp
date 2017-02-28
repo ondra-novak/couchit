@@ -90,11 +90,15 @@ Changeset CouchDB::createChangeset() {
 
 
 
-Value CouchDB::getLastSeqNumber() {
-	ChangesSink chsink = createChangesSink();
+SeqNumber CouchDB::getLastSeqNumber() {
+	ChangesFeed chsink = createChangesFeed();
 	Changes chgs = chsink.setFilterFlags(Filter::reverseOrder).limit(1).exec();
 	if (chgs.hasItems()) return ChangedDoc(chgs.getNext()).seqId;
-	else return nullptr;
+	else return SeqNumber();
+}
+SeqNumber CouchDB::getLastKnownSeqNumber() const {
+	LockGuard _(lock);
+	return lksqid;
 }
 
 
@@ -167,6 +171,7 @@ UpdateResult CouchDB::execUpdateProc(StrViewA updateHandlerPath, StrViewA docume
 	}
 	Value h(Object("Accept","*/*"));
 	Value v = requestPUT(conn, nullptr, &h, flgStoreHeaders);
+	lksqid.markOld();
 	String rev (h["X-Couch-Update-NewRev"]);
 	String ctt(h["content-type"]);
 	if (ctt != "application/json") {
@@ -262,7 +267,7 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 		bool finished;
 	};
 
-
+		lksqid.markOld();
 		//open request
 		conn->http.open(conn->getUrl(),"PUT",true);
 		//send header
@@ -468,7 +473,7 @@ bool  CouchDB::putDesignDocument(const char* content,
 
 }
 
-Changes CouchDB::receiveChanges(ChangesSink& sink) {
+Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 
 	PConnection conn = getConnection("_changes");
 
@@ -602,13 +607,18 @@ Changes CouchDB::receiveChanges(ChangesSink& sink) {
 
 	Value results=v["results"];
 	sink.seqNumber = v["last_seq"];
+	{
+		SeqNumber l (sink.seqNumber);
+		LockGuard _(lock);
+		if (l > lksqid) lksqid = l;
+	}
 
 	return results;
 }
 
 
-ChangesSink CouchDB::createChangesSink() {
-	return ChangesSink(*this);
+ChangesFeed CouchDB::createChangesFeed() {
+	return ChangesFeed(*this);
 }
 
 class EmptyDownload: public Download::Source {
@@ -799,7 +809,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		if (r.view.flags & View::attEncodingInfo) conn->add("att_encoding_info","true");
 	}
 	if (r.exclude_end) conn->add("inclusive_end","false");
-	if (r.view.flags & View::updateSeq) conn->add("update_seq","false");
+	conn->add("update_seq","true");
 	if (r.view.flags & View::updateAfter) conn->add("stale","update_after");
 	else if (r.view.flags & View::stale) conn->add("stale","ok");
 
@@ -819,6 +829,12 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		result = owner.requestPOST(conn,postBody,0,0);
 	}
 	if (r.view.postprocess) result = r.view.postprocess(&owner, r.ppargs, result);
+	Value sq = result["update_seq"];
+	if (sq.defined()) {
+		LockGuard _(owner.lock);
+		SeqNumber l(sq);
+		if (l > owner.lksqid) owner.lksqid = l;
+	}
 	return result;
 
 }
@@ -832,7 +848,9 @@ Value CouchDB::bulkUpload(const Value docs) {
 	Object wholeRequest;
 	wholeRequest.set("docs", docs);
 
-	return requestPOST(b,wholeRequest,0,0);
+	Value r = requestPOST(b,wholeRequest,0,0);
+	lksqid.markOld();
+	return r;
 }
 
 void CouchDB::put(Document& doc) {

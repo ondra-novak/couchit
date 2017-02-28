@@ -7,6 +7,8 @@
 
 #include "localView.h"
 
+#include "changes.h"
+
 #include "collation.h"
 #include "couchDB.h"
 
@@ -42,7 +44,7 @@ public:
 
 static AllDocView allDocView;
 
-LocalView::LocalView():queryable(*this),includeDocs(false),linkedView(&allDocView){
+LocalView::LocalView():queryable(*this),includeDocs(false),linkedView(&allDocView) {
 
 }
 
@@ -173,6 +175,9 @@ void LocalView::loadFromView(CouchDB& db, const View& view, bool runMapFn) {
 			addDocLk(String(row.id),doc,row.key,row.value);
 		}
 	}
+
+	serverView = std::unique_ptr<View>(new View(view));
+	updateSeqNumber = db.getLastKnownSeqNumber();
 
 }
 
@@ -541,6 +546,53 @@ Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 
 }
 
+
+void LocalView::updateFromChangesFeed(CouchDB& db, const View* view, const SeqNumber* seqNumber) {
+	Exclusive _(lock);
+	if (seqNumber == nullptr) {
+		seqNumber = &updateSeqNumber;
+	}
+	if (view == nullptr) {
+		view = serverView.get();
+	} else if (serverView == nullptr) {
+		serverView = std::unique_ptr<View>(new View(*view));
+	}
+
+	ChangesFeed feed = db.createChangesFeed();
+	if (view != nullptr) {
+		feed.setFilter(Filter(view->viewPath,view->flags | View::includeDocs,view->args));
+	} else {
+		feed.setFilterFlags(View::includeDocs);
+	}
+
+	if (seqNumber->defined()) {
+		feed.fromSeq(seqNumber->toValue());
+	}
+
+	Value sq;
+	feed >> [&](const ChangedDoc &doc) {
+		updateDocLk(doc.doc);
+		sq = doc.seqId;
+	};
+	if (sq.defined()) {
+		updateSeqNumber = sq;
+	}
+}
+
+
+Query LocalView::createQuery(CouchDB& dbclient, std::size_t viewFlags) {
+	SeqNumber nb = dbclient.getLastKnownSeqNumber();
+	if (nb >= updateSeqNumber || nb.isOld())
+		updateFromChangesFeed(dbclient);
+	return createQuery(viewFlags);
+}
+
+Query LocalView::createQuery(CouchDB& dbclient, std::size_t viewFlags, PostProcessFn fn) {
+	SeqNumber nb = dbclient.getLastKnownSeqNumber();
+	if (nb >= updateSeqNumber || nb.isOld())
+	updateFromChangesFeed(dbclient);
+	return createQuery(viewFlags,fn);
+}
 
 
 

@@ -24,6 +24,7 @@
 #include "attachment.h"
 #include "iqueryable.h"
 #include "urlBuilder.h"
+#include "revision.h"
 
 namespace couchit {
 
@@ -36,7 +37,7 @@ class Conflicts;
 class Document;
 class Validator;
 class Changes;
-class ChangesSink;
+class ChangesFeed;
 class Validator;
 class UpdateResult;
 class ShowResult;
@@ -190,7 +191,30 @@ public:
 	 * changes made during synchronization
 	 * @return last sequence number
 	 */
-	Value getLastSeqNumber();
+	SeqNumber getLastSeqNumber();
+
+	///Retrieves last known sequence number (LKSQID)
+	/** Function returns last known sequence number without asking the
+	 * server. This value is updated from various sources as the client is used.
+	 *
+	 * @return last known sequence number
+	 *
+	 * The sequence number can be marked as old. In this situation, the client knows that
+	 * sequence number is old without knowning the latest number. The sequence number is marked as old after calling
+	 * some update functions.
+	 *
+	 * Sources used to update LKSQID:
+	 *    views - their sequence number if it is fresh than LKSQID
+	 *    changes feed
+	 *
+	 *
+	 * Starting from CouchDB 2.0.0, the sequence number is presented as string, starting
+	 * with a number followed by dash and number of characters. It looks like revision id.
+	 * The class SequenceNumber allows to work with sequence numbers regardless on which
+	 * version of CouchDB is used.
+	 *
+	 */
+	SeqNumber getLastKnownSeqNumber() const;
 
 	///Creates query for specified view
 	/**
@@ -215,7 +239,7 @@ public:
 
 
 	///Creates object which is used to receive database changes
-	ChangesSink createChangesSink();
+	ChangesFeed createChangesFeed();
 
 
 
@@ -435,7 +459,7 @@ public:
 
 protected:
 
-	std::mutex lock;
+	mutable std::mutex lock;
 	std::condition_variable connRelease;
 	typedef std::lock_guard<std::mutex> LockGuard;
 
@@ -454,6 +478,7 @@ protected:
 	std::size_t curConnections;
 	std::vector<char> uidBuffer;
 	IIDGen& uidGen;
+	SeqNumber lksqid;
 
 
 
@@ -462,9 +487,9 @@ protected:
 	Value jsonPUTPOST(bool methodPost, const StrViewA &path, Value data, Value *headers, Flags flags);
 
 
-	friend class ChangesSink;
+	friend class ChangesFeed;
 
-	Changes receiveChanges(ChangesSink &sink);
+	Changes receiveChanges(ChangesFeed &sink);
 
 	class Queryable: public IQueryableObject {
 	public:

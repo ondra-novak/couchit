@@ -19,6 +19,8 @@
 #include "../couchit/query.h"
 #include "../couchit/changes.h"
 #include "../couchit/json.h"
+#include "../couchit/queryServerIfc.h"
+#include "../couchit/localView.h"
 #include "test_common.h"
 #include "testClass.h"
 
@@ -297,7 +299,7 @@ static void couchChangeSetOneShot(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 
-	ChangesSink chsink (db.createChangesSink());
+	ChangesFeed chsink (db.createChangesFeed());
 	Changes chngs = chsink.exec();
 	std::size_t count = 0;
 	while (chngs.hasItems()) {
@@ -327,7 +329,7 @@ static void couchChangeSetWaitForData(std::ostream &a) {
 
 	std::thread thr([&]{loadSomeDataThread(db,uid);});
 
-	ChangesSink chsink (db.createChangesSink());
+	ChangesFeed chsink (db.createChangesFeed());
 	chsink.setTimeout(10000);
 	chsink.fromSeq(lastId);
 	try {
@@ -385,7 +387,7 @@ static void couchChangeSetWaitForData3(std::ostream &a) {
 
 	std::thread thr([&]{loadSomeDataThread3(db,uid, event);});
 
-	ChangesSink chsink (db.createChangesSink());
+	ChangesFeed chsink (db.createChangesFeed());
 	chsink.setTimeout(10000);
 	chsink.fromSeq(lastId);
 	try {
@@ -412,7 +414,7 @@ static void couchChangesStopWait(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 
-	ChangesSink chsink (db.createChangesSink());
+	ChangesFeed chsink (db.createChangesFeed());
 	chsink.setTimeout(10000);
 
 
@@ -437,9 +439,11 @@ static void couchGetSeqNumber(std::ostream &a) {
 
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
-	Value cnt = db.getLastSeqNumber();
+	SeqNumber cnt = db.getLastSeqNumber();
+	SeqNumber beg(Value(1));
+	SeqNumber last = db.getLastKnownSeqNumber();
 
-	a << (cnt != null ?"ok":"failed");
+	a << (cnt > beg && last == cnt?"ok":"failed");
 
 }
 
@@ -477,6 +481,93 @@ static void couchStoreAndRetrieveAttachment(std::ostream &a) {
 
 }
 
+class ByName: public AbstractViewMapOnly<1> {
+	virtual void map(const Document &doc, IEmitFn &emit) override {
+		emit(Value(array,{doc["name"]}), {doc["age"],doc["height"]});
+	}
+};
+
+
+static void testLocalViewUpdate(std::ostream &a) {
+
+	LocalView l(new ByName,0);
+
+	CouchDB db(getTestCouch());
+	db.setCurrentDB(DATABASENAME);
+	l.loadFromView(db,by_name,true);
+
+	Query q(l.createQuery(db,0));
+	Result res = q.keys({
+				{"Kermit Byrd"},
+				{"Owen Dillard"},
+				{"Nicole Jordan"}
+					}).exec();
+	while (res.hasItems()) {
+		Row row = res.getNext();
+		a << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
+	}
+
+}
+
+static void testLocalViewUpdate2(std::ostream &a) {
+
+	LocalView l(new ByName,0);
+
+	CouchDB db(getTestCouch());
+	db.setCurrentDB(DATABASENAME);
+	l.loadFromView(db,by_name,true);
+
+	Document doc;
+	doc("name","Ondra Novak")
+		("age",41)
+		("height",189)
+		("_id","someUnique");
+	db.put(doc);
+
+	Query q(l.createQuery(db,0));
+	Result res = q.keys({
+				{"Ondra Novak"},
+				{"Owen Dillard"},
+				{"Nicole Jordan"}
+					}).exec();
+	while (res.hasItems()) {
+		Row row = res.getNext();
+		a << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
+	}
+
+}
+
+static void testLocalViewUpdate3(std::ostream &a) {
+
+	LocalView l(new ByName,0);
+
+	CouchDB db(getTestCouch());
+	db.setCurrentDB(DATABASENAME);
+	l.loadFromView(db,by_name,true);
+
+	Document doc = db.get("someUnique");
+	doc.setDeleted({"name"});
+	db.put(doc);
+
+	Query q(l.createQuery(db,0));
+	Result res = q.keys({
+				{"Ondra Novak"},
+				{"Owen Dillard"},
+				{"Nicole Jordan"}
+					}).exec();
+	while (res.hasItems()) {
+		Row row = res.getNext();
+		a << row.key[0].getString() << ","
+				<<row.value[0].getUInt() << ","
+				<<row.value[1].getUInt() << " ";
+	}
+
+}
+
 void runTestBasics(TestSimple &tst) {
 
 tst.test("couchdb.connect","Welcome") >> &couchConnect;
@@ -490,6 +581,9 @@ tst.test("couchdb.findRange","Daniel Cochran Ramona Lang Urielle Pennington ") >
 tst.test("couchdb.findKeys","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &couchFindKeys;
 tst.test("couchdb.retrieveDoc","{\"_local_seq\":1,\"age\":76,\"height\":184,\"name\":\"Kermit Byrd\"}") >> &couchRetrieveDocument;
 tst.test("couchdb.caching","Kermit Byrd,76,184:0 Owen Dillard,80,151:0 Nicole Jordan,75,150:0 Kermit Byrd,76,184:1 Owen Dillard,80,151:1 Nicole Jordan,75,150:1 Kermit Byrd,76,184:1 Owen Dillard,80,151:1 Nicole Jordan,75,150:1 ") >> &couchCaching;
+tst.test("couchdb.updateLocalView","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &testLocalViewUpdate;
+tst.test("couchdb.updateLocalView2","Ondra Novak,41,189 Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &testLocalViewUpdate2;
+tst.test("couchdb.updateLocalView3","Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &testLocalViewUpdate3;
 tst.test("couchdb.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ") >>  &couchReduce;
 //defineTest test_couchCaching2("couchdb.caching2","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,76,184 Nicole Jordan,75,150 ",&couchCaching2);
 tst.test("couchdb.changesOneShot","1") >> &couchChangeSetOneShot;

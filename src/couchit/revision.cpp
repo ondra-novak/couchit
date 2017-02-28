@@ -8,60 +8,63 @@
 #include "revision.h"
 
 #include "num2str.h"
+#include "str2num.h"
 namespace couchit {
 
-Revision::Revision():revId(0),tagsize(0) {
+
+
+Revision::Revision():revId(0),revTagOffs(1) {
+
 }
 
-Revision::Revision(std::size_t revId, StrViewA tag):revId(revId),tagsize(tag.length) {
-	if (tag.length>sizeof(this->tag)) {
-		String s({"Revision tag is too long:", tag});
-		throw std::runtime_error(s.c_str());
+Revision::Revision(std::size_t revId, const String &revTag)
+	:revId(revId),revTag(revTag), revTagOffs(0)
+{
+}
+
+Revision::Revision(const String &rev) {
+	std::size_t sep = rev.indexOf("-");
+	if (sep == StrViewA::npos) {
+		revId = 0;
+		revTag = rev;
+		revTagOffs = 0;
+	} else {
+		revId = stringToUnsigned(rev.substr(0,sep));
+		revTag = rev;
+		revTagOffs = sep+1;
 	}
-
-	std::copy(tag.begin(),tag.end(), this->tag);
-
 }
+
+Revision::Revision(const Value &rev):Revision(String(rev)) {}
 
 String Revision::toString() const {
-	return String(21+tagsize, [&](char *c){
-		char *s = c;
-		unsignedToString([&](char x){*c++=x;},revId,20,10);
-		*c++='-';
-		std::copy(tag,tag+tagsize,c);
-		c+=tagsize;
-		return c-s;
-	});
-}
 
-Revision::Revision(StrViewA revStr) {
-	std::size_t p = revStr.indexOf("-",0);
-	if (p = revStr.npos) {
-		String s({"Invalid revision:", revStr});
-		throw std::runtime_error(s.c_str());
+	if (revTagOffs != 0) return revTag;
+	else {
+		char buff[50];
+		auto size = unsignedToString(outputToBuffer(buff),revId,50,10);
+		return String( {StrViewA(buff,size),"-",getTag()} );
 	}
-	std::size_t r = std::strtol(revStr.data,0,10);
-	this->revId = r;
-
-	p++;
-	StrViewA tagStr = revStr.substr(p);
-	if (tagStr.length > sizeof(tag)) {
-		String s({"Revision tag is too long:", revStr});
-		throw std::runtime_error(s.c_str());
-	}
-	std::copy(tagStr.begin(), tagStr.end(), tag);
-	tagsize = tagStr.length;
-
 }
 
 CompareResult Revision::compare(const Revision& other) const {
-	if (revId < other.revId) return cmpResultLess;
-	if (revId > other.revId) return cmpResultGreater;
-	StrViewA mtag(tag,tagsize);
-	StrViewA otag(other.tag, other.tagsize);
-	if (mtag < otag) return cmpResultLess;
-	if (mtag > otag) return cmpResultGreater;
-	return cmpResultEqual;
+	if (revId < other.revId) return -1;
+	if (revId > other.revId) return 1;
+	return getTag().compare(other.getTag());
 }
 
-} /* namespace assetex */
+
+Revision SeqNumber::initRev(const Value& sn) {
+	if (sn.type() == json::number) {
+		//CouchDB ver < 2
+		return Revision(sn.getNumber(),String());
+	} else {
+		//couchDB ver >= 2
+		return Revision(sn.toString());
+	}
+}
+
+
+
+}
+

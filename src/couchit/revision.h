@@ -18,18 +18,14 @@ namespace couchit {
 class Revision {
 public:
 	Revision();
-	Revision(std::size_t revId, StrViewA tag);
-	Revision(StrViewA revStr);
+	Revision(std::size_t revId,const String &revTag);
+	Revision(const String &rev);
+	Revision(const Value &rev);
 
 	std::size_t getRevId() const {return revId;}
-	StrViewA getTag() const {return StrViewA(tag,tagsize);}
-
-	static std::size_t getRevId(StrViewA rev);
-	static StrViewA getTag(StrViewA rev);
-
+	StrViewA getTag() const {return StrViewA(revTag).substr(revTagOffs);}
 
 	String toString() const;
-
 
 	CompareResult compare(const Revision &other) const;
 
@@ -42,11 +38,30 @@ public:
 
 protected:
 	std::size_t revId;
-	std::size_t tagsize;
-	char tag[33];
+	String revTag;
+	int revTagOffs;
+
+};
+
+class SeqNumber: public Revision {
+public:
+
+	SeqNumber(const Value &sn):Revision(initRev(sn)),_isOld(false),origVal(sn) {}
+	SeqNumber():_isOld(true) {}
+	void markOld() {_isOld = true;}
+	bool isOld() const {return _isOld;}
+
+	Value toValue() const {return origVal;}
+	bool defined() const {return origVal.defined();}
+protected:
+	bool _isOld;
+	Value origVal;
+
+	static Revision initRev(const Value &sn);
 
 
 };
+
 
 }
 

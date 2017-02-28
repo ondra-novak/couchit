@@ -105,7 +105,7 @@ protected:
 
 
 ///Receives changes from the couch database
-class ChangesSink {
+class ChangesFeed {
 public:
 	///Construct the sink
 	/**
@@ -117,9 +117,9 @@ public:
 	 * the sink is waiting for events, the referenced object is blocked and it is unable to process
 	 * other requests.
 	 */
-	ChangesSink(CouchDB &couchdb);
+	ChangesFeed(CouchDB &couchdb);
 
-	ChangesSink(ChangesSink &&other);
+	ChangesFeed(ChangesFeed &&other);
 
 
 	///specifies sequence of last seen change.
@@ -129,7 +129,7 @@ public:
 	 * @return reference to this (chaining).
 	 *
 	 */
-	ChangesSink& fromSeq(const Value &seqNumber);
+	ChangesFeed& fromSeq(const Value &seqNumber);
 
 	///Specifies timeout how long will listener wait for changes
 	/**
@@ -143,7 +143,7 @@ public:
 	 *
 	 * @note default timeout is 0. You have to set timeout to perform longpool reading
 	 */
-	ChangesSink& setTimeout(std::size_t timeout);
+	ChangesFeed& setTimeout(std::size_t timeout);
 
 	///Sets filter
 	/**
@@ -152,10 +152,10 @@ public:
 	 *
 	 * @note function also resets any arguments of the filter
 	 */
-	ChangesSink& setFilter(const Filter &filter);
+	ChangesFeed& setFilter(const Filter &filter);
 	///Removes any filter
 	/** @return reference to this (chaining) */
-	ChangesSink& unsetFilter();
+	ChangesFeed& unsetFilter();
 
 	///Sets flags defined for Filter object, but without setting the filter
 	/**
@@ -165,7 +165,7 @@ public:
 	 * @param flags flags
 	 * @return reference to this (chaining)
 	 */
-	ChangesSink &setFilterFlags(std::size_t flags);
+	ChangesFeed &setFilterFlags(std::size_t flags);
 	///Define argument of the filter
 	/**
 	 * @param key name of key
@@ -173,13 +173,13 @@ public:
 	 * @return
 	 */
 	template<typename T>
-	ChangesSink& arg(StrViewA key, T value);
+	ChangesFeed& arg(StrViewA key, T value);
 	///Limit output for max count result
 	/**
 	 * @param count count of results to be in output. Specify ((std::size_t)-1) to remove limit
 	 * @return
 	 */
-	ChangesSink& limit(std::size_t count);
+	ChangesFeed& limit(std::size_t count);
 
 
 	///Executes the operation - reads all changes
@@ -247,7 +247,7 @@ protected:
 
 
 template<typename T>
-inline ChangesSink& couchit::ChangesSink::arg(StrViewA key, T value) {
+inline ChangesFeed& couchit::ChangesFeed::arg(StrViewA key, T value) {
 
 	filterArgs.set(key, value);
 	return *this;
@@ -255,7 +255,7 @@ inline ChangesSink& couchit::ChangesSink::arg(StrViewA key, T value) {
 }
 
 template<typename Fn>
-inline void couchit::ChangesSink::operator >>(const Fn& fn) {
+inline void couchit::ChangesFeed::operator >>(const Fn& fn) {
 	bool repeat;
 	do {
 		repeat = false;

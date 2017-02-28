@@ -10,6 +10,7 @@
 #include <mutex>
 
 #include "query.h"
+#include "revision.h"
 
 
 //#include "btree/btree_map.h"
@@ -18,7 +19,7 @@
 #include "reducerow.h"
 namespace couchit {
 
-
+class CouchDB;
 
 class AbstractViewBase;
 
@@ -87,7 +88,27 @@ public:
 	void loadFromView(CouchDB &db, const View &view, bool runMapFn );
 
 
+	///Function loads content of the view from a query
 	void loadFromQuery(const Query &q);
+
+	///Updates view from the changes feed
+	/**
+	 * @param db database client
+	 * @param view pointer to server view used as filter. This prevents to transfer unnecessery documents.
+	 *   If this argument is nullptr, the function uses view from the previous call, or view defined
+	 *   by the function loadFromView
+	 * @param seqNumber starting sequence ID. If this argument is nullptr, the scanning starts from the
+	 * last sequence ID or from the start
+	 *
+	 * @note It is much faster to initialize the view using the function loadFromView. This function
+	 * is inteeded for updates.
+	 *
+	 * @note calling this function with default argument triggers default update. It is
+	 * equivalent to call createQuery(db...
+	 *
+	 */
+	void updateFromChangesFeed(CouchDB &db, const View *view = nullptr, const SeqNumber *seqNumber = nullptr);
+
 
 	///Directly erases the document from the view
 	/**
@@ -155,6 +176,25 @@ public:
 	 *  CouchDB client. You have to supply it in function instance.
 	 */
 	Query createQuery(std::size_t viewFlags, PostProcessFn fn) const;
+
+	///Creates Query object. It also performs automatic update from the CouchDB
+	/**
+	 * @param dbclient Reference to CouchDB client. It will be used to update the view
+	 * @param viewFlags flags defined by View
+	 * @return created query
+	 *
+	 * @note the View must be initialized using function loadFromView, otherwise
+	 */
+	Query createQuery(CouchDB &dbclient, std::size_t viewFlags);
+
+	///Creates Query object. It also performs automatic update from the CouchDB
+	/**
+	 * @param dbclient Reference to CouchDB client. It will be used to update the view
+	 * @param viewFlags flags defined by View
+	 * @param fn function to postprocess results.
+	 * @return created query
+	 */
+	Query createQuery(CouchDB &dbclient, std::size_t viewFlags, PostProcessFn fn);
 
 
 	void clear();
@@ -276,6 +316,10 @@ protected:
 	bool includeDocs;
 
 	AbstractViewBase *linkedView;
+	///updated during loadFromView - it is later used to filtering changes feed
+	std::unique_ptr<View> serverView;
+
+	SeqNumber updateSeqNumber;
 
 
 	void eraseDocLk(const String &docId);

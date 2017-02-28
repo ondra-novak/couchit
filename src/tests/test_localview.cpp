@@ -173,6 +173,7 @@ static void localView_couchReduceAll(std::ostream &a) {
 	}
 }
 
+
 void runTestLocalview(TestSimple &tst) {
 
 	tst.test("couchdb.localview.byName","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 ")>>&localView_ByName;

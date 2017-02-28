@@ -302,7 +302,7 @@ static void couchFilterView(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 
-	ChangesSink chsink(db.createChangesSink());
+	ChangesFeed chsink(db.createChangesFeed());
 	chsink.setFilter(Filter(age_range_view,false));
 	Changes changes = chsink.exec();
 
@@ -314,7 +314,7 @@ static void couchFilter(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 
-	ChangesSink chsink(db.createChangesSink());
+	ChangesFeed chsink(db.createChangesFeed());
 	chsink.setFilter(age_range).arg("agemin",40).arg("agemax",60);
 	Changes changes = chsink.exec();
 
