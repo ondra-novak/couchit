@@ -916,7 +916,7 @@ Value CouchDB::postRequest(PConnection& conn, const StrViewA &cacheKey, Value *h
 			if (!cacheKey.empty()) {
 				Value fld = http.getHeaders()["ETag"];
 				if (fld.defined()) {
-					cache->set(cacheKey, QueryCache::CachedItem(fld.getString(), v));
+					cache->set(QueryCache::CachedItem(cacheKey, fld.getString(), v));
 				}
 			}
 		} else {

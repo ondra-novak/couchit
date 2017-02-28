@@ -391,6 +391,8 @@ Async::Async()
 	readPending = false;
 	writePending = false;
 	eof = false;
+	rcount = 0;
+	wcount = 0;
 }
 
 void Async::readToBuffer(SOCKET s, unsigned char * buffer, unsigned int length)

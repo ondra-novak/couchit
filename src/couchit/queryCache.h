@@ -51,6 +51,7 @@ public:
 	QueryCache(std::size_t hint_size):maxSize(hint_size),initialMaxSize(hint_size) {}
 
 	struct CachedItem {
+		String url;
 		String etag;
 		Value value;
 		std::size_t lru;
@@ -63,8 +64,8 @@ public:
 		 * @param seqNum seq. number known when value is stored
 		 * @param value value to store
 		 */
-		CachedItem(String etag,const Value &value)
-			:etag(etag),value(value),lru(maxlru) {}
+		CachedItem(String url, String etag,const Value &value)
+			:url(url),etag(etag),value(value),lru(maxlru) {}
 		bool isDefined() const {return value.defined();}
 	};
 
@@ -72,7 +73,7 @@ public:
 	CachedItem  find(StrViewA url);
 
 	///set content to cache (override if exists)
-	void set(StrViewA url, const CachedItem &item);
+	void set(const CachedItem &item);
 
 	///clear the cache
 	void clear();
@@ -89,7 +90,11 @@ protected:
 	std::size_t initialMaxSize;
 
 
-	typedef std::unordered_map<std::size_t, CachedItem  > ItemMap;
+	struct CalcHash {
+		std::size_t operator()(const StrViewA str) const;
+	};
+
+	typedef std::unordered_map<StrViewA, CachedItem, CalcHash  > ItemMap;
 
 	ItemMap itemMap;
 

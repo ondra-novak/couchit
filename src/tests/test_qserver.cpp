@@ -26,7 +26,7 @@ static void prepareQueryServer(QueryServer &qserver) {
 
 	class ByName: public AbstractViewMapOnly<1> {
 		virtual void map(const Document &doc, IEmitFn &emit) override {
-			emit(Value({doc["name"]}), {doc["age"],doc["height"]});
+			emit(Value(array,{doc["name"]}), {doc["age"],doc["height"]});
 		}
 	};
 	qserver.regView("testview/by_name", new ByName);
@@ -64,7 +64,7 @@ static void prepareQueryServer(QueryServer &qserver) {
 				sum+=rows[i].value["sum"].getUInt();
 				count+=rows[i].value["count"].getUInt();
 			}
-			return Object("sum",sum)("count",rows.length);
+			return Object("sum",sum)("count",count);
 		}
 	};
 	qserver.regView("testview/age_group_height", new ByGroupHeight);

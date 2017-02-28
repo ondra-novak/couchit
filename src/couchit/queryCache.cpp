@@ -29,7 +29,7 @@ QueryCache::CachedItem QueryCache::find(StrViewA url) {
 
 	Sync _(lock);
 
-	auto f = itemMap.find(hashUrl(url));
+	auto f = itemMap.find(url);
 	if (f == itemMap.end()) return CachedItem();
 	else {
 		f->second.lru = maxlru;
@@ -42,16 +42,15 @@ void QueryCache::clear() {
 	itemMap.clear();
 }
 
-void QueryCache::set(StrViewA url, const CachedItem& item) {
+void QueryCache::set(const CachedItem& item) {
 	Sync _(lock);
 
 	if (itemMap.size() >= maxSize) {
 		optimize();
 	}
 
-	std::uintptr_t hash = hashUrl(url);
-	itemMap.erase(hash);
-	itemMap.insert(std::make_pair(hash, item));
+	itemMap.erase(item.url);
+	itemMap.insert(std::make_pair(StrViewA(item.url), item));
 
 }
 
@@ -73,6 +72,11 @@ QueryCache::~QueryCache() {
 }
 
 
+
+std::size_t QueryCache::CalcHash::operator()(const StrViewA str) const
+{
+	return hashUrl(str);
+}
 
 } /* namespace couchit */
 
