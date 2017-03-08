@@ -737,7 +737,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 							if (useCache) {
 								String ser = Value(r.keys).stringify();
 								if (ser.length() > maxSerializedKeysSizeForGETRequest) {
-									postBody = r.keys;
+									postBody = Object("keys",r.keys);
 								} else {
 									conn->add("keys",ser);
 								}

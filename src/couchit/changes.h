@@ -131,6 +131,9 @@ public:
 	 */
 	ChangesFeed& fromSeq(const Value &seqNumber);
 
+	///Alias to the function fromSeq()
+	ChangesFeed& since(const Value &seqNumber) {return fromSeq(seqNumber);}
+
 	///Specifies timeout how long will listener wait for changes
 	/**
 	 *
@@ -225,6 +228,7 @@ public:
 	void operator>> (const Fn &fn);
 
 
+	Value getLastSeq() const {return seqNumber;}
 
 protected:
 
@@ -265,7 +269,7 @@ inline void couchit::ChangesFeed::operator >>(const Fn& fn) {
 			fn(chdoc);
 			repeat= true;
 		}
-	} while (repeat);
+	} while (repeat && timeout != 0);
 }
 
 

@@ -1,7 +1,10 @@
 #include "query.h"
+#include "query.tcc"
 
 #include <imtjson/abstractValue.h>
 namespace couchit {
+
+template class JoinedQuery<json::Value (*)(json::Value),json::Value (*)(json::Value),json::Value (*)(json::Value,json::Value) >;
 
 const StrViewA maxStrViewA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
 
@@ -127,6 +130,11 @@ Value Query::exec() const {
 	return qao.executeQuery(request);
 }
 
+Value Query::exec(const QueryRequest &request) const {
+	return qao.executeQuery(request);
+}
+
+
 Result::Result(const Value& result):pos(0),cnt(result.size()) {
 	if (result.type() == json::object) {
 		total = result["total_rows"].getUInt();
@@ -153,6 +161,7 @@ Query& Query::nocache() {
 	request.nocache = true;
 	return *this;
 }
+
 
 
 }

@@ -10,9 +10,9 @@
 
 #include "query.h"
 
-#include <lightspeed/base/containers/sort.tcc>
 namespace couchit {
 
+#if 0
 
 template<typename Fn>
 struct SortResultCmp {
@@ -128,7 +128,7 @@ inline Result couchit::Result::merge(const Result& other, MergeFn mergeFn) const
 
 struct ResultJoinHlp {
 	Value baseObject;
-	mutable AutoArray<Value, SmallAlloc<4> > joinRows;
+	mutable std::vector<Value> joinRows;
 
 	void addResult(Value v) const {
 		joinRows.add(v);
@@ -139,7 +139,7 @@ struct ResultJoinHlp {
 template<typename BindFn>
 inline Result couchit::Result::join(QueryBase& q, const StrViewA &name, std::size_t flags,  BindFn bindFn)
 {
-	typedef MultiMap<Value, ResultJoinHlp, JsonIsLess> ResultMap;
+	typedef std::unordered_map<Value, ResultJoinHlp> ResultMap;
 	ResultMap map;
 
 	q.reset();
@@ -197,6 +197,80 @@ inline Result couchit::Result::join(QueryBase& q, const StrViewA &name, std::siz
 
 	return Result(Object("rows",output));
 }
+
+#endif
+
+template<typename BindFn, typename AgrFn, typename MergeFn>
+Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &r) {
+	Result res = owner.lq.exec(r);
+	keyAtIndexMap.clear();
+	resultMap.clear();
+
+	Array out;
+
+	std::size_t sz = res.size();
+	resultMap.resize(sz);
+	keyAtIndexMap.reserve(sz);
+	for (std::size_t i = 0; i < sz; i++) {
+		Value r = res[i];
+		Value fk = bindFn(r);
+		if (fk.defined()) {
+			keyAtIndexMap.insert(KeyAtIndexMap::value_type(fk, i));
+		}
+	}
+
+	Array keys;
+	keys.reserve(keyAtIndexMap.size());
+
+	for (auto iter=keyAtIndexMap.begin();
+	     iter!=keyAtIndexMap.end();
+	     iter=keyAtIndexMap.equal_range(iter->first).second){
+	  keys.push_back(iter->first);
+	}
+
+	if (!keys.empty()) {
+
+
+		owner.rq.keys(keys);
+		Result rside = owner.rq.exec();
+
+		if (!rside.empty()) {
+			Array group;
+			Value curKey;
+
+			for (Row r : rside) {
+				if (r.key != curKey) {
+					if (!group.empty()) {
+						Value v = agrFn(group);
+						auto rang = keyAtIndexMap.equal_range(curKey);
+						for (auto iter = rang.first; iter != rang.second;++iter) {
+							resultMap[iter->second] = v;
+						}
+					}
+					curKey = r.key;
+					group.clear();
+				}
+				group.push_back(r);
+			}
+			{
+				Value v = agrFn(group);
+				auto rang = keyAtIndexMap.equal_range(curKey);
+				for (auto iter = rang.first; iter != rang.second;++iter) {
+					resultMap[iter->second] = v;
+				}
+			}
+		}
+	}
+
+	for (std::size_t i = 0; i < sz; i++) {
+		Value rm = resultMap[i];
+		out.push_back(mergeFn(res[i],rm));
+	}
+	return Object("rows",out)
+				("total_rows",res.getTotal())
+				("offset",res.getOffset());
+}
+
 
 
 

@@ -50,9 +50,24 @@ public:
 	SeqNumber():_isOld(true) {}
 	void markOld() {_isOld = true;}
 	bool isOld() const {return _isOld;}
+	///Determines, whether given sequence number is old and requires to update
+	/**
+	 * Function assumes current sequence number as global sequence number. It determines,
+	 * whether given sequence number is old and underlying resource need to be updated.
+	 *
+	 * @param seqNum sequence number to test
+	 * @retval true Update is requred, it can happen, when given sequence number is not defined
+	 *  or marked as old. It also return true, if current sequence number is marked as old.
+	 * @retval false Update is not needed
+	 *
+	 */
+	bool isOld(const SeqNumber &seqNum) const {
+		return !seqNum.defined() || seqNum.isOld() || isOld() || this->operator >(seqNum);
+	}
 
 	Value toValue() const {return origVal;}
 	bool defined() const {return origVal.defined();}
+	operator Value() const {return origVal;}
 protected:
 	bool _isOld;
 	Value origVal;
