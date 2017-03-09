@@ -9,6 +9,8 @@ namespace couchit {
 template<typename A, typename B, typename C> class JoinedQuery;
 
 
+
+
 class Query {
 public:
 
@@ -191,6 +193,44 @@ public:
 
 };
 
+namespace _details {
+	template<typename T, std::size_t n> class NStore {
+	public:
+		T data[n];
+		const std::size_t count = n;
+		typedef T Type;
+
+		NStore(const std::initializer_list<T> &list) {
+			std::size_t pos = 0;
+			for(auto &&x : list) {
+				if (pos >=n) break;
+				data[pos++] = x;
+			}
+		}
+		NStore() {}
+
+		operator const T &() const {return data[0];}
+		operator T &() {return data[0];}
+	};
+
+	template<typename> class DetectFkType {
+	public:
+		typedef NStore<Value, 1> Type;
+		static Type conv(const Value &v) {return Type({v});}
+	};
+
+	template<std::size_t n> class DetectFkType<NStore<Value,n> > {
+	public:
+		typedef NStore<Value,n> Type;
+		static Type conv(const Type &v) {return v;}
+	};
+}
+
+///If you need to return multiple foreign keys from the BindFn of the JoinedQuery
+template<std::size_t n> using MultiFKey = _details::NStore<Value, n>;
+
+
+
 ///Query object which joins two view into single result
 /**
  * Join operation involves two requests to the database, however, the
@@ -201,7 +241,12 @@ public:
  *
  * @tparam BindFn Bind funcion Value(Value), it receives row from the results of the
  *   first query and it should extract a foreign key. Function can return undefined value
- *   to skip the row in the request to the other view
+ *   to skip the row in the request to the other view.
+ *   (Alternatively: Function can return StringView<Value> if there are multiple
+ *   foreign keys for given row. Note that because only view is returned,
+ *   the function need to store it somewhere else. Furtunately the returned value is immediately
+ *   processed and it is no longer needed when the function is called again)
+ *
  *
  * @tparam AgrFn Aggregate function Value(Array &). Function receives array of results
  *    matching a single foreign key. Function should agregate the result and return a signle
@@ -225,11 +270,18 @@ public:
 		:Query(other.lq.request.view,qobj),lq(other.lq),rq(other.rq),qobj(other.qobj) {}
 
 protected:
+
+
+
 	class QObj: public IQueryableObject {
 	public:
 		QObj(JoinedQuery &owner, const BindFn &bindFn, const AgrFn &agrFn, const MergeFn &mergeFn)
 				:owner(owner),bindFn(bindFn),agrFn(agrFn),mergeFn(mergeFn) {}
 		virtual Value executeQuery(const QueryRequest &r);
+
+		typedef typename _details::DetectFkType<typename std::result_of<BindFn(Value)>::type>::Type KeyType;
+		typedef KeyType ResultType;
+		typedef std::pair<std::size_t, int> IndexType;
 
 		JoinedQuery &owner;
 		BindFn bindFn;
@@ -237,10 +289,16 @@ protected:
 		MergeFn mergeFn;
 
 
-		typedef std::unordered_multimap<Value, std::size_t> KeyAtIndexMap;
+
+
+
+		typedef std::unordered_multimap<Value, IndexType> KeyAtIndexMap;
 		KeyAtIndexMap keyAtIndexMap;
-		typedef std::vector<Value> ResultMap;
+		typedef std::vector<ResultType> ResultMap;
 		ResultMap resultMap;
+
+		void addFk(const Value &v, std::size_t index);
+		void addFk(const KeyType &v, std::size_t index);
 
 	};
 

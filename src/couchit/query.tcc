@@ -201,6 +201,21 @@ inline Result couchit::Result::join(QueryBase& q, const StrViewA &name, std::siz
 #endif
 
 template<typename BindFn, typename AgrFn, typename MergeFn>
+void JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::addFk(const Value &v, std::size_t index) {
+	if (v.defined()) {
+		keyAtIndexMap.insert(KeyAtIndexMap::value_type(v, IndexType(index,0)));
+	}
+}
+template<typename BindFn, typename AgrFn, typename MergeFn>
+void JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::addFk(const KeyType &v, std::size_t index) {
+	int pos = 0;
+	for (const Value &e : v.data) {
+		keyAtIndexMap.insert(KeyAtIndexMap::value_type(e, IndexType(index,pos++)));
+	}
+}
+
+
+template<typename BindFn, typename AgrFn, typename MergeFn>
 Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &r) {
 	Result res = owner.lq.exec(r);
 	keyAtIndexMap.clear();
@@ -209,14 +224,13 @@ Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &
 	Array out;
 
 	std::size_t sz = res.size();
-	resultMap.resize(sz);
+	resultMap.clear();
+	resultMap.reserve(sz);
 	keyAtIndexMap.reserve(sz);
 	for (std::size_t i = 0; i < sz; i++) {
 		Value r = res[i];
-		Value fk = bindFn(r);
-		if (fk.defined()) {
-			keyAtIndexMap.insert(KeyAtIndexMap::value_type(fk, i));
-		}
+		addFk(bindFn(r),i);
+		resultMap.push_back(ResultType());
 	}
 
 	Array keys;
@@ -244,7 +258,7 @@ Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &
 						Value v = agrFn(group);
 						auto rang = keyAtIndexMap.equal_range(curKey);
 						for (auto iter = rang.first; iter != rang.second;++iter) {
-							resultMap[iter->second] = v;
+							resultMap[iter->second.first].data[iter->second.second] = v;
 						}
 					}
 					curKey = r.key;
@@ -256,15 +270,14 @@ Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &
 				Value v = agrFn(group);
 				auto rang = keyAtIndexMap.equal_range(curKey);
 				for (auto iter = rang.first; iter != rang.second;++iter) {
-					resultMap[iter->second] = v;
+					resultMap[iter->second.first].data[iter->second.second] = v;
 				}
 			}
 		}
 	}
 
 	for (std::size_t i = 0; i < sz; i++) {
-		Value rm = resultMap[i];
-		out.push_back(mergeFn(res[i],rm));
+		out.push_back(mergeFn(res[i],resultMap[i]));
 	}
 	return Object("rows",out)
 				("total_rows",res.getTotal())
