@@ -179,7 +179,9 @@ public:
 		//when processed <> 0 weaker part follows
 		else {
 			//if eof or error, return empty buffer - no report is recorded
-			if (eof || chunkError)  return BinaryView(nullptr, 0);
+			if (eof || chunkError)
+			//
+				return BinaryView(nullptr, 0);
 			//processed whole chunk?
 			if (curChunk <= processed) {
 				//adjust processed
@@ -230,10 +232,17 @@ protected:
 
 	json::BinaryView prepareNext(std::size_t processed) {
 		BinaryView b = inFn(processed);
-		std::size_t sz = parseChunkHdr(b);
-		if (sz) b = inFn(sz);
-		if (eof) return BinaryView(nullptr, 0);
-		if (processed == 0 && b.empty()) b = inFn(0);
+		do {
+			std::size_t sz = parseChunkHdr(b);
+			if (sz)
+				b = inFn(sz);
+			if (eof)
+				return BinaryView(nullptr, 0);
+			if (processed == 0 && b.empty()) {
+				b = inFn(0);
+				if (b.empty()) eof = true;
+			}
+		} while (curChunk == 0 && !b.empty());
 		return b.substr(0, curChunk);
 
 	}
