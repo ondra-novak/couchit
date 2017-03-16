@@ -158,11 +158,17 @@ Value QueryServer::commandMapDoc(const Value& req) {
 		}
 
 		virtual void operator()(const Value &key) override {
-			container.add( {key,nullptr} );
+			if (key.defined())
+				container.add( {key,nullptr} );
 		}
 
 		virtual void operator()(const Value &key, const Value &value) override {
-			container.add( {key,value} );
+			if (key.defined()) {
+				if (value.defined())
+					container.add( {key,value} );
+				else
+					container.add({key,nullptr});
+			}
 		}
 	};
 
@@ -473,11 +479,11 @@ Value QueryServer::commandView(const Value& fn,
 	public:
 		bool result;
 		FakeEmit() {result = false;}
-		virtual void operator()(const Value &, const Value &) {
-			result = true;
+		virtual void operator()(const Value &k, const Value &) {
+			if (k.defined()) result = true;
 		}
-		virtual void operator()(const Value &) {
-			result = true;
+		virtual void operator()(const Value &k) {
+			if (k.defined()) result = true;
 		}
 		virtual void operator()() {
 			result = true;
