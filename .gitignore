@@ -27,3 +27,19 @@
 *.exe
 *.out
 *.app
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+src/tests/Debug/
+src/couchit/Debug/
+*.filters
+couchit.VC.db
+couchit.VC.VC.opendb
