@@ -238,7 +238,7 @@ protected:
 				b = inFn(sz);
 			if (eof)
 				return BinaryView(nullptr, 0);
-			if (processed == 0 && b.empty()) {
+			if (processed == 0 && sz == 0) {
 				b = inFn(0);
 				if (b.empty()) eof = true;
 			}
@@ -276,7 +276,10 @@ protected:
 						   }
 						   break;
 			case readFinish:
-				if (chunkError) return 0;
+				if (chunkError) {
+					eof = true;
+					return 0;
+				}
 				std::swap(curChunk, accChunk);
 				if (curChunk == 0) eof = true;
 				state = skipWhite;

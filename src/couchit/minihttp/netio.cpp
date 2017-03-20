@@ -67,7 +67,7 @@ NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot
 
 	struct addrinfo req;
 	std::memset(&req,0,sizeof(req));
-	req.ai_family = AF_UNSPEC;
+	req.ai_family = AF_INET;
 	req.ai_socktype = SOCK_STREAM;
 
 	struct addrinfo *res;
