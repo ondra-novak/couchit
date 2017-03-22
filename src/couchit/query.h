@@ -185,6 +185,7 @@ public:
 	///contains error information for this row
 	const Value error;
 
+	Row(const PValue &jrow);
 	Row(const Value &jrow);
 
 	///Returns 'true' if row exists (it is not error)

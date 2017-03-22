@@ -156,6 +156,7 @@ Row::Row(const Value& jrow)
 	,error(jrow["error"])
 {
 }
+Row::Row(const PValue& jrow):Row(Value(jrow)) {}
 
 Query& Query::nocache() {
 	request.nocache = true;
