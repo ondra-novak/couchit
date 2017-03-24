@@ -568,6 +568,22 @@ static void testLocalViewUpdate3(std::ostream &a) {
 
 }
 
+static void testRecreate(std::ostream &a) {
+
+	CouchDB db(getTestCouch());
+	db.setCurrentDB(DATABASENAME);
+	Document doc1 = db.get("test_recreate",CouchDB::flgCreateNew);
+	doc1.set("aaa","bbb");
+	db.put(doc1);
+	doc1.setDeleted();
+	db.put(doc1);
+	Document doc2 = db.get("test_recreate",CouchDB::flgCreateNew);
+	doc2.set("ccc","xxx");
+	db.put(doc2);
+	Document doc3 = db.get("test_recreate");
+	a << doc3["ccc"].getString();
+}
+
 void runTestBasics(TestSimple &tst) {
 
 tst.test("couchdb.connect","Welcome") >> &couchConnect;
@@ -585,6 +601,7 @@ tst.test("couchdb.updateLocalView","Kermit Byrd,76,184 Owen Dillard,80,151 Nicol
 tst.test("couchdb.updateLocalView2","Ondra Novak,41,189 Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &testLocalViewUpdate2;
 tst.test("couchdb.updateLocalView3","Owen Dillard,80,151 Nicole Jordan,75,150 ") >> &testLocalViewUpdate3;
 tst.test("couchdb.reduce","20:178 30:170 40:171 50:165 70:167 80:151 ") >>  &couchReduce;
+tst.test("couchdb.recreate","xxx") >> &testRecreate;
 //defineTest test_couchCaching2("couchdb.caching2","Kermit Byrd,76,184 Owen Dillard,80,151 Nicole Jordan,75,150 Kermit Byrd,184,100 Owen Dillard,151,100 Nicole Jordan,150,100 Kermit Byrd,76,184 Nicole Jordan,75,150 ",&couchCaching2);
 tst.test("couchdb.changesOneShot","1") >> &couchChangeSetOneShot;
 tst.test("couchdb.changesWaiting","ok") >> &couchChangeSetWaitForData;

@@ -638,11 +638,9 @@ Value QueryServer::generateDesignDocuments() {
 	Value ddocv = ddocs;
 	Array output;
 
-	ddocv.forEach([&](const Value doc) {
+	for (Value doc: ddocv) {
 		output.add(doc);
-		return true;
-
-	});
+	}
 
 
 	return output;
@@ -653,11 +651,9 @@ void QueryServer::syncDesignDocuments(Value designDocuments, CouchDB& couch, Cou
 
 	Changeset chset = couch.createChangeset();
 
-	designDocuments.forEach([&](Value doc) {
-		couch.putDesignDocument(doc,updateRule);
-		return false;
-	});
-
+	for (Value x: designDocuments) {
+		couch.putDesignDocument(x,updateRule);
+	}
 }
 
 String QueryServerError::getWhatMsg() const throw() {
