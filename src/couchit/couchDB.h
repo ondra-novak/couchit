@@ -117,6 +117,8 @@ public:
 	static const Flags flgDeletedConflicts = 0x400;
 	///create new document when requesting document doesn't exists
 	static const Flags flgCreateNew = 0x1000;
+	///do not use authentification (token is not used)
+	static const Flags flgNoAuth = 0x2000;
 
 
 
@@ -308,7 +310,7 @@ public:
 	 *
 	 * See: UpdateProc
 	 */
-	UpdateResult execUpdateProc(StrViewA updateHandlerPath, StrViewA documentId, Value arguments);
+	UpdateResult execUpdateProc(StrViewA updateHaauthInfondlerPath, StrViewA documentId, Value arguments);
 
 
 	///Calls show handler.
@@ -480,8 +482,21 @@ protected:
 	IIDGen& uidGen;
 	SeqNumber lksqid;
 
+	///stores current token (as cookie)
+	String token;
+	///stores previous token - this need to keep old token during it is changed by other thread
+	String prevToken;
+	///time when token expires
+	time_t tokenExpireTime = 0;
+	///time when token should be refreshed
+	time_t tokenRefreshTime = 0;
+	///only one thread can refresh token at time
+	std::mutex tokenLock;
+	///tokent timeout
+	std::size_t tokenTimeout;
 
 
+	AuthInfo authInfo;
 
 
 	Value jsonPUTPOST(bool methodPost, const StrViewA &path, Value data, Value *headers, Flags flags);
@@ -638,6 +653,8 @@ protected:
 	Value parseResponse(PConnection &conn);
 	void releaseConnection(Connection *b);
 	Value postRequest(PConnection &conn, const StrViewA &cacheKey, Value *headers, Flags flags);
+	Value getToken();
+
 
 };
 

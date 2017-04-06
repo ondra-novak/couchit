@@ -21,6 +21,12 @@ class Validator;
 class IIDGen;
 
 
+struct AuthInfo {
+	String username;
+	String password;
+
+};
+
 
 ///CouchDB client configuration
 /**
@@ -36,6 +42,8 @@ struct Config {
 	String baseUrl;
 	///name of database (optional) if set, object initializes self to work with database
 	String databaseName;
+	///authentification information
+	AuthInfo authInfo;
 	///Pointer to query cache.
 	/** This pointer can be NULL to disable caching
 	 * Otherwise, you have to keep pointer valid until the CouchDB object is destroyed
@@ -68,6 +76,11 @@ struct Config {
 
 	///Allows to limit maximum connections per client instance. Default is unlimited
 	std::size_t maxConnections = (std::size_t)-1;
+
+	///when token expires.
+	/** Default settings is 600 seconds (10 minutes). The client will ask
+	 * for the token sooner to prevent race condition when tokens becomes invalid*/
+	std::size_t tokenTimeout = (std::size_t)600;
 };
 
 

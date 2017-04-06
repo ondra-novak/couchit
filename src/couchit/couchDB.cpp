@@ -7,6 +7,8 @@
 
 #include <fstream>
 #include <assert.h>
+#include <mutex>
+
 
 #include "changeset.h"
 #include "couchDB.h"
@@ -46,7 +48,10 @@ CouchDB::CouchDB(const Config& cfg)
 	,maxConnections(cfg.maxConnections)
 	,curConnections(0)
 	,uidGen(cfg.uidgen == nullptr?DefaultUIDGen::getInstance():*cfg.uidgen)
+	,authInfo(cfg.authInfo)
+	,tokenTimeout(cfg.tokenTimeout)
 	,queryable(*this)
+
 {
 	if (!cfg.databaseName.empty()) setCurrentDB(cfg.databaseName);
 }
@@ -221,7 +226,8 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 			:http(urlline->http)
 			,out(http.beginBody())
 			,urlline(std::move(urlline))
-			,finished(false) {
+			,finished(false)
+	{
 		}
 
 		~UploadClass() noexcept(false) {
@@ -271,7 +277,7 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 		//open request
 		conn->http.open(conn->getUrl(),"PUT",true);
 		//send header
-		conn->http.setHeaders(Object("Content-Type",contentType));
+		conn->http.setHeaders(Object("Content-Type",contentType)("Cookie",getToken()));
 		//create upload object
 		return Upload(new UploadClass(std::move(conn)));
 
@@ -656,7 +662,10 @@ protected:
 Download CouchDB::downloadAttachmentCont(PConnection &conn, const StrViewA &etag) {
 
 		conn->http.open(conn->getUrl(), "GET", true);
-		if (!etag.empty()) conn->http.setHeaders(Object("If-None-Match",etag));
+		Object hdr;
+		hdr("Cookie", getToken());
+		if (!etag.empty()) hdr("If-None-Match",etag);
+		conn->http.setHeaders(hdr);
 		int status = conn->http.send();
 
 		if (status != 200 && status != 304) {
@@ -999,6 +1008,7 @@ Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) 
 		if (cachedItem.isDefined()) {
 			hdr("If-None-Match", cachedItem.etag);
 		}
+		if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
 
 		status = http.setHeaders(hdr).send();
 		if (status == 304 && cachedItem.isDefined()) {
@@ -1043,6 +1053,8 @@ Value CouchDB::requestDELETE(PConnection& conn, Value* headers,
 	if (!hdr["Accept"].defined())
 		hdr("Accept","application/json");
 
+	if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
+
 	http.setHeaders(hdr).send();
     return postRequest(conn,StrViewA(),headers,flags);
 }
@@ -1060,6 +1072,7 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
 	if (!hdr["Accept"].defined())
 		hdr("Accept","application/json");
 	hdr("Content-Type","application/json");
+	if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
 	http.setHeaders(hdr);
 
 	if (data.type() == json::undefined) {
@@ -1091,4 +1104,40 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
     return postRequest(conn,StrViewA(),headers,flags);
 }
 
+Value CouchDB::getToken() {
+	if (authInfo.username.empty()) return json::undefined;
+	time_t now;
+	time(&now);
+	if (now > tokenRefreshTime) {
+		std::unique_lock<std::mutex> sl(tokenLock, std::defer_lock);
+		if (now > tokenExpireTime) {
+			sl.lock();
+			if (now <= tokenExpireTime) return token;
+			prevToken = token;
+		} else {
+			if (!sl.try_lock()) return token;
+		}
+		Value headers;
+		PConnection conn = getConnection("/_session");
+		Value result = requestPOST(conn,
+				Object("name",authInfo.username)("password",authInfo.password),
+				&headers,flgStoreHeaders|flgNoAuth);
+
+		if (result["ok"].getBool()) {
+			StrViewA c = headers["Set-Cookie"].getString();
+			auto splt = c.split(";");
+			token = splt();
+			tokenExpireTime = now+tokenTimeout;
+			tokenRefreshTime = tokenExpireTime-30;
+			return token;
+		} else {
+			throw RequestError(conn->getUrl(),500, "Failed to retrieve token",Value());
+		}
+	}
+	return token;
+
+}
+
+
 } /* namespace assetex */
+
