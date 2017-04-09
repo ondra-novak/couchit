@@ -74,6 +74,14 @@ struct Config {
 	///Defines, how long is connection to the database keep alive. Older connections are closed
 	std::size_t keepAliveTimeout = 3000;
 
+	///Defines timeout for synchronous query.
+	/** Queries can rebuild for long time. Default value is 10 minutes.
+	 * This timeout is applied only for queries with sync flag, where
+	 * the indexing can take some time.
+	 */
+	std::size_t syncQueryTimeout = 600000;
+
+
 	///Allows to limit maximum connections per client instance. Default is unlimited
 	std::size_t maxConnections = (std::size_t)-1;
 

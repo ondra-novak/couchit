@@ -163,6 +163,26 @@ Query& Query::nocache() {
 	return *this;
 }
 
+Query& couchit::Query::update() {
+	request.view.flags = (request.view.flags & ~View::stale) | View::update;
+	return *this;
+}
+
+Query& couchit::Query::stale() {
+	request.view.flags = (request.view.flags & ~View::update) | View::stale;
+	return *this;
+}
+
+Query& couchit::Query::includeDocs() {
+	request.view.flags |= View::includeDocs;
+	return *this;
+}
+
+Query& couchit::Query::conflicts() {
+	request.view.flags |= View::includeDocs|View::conflicts;
+	return *this;
+}
+
 
 
 }

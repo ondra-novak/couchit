@@ -90,7 +90,7 @@ public:
 	///Download flag - refresh cache with new value
 	/** Cache can quess, whether there is chance that content of URL has been updated. If
 	 * cache doesn't detect such condition, no request is generated and result is
-	 * returned from the cache. This flag disabled that feature. With this flag, request
+	 * returned from the cache. This flag disables that feature. With this flag, request
 	 * is always generated but eTags will be used. So cache can still be used when
 	 * server returns state 304. If there is changed content, cache is also updated.
 	 */
@@ -119,6 +119,8 @@ public:
 	static const Flags flgCreateNew = 0x1000;
 	///do not use authentification (token is not used)
 	static const Flags flgNoAuth = 0x2000;
+	///use syncQueryTimeout instead normal timeout
+	static const Flags flgLongOperation = 0x4000;
 
 
 
@@ -302,7 +304,7 @@ public:
 	 * @return function returns null, when validator is not defined. Otherwise function
 	 * returns pointer to current validator
 	 */
-	Validator *getValidator() const {return validator;}
+	Validator *getValidator() const {return cfg.validator;}
 
 
 	///Calls update handler to update document using server-side function
@@ -458,6 +460,19 @@ public:
 	void put(Document &doc);
 
 
+	///Commands the database to update specified view
+	/**
+	 * @param view view to update. Function just uses URL to the view, flags and postprocessing is ignored.
+	 *  Note that CouchDB generally updates all view in the same design document, so you
+	 *  don't need to call this function for every view in the same design document.
+	 *
+	 * @param wait specify true if you want to wait for the completion. Otherwise, the
+	 * operation is executed in the background (on the server)
+	 *
+	 * @return Count of rows in the view in time of request. Function may return 0 when wait is set to false
+	 * that indicates, that view is being rebuild complete
+	 */
+	std::size_t updateView(const View &view, bool wait = false);
 
 protected:
 
@@ -470,13 +485,9 @@ protected:
 
 	friend class ChangeFeed;
 
-	String baseUrl;
-	String database;
+	Config cfg;
+
 	std::size_t lastStatus = 0;
-	QueryCache *cache = nullptr;
-	Validator *validator = nullptr;
-	std::size_t connPoolTm;
-	std::size_t maxConnections;
 	std::size_t curConnections;
 	std::vector<char> uidBuffer;
 	IIDGen& uidGen;
@@ -492,11 +503,8 @@ protected:
 	time_t tokenRefreshTime = 0;
 	///only one thread can refresh token at time
 	std::mutex tokenLock;
-	///tokent timeout
-	std::size_t tokenTimeout;
 
-
-	AuthInfo authInfo;
+	Value authObj;
 
 
 	Value jsonPUTPOST(bool methodPost, const StrViewA &path, Value data, Value *headers, Flags flags);
@@ -654,6 +662,7 @@ protected:
 	void releaseConnection(Connection *b);
 	Value postRequest(PConnection &conn, const StrViewA &cacheKey, Value *headers, Flags flags);
 	Value getToken();
+	void setupHttpConn(HttpClient &http, Flags flags);
 
 
 };

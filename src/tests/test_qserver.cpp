@@ -189,6 +189,8 @@ static void couchLoadData(std::ostream &print) {
 		uuidmap.insert(uuid);
 	}
 	print << uuidmap.size();
+	db.updateView(by_name,true);
+
 
 }
 
