@@ -105,6 +105,20 @@ public:
 
 	Value exec(const QueryRequest &request) const;
 
+	///Updates view before the query is executed
+	/** Similar to View::update */
+	Query &update();
+
+	///Disable updating the view
+	/** Similar to View::stale */
+	Query &stale();
+
+	///Includes documents into the query.
+	/** Similar to View::includeDocs */
+	Query &includeDocs();
+
+	///Includes conflict informations to the result (enables includeDocs)
+	Query &conflicts();
 
 	///Join two queries into one
 	/**

@@ -41,29 +41,26 @@ std::size_t CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
 CouchDB::CouchDB(const Config& cfg)
-	:baseUrl(cfg.baseUrl)
-	,cache(cfg.cache)
-	,validator(cfg.validator)
-	,connPoolTm(cfg.keepAliveTimeout)
-	,maxConnections(cfg.maxConnections)
+	:cfg(cfg)
 	,curConnections(0)
 	,uidGen(cfg.uidgen == nullptr?DefaultUIDGen::getInstance():*cfg.uidgen)
-	,authInfo(cfg.authInfo)
-	,tokenTimeout(cfg.tokenTimeout)
 	,queryable(*this)
 
 {
-	if (!cfg.databaseName.empty()) setCurrentDB(cfg.databaseName);
+	if (!cfg.authInfo.username.empty()) {
+		authObj = Object("name",cfg.authInfo.username)
+						("password",cfg.authInfo.password);
+	}
 }
 
 
 
 void CouchDB::setCurrentDB(String database) {
-	this->database = database;
+	cfg.databaseName = database;
 }
 
 String CouchDB::getCurrentDB() const {
-	return database;
+	cfg.databaseName;
 }
 
 
@@ -819,8 +816,9 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 	}
 	if (r.exclude_end) conn->add("inclusive_end","false");
 	conn->add("update_seq","true");
-	if (r.view.flags & View::updateAfter) conn->add("stale","update_after");
-	else if (r.view.flags & View::stale) conn->add("stale","ok");
+	if (r.view.flags & View::stale) conn->add("stale","ok");
+	else if ((r.view.flags & View::update) == 0) conn->add("stale","update_after");
+
 
 
 	if (r.view.args.type() == json::object) {
@@ -874,11 +872,11 @@ void CouchDB::put(Document& doc) {
 CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath) {
 	std::unique_lock<std::mutex> _(lock);
 
-	if (database.empty() && resourcePath.substr(0,1) != StrViewA("/"))
+	if (cfg.databaseName.empty() && resourcePath.substr(0,1) != StrViewA("/"))
 		throw std::runtime_error("No database selected");
 
-	if (curConnections >= maxConnections) {
-		connRelease.wait(_,[&]{return curConnections<maxConnections;});
+	if (curConnections >= cfg.maxConnections) {
+		connRelease.wait(_,[&]{return curConnections<cfg.maxConnections;});
 	}
 
 	PConnection b(nullptr);
@@ -888,7 +886,7 @@ CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath) {
 		b = PConnection(connPool[connPool.size()-1].release(), ConnectionDeleter(this));
 		connPool.pop_back();
 		auto dur = SysClock::now() - b->lastUse;
-		if (dur > std::chrono::milliseconds(this->connPoolTm)) {
+		if (dur > std::chrono::milliseconds(this->cfg.keepAliveTimeout)) {
 			connPool.clear();
 			delete b.release();
 			b = PConnection(new Connection, ConnectionDeleter(this));
@@ -900,14 +898,14 @@ CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath) {
 }
 
 void CouchDB::setUrl(PConnection &conn, StrViewA resourcePath) {
-	conn->init(baseUrl,database,resourcePath);
+	conn->init(cfg.baseUrl,cfg.databaseName,resourcePath);
 }
 void CouchDB::releaseConnection(Connection* b) {
 	LockGuard _(lock);
 	b->lastUse = SysClock::now();
 	connPool.push_back(PConnection(b));
 	curConnections--;
-	if (curConnections+1==maxConnections) {
+	if (curConnections+1==cfg.maxConnections) {
 		connRelease.notify_one();
 	}
 }
@@ -943,7 +941,7 @@ Value CouchDB::postRequest(PConnection& conn, const StrViewA &cacheKey, Value *h
 			if (!cacheKey.empty()) {
 				Value fld = http.getHeaders()["ETag"];
 				if (fld.defined()) {
-					cache->set(QueryCache::CachedItem(cacheKey, fld.getString(), v));
+					cfg.cache->set(QueryCache::CachedItem(cacheKey, fld.getString(), v));
 				}
 			}
 		} else {
@@ -968,18 +966,18 @@ Value CouchDB::postRequest(PConnection& conn, const StrViewA &cacheKey, Value *h
 
 Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) {
 
-	bool usecache = (flags & flgDisableCache) == 0 && cache != nullptr;
+	bool usecache = (flags & flgDisableCache) == 0 && cfg.cache != nullptr;
 
 	StrViewA path = conn->getUrl();
 	StrViewA cacheKey;
 
 	if (usecache) {
-		std::size_t baseUrlLen = baseUrl.length();
-		std::size_t databaseLen = database.length();
+		std::size_t baseUrlLen = cfg.baseUrl.length();
+		std::size_t databaseLen = cfg.databaseName.length();
 		std::size_t prefixLen = baseUrlLen+databaseLen+1;
 
-		if (path.substr(0,baseUrlLen) != baseUrl
-			|| path.substr(baseUrlLen, databaseLen) != database) {
+		if (path.substr(0,baseUrlLen) != cfg.baseUrl
+			|| path.substr(baseUrlLen, databaseLen) != cfg.databaseName) {
 			usecache = false;
 		} else {
 			cacheKey = path.substr(prefixLen);
@@ -991,7 +989,7 @@ Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) 
 	QueryCache::CachedItem cachedItem;
 
 	if (usecache) {
-		cachedItem = cache->find(cacheKey);
+		cachedItem = cfg.cache->find(cacheKey);
 	}
 
 	HttpClient &http = conn->http;
@@ -1105,7 +1103,7 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
 }
 
 Value CouchDB::getToken() {
-	if (authInfo.username.empty()) return json::undefined;
+	if (!authObj.defined()) return json::undefined;
 	time_t now;
 	time(&now);
 	if (now > tokenRefreshTime) {
@@ -1119,16 +1117,14 @@ Value CouchDB::getToken() {
 		}
 		Value headers;
 		PConnection conn = getConnection("/_session");
-		Value result = requestPOST(conn,
-				Object("name",authInfo.username)("password",authInfo.password),
-				&headers,flgStoreHeaders|flgNoAuth);
+		Value result = requestPOST(conn,authObj,&headers,flgStoreHeaders|flgNoAuth);
 
 		if (result["ok"].getBool()) {
 			StrViewA c = headers["Set-Cookie"].getString();
 			auto splt = c.split(";");
 			token = splt();
-			tokenExpireTime = now+tokenTimeout;
-			tokenRefreshTime = tokenExpireTime-30;
+			tokenExpireTime = now+cfg.tokenTimeout-10;
+			tokenRefreshTime = tokenExpireTime-cfg.tokenTimeout/2;
 			return token;
 		} else {
 			throw RequestError(conn->getUrl(),500, "Failed to retrieve token",Value());
@@ -1138,6 +1134,21 @@ Value CouchDB::getToken() {
 
 }
 
+std::size_t CouchDB::updateView(const View& view, bool wait) {
 
-} /* namespace assetex */
+	PConnection conn = getConnection(view.viewPath);
+	if (!wait)
+		conn->add("stale","update_after");
+	conn->add("limit",0);
+	Value r = requestGET(conn, 0, flgDisableCache);
+	return r["total_rows"].getUInt();
+}
+void CouchDB::setupHttpConn(HttpClient &http, Flags flags) {
+	if (flags & flgLongOperation) {
+		http.setTimeout(cfg.syncQueryTimeout);
+	}
+}
+
+
+}
 

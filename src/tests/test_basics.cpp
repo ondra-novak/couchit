@@ -134,6 +134,7 @@ static void couchLoadDesign(std::ostream &) {
 	for (std::size_t i = 0; i < countof(designs); i++) {
 		db.putDesignDocument(designs[i],strlen(designs[i]));
 	}
+	db.updateView(by_name,true);
 
 }
 
@@ -565,6 +566,7 @@ static void testLocalViewUpdate3(std::ostream &a) {
 				<<row.value[0].getUInt() << ","
 				<<row.value[1].getUInt() << " ";
 	}
+	db.updateView(by_name,true);
 
 }
 

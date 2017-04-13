@@ -34,12 +34,15 @@ public:
 	static const std::size_t exludeEnd=0x04;
 	///Disable caching for this view
 	static const std::size_t noCache=0x04;
-	///never update the view
+	///do not update the view
 	static const std::size_t stale=0x10;
-	///update view after values are returned
-	static const std::size_t updateAfter=0x20;
-	///include update seq
-	static const std::size_t updateSeq = 0x40;
+	///synchronous update. Updates the view before the results are returned
+	/**Querying with this flag can block the thread for long time until the
+	 * view is updated.
+	 *
+	 * This flag enforces CouchDB::updateView during the query
+	 */
+	static const std::size_t update=0x20;
 	///include attachments to the result (before list is processed)
 	static const std::size_t attachments = 0x80;
 	///include attachment encoding info
@@ -98,9 +101,9 @@ public:
 	 */
 	View(String viewPath, std::size_t flags, const Postprocessing &ppfunction, Value args = Value() );
 
-	const String viewPath;
-	const std::size_t flags;
-	const Value args;
+	String viewPath;
+	std::size_t flags;
+	Value args;
 	Postprocessing postprocess;
 };
 
