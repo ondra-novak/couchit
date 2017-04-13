@@ -147,6 +147,15 @@ Result::Result(const Value& result):pos(0),cnt(result.size()) {
 	cnt = size();
 }
 
+Result::Result(const Value &resultArray, const Value &total, const Value &offset)
+	:Result(Object("rows",resultArray)("total_rows",total)("offset",offset))
+{
+
+
+}
+
+
+
 Row::Row(const Value& jrow)
 	:Value(jrow)
 	,key(jrow["key"])
