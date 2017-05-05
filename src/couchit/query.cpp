@@ -192,6 +192,10 @@ Query& couchit::Query::conflicts() {
 	return *this;
 }
 
+Query& couchit::Query::setPostData(Value postData) {
+	request.postData = postData;
+}
+
 
 
 }

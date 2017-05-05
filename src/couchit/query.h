@@ -120,6 +120,9 @@ public:
 	///Includes conflict informations to the result (enables includeDocs)
 	Query &conflicts();
 
+	///Set POST data for the list as additional arguments
+	Query &setPostData(Value postData);
+
 	///Join two queries into one
 	/**
 	 * @param rightSide other query

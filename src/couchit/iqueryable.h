@@ -91,6 +91,8 @@ struct QueryRequest {
 	bool docIdFromGetKey;
 	///disable caching
 	bool nocache;
+	///data send as POST request to the list. It can be also used for view when keys are directly send as post data
+	Value postData;
 
 	QueryRequest(const View &view)
 		:view(view)
@@ -115,6 +117,7 @@ struct QueryRequest {
 		nocache = false;
 		keys.clear();
 		ppargs.clear();
+		postData = json::undefined;
 	}
 };
 

@@ -727,7 +727,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 	bool desc = (r.view.flags & View::reverseOrder) != 0;
 	if (r.reversedOrder) desc = !desc;
 	if (desc) conn->add("descending","true");
-	Value postBody;
+	Value postBody = r.postData;
 	if (desc) {
 		std::swap(startKey,endKey);
 		std::swap(startKeyDocId,endKeyDocId);
@@ -740,15 +740,15 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		case qmKeyList: if (r.keys.size() == 1) {
 							conn->addJson("key",r.keys[0]);
 						}else if (r.keys.size() > 1){
-							if (useCache) {
+							if (postBody.defined()) {
+								conn->add("keys",Value(r.keys).stringify());
+							} else {
 								String ser = Value(r.keys).stringify();
-								if (ser.length() > maxSerializedKeysSizeForGETRequest) {
+								if (ser.length() > maxSerializedKeysSizeForGETRequest ) {
 									postBody = Object("keys",r.keys);
 								} else {
 									conn->add("keys",ser);
 								}
-							} else {
-								postBody = Object("keys",r.keys);
 							}
 						}
 						break;
