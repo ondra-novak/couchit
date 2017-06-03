@@ -33,6 +33,7 @@ inline std::size_t stringToUnsigned(json::StrViewA str, std::size_t base = 10) {
 			return json::StrViewA::npos;
 		accum = accum * base + d;
 	}
+	return accum;
 }
 
 

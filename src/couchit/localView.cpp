@@ -573,6 +573,7 @@ void LocalView::updateFromChangesFeed(CouchDB& db, const View* view, const SeqNu
 	feed >> [&](const ChangedDoc &doc) {
 		updateDocLk(doc.doc);
 		sq = doc.seqId;
+		return true;
 	};
 	if (sq.defined()) {
 		updateSeqNumber = sq;

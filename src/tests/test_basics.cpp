@@ -339,6 +339,7 @@ static void couchChangeSetWaitForData(std::ostream &a) {
 				throw CanceledException();
 
 			}
+			return true;
 		};
 		a << "fail";
 	} catch (CanceledException &) {
@@ -391,21 +392,22 @@ static void couchChangeSetWaitForData3(std::ostream &a) {
 	ChangesFeed chsink (db.createChangesFeed());
 	chsink.setTimeout(10000);
 	chsink.fromSeq(lastId);
-	try {
-		chsink >> [&](const ChangedDoc &doc) {
-			if (doc.id == uid && !doc.deleted) {
-				counter++;
-				event.notify();
-			} else if (counter) {
-				counter++;
-				event.notify();
-				if (counter == 3) throw CanceledException();
+	bool ok = false;
+	chsink >> [&](const ChangedDoc &doc) {
+		if (doc.id == uid && !doc.deleted) {
+			counter++;
+			event.notify();
+		} else if (counter) {
+			counter++;
+			event.notify();
+			if (counter == 3) {
+				ok = true;
+				return false;
 			}
-		};
-		a << "fail";
-	} catch (CanceledException &e) {
-		a << "ok";
-	}
+		}
+		return true;
+	};
+	if (ok) a << "ok"; else a << "fail";
 	thr.join();
 
 
@@ -425,7 +427,7 @@ static void couchChangesStopWait(std::ostream &a) {
 	});
 
 	try {
-		chsink >> [](const ChangedDoc &) {};
+		chsink >> [](const ChangedDoc &) {return true;};
 		a << "fail";
 	} catch (CanceledException &) {
 		CouchDB::PConnection conn = db.getConnection("/");

@@ -84,6 +84,10 @@ Changes ChangesFeed::exec() {
 	return couchdb.receiveChanges(*this);
 }
 
+void  ChangesFeed::continuous(ChangesFeedHandler &handler) {
+	return couchdb.receiveChangesContinuous(*this,handler);
+}
+
 ChangesFeed& ChangesFeed::setFilterFlags(std::size_t flags) {
 	return setFilter(Filter(String(),flags));
 }

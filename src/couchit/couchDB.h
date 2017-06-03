@@ -38,6 +38,7 @@ class Document;
 class Validator;
 class Changes;
 class ChangesFeed;
+class ChangesFeedHandler;
 class Validator;
 class UpdateResult;
 class ShowResult;
@@ -513,6 +514,7 @@ protected:
 	friend class ChangesFeed;
 
 	Changes receiveChanges(ChangesFeed &sink);
+	void receiveChangesContinuous(ChangesFeed &sink, ChangesFeedHandler &fn);
 
 	class Queryable: public IQueryableObject {
 	public:
@@ -664,6 +666,9 @@ protected:
 	Value getToken();
 	void setupHttpConn(HttpClient &http, Flags flags);
 
+private:
+	int initChangesFeed(const PConnection& conn, ChangesFeed& sink);
+	static void changesFeedError(ChangesFeed& sink, const PConnection &conn);
 
 };
 
