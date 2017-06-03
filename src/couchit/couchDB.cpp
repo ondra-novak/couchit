@@ -154,12 +154,15 @@ Value CouchDB::get(const StrViewA &docId, std::size_t flags) {
 	try {
 		return requestGET(conn,nullptr,flags & (flgDisableCache|flgRefreshCache));
 	} catch (const RequestError &e) {
-		if (e.getCode() == 404 && (flags & flgCreateNew)) {
-			return Object("_id",docId);
+		if (e.getCode() == 404) {
+			if (flags & flgCreateNew) {
+				return Object("_id",docId);
+			} else if (flags & flgNullIfMissing) {
+				return nullptr;
+			}
 		}
-		else throw;
+		throw;
 	}
-
 }
 
 UpdateResult CouchDB::execUpdateProc(StrViewA updateHandlerPath, StrViewA documentId,

@@ -122,7 +122,8 @@ public:
 	static const Flags flgNoAuth = 0x2000;
 	///use syncQueryTimeout instead normal timeout
 	static const Flags flgLongOperation = 0x4000;
-
+	///disable exception if document is missing (for function get()), instead null is returned
+	static const Flags flgNullIfMissing = 0x8000;
 
 
 	CouchDB(const Config &cfg);
