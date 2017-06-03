@@ -515,7 +515,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 		if (flt.flags & Filter::allRevs)
 			conn->add("style", "all_docs");
 
-		if (flt.flags & Filter::includeDocs) {
+		if (flt.flags & Filter::includeDocs || sink.forceIncludeDocs) {
 			conn->add("include_docs", "true");
 			if (flt.flags & Filter::attachments) {
 				conn->add("attachments", "true");
@@ -527,7 +527,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 				conn->add("att_encoding_info", "true");
 			}
 		}
-		if (flt.flags & Filter::reverseOrder) {
+		if (((flt.flags & Filter::reverseOrder) != 0) != sink.forceReversed) {
 			conn->add("descending", "true");
 		}
 		for (auto&& itm : flt.args) {

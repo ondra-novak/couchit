@@ -247,6 +247,15 @@ public:
 
 	Value getLastSeq() const {return seqNumber;}
 
+	ChangesFeed &includeDocs(bool v=true) {
+		forceIncludeDocs = v;
+		return *this;
+	}
+	ChangesFeed &reversedOrder(bool v=true) {
+		forceReversed = v;
+		return *this;
+	}
+
 protected:
 
 	CouchDB &couchdb;
@@ -255,6 +264,8 @@ protected:
 	std::size_t timeout;
 	std::unique_ptr<Filter> filter;
 	Object filterArgs;
+	bool forceIncludeDocs = false;
+	bool forceReversed = false;
 
 	CancelFunction cancelFunction;
 	std::mutex cancelFnInitLock;
