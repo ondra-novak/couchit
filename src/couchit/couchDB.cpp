@@ -538,6 +538,13 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 				conn->add(StrViewA(itm.getKey()), StrViewA(itm.toString()));
 			}
 		}
+	} else {
+		if (sink.forceIncludeDocs) {
+			conn->add("include_docs", "true");
+		}
+		if (sink.forceReversed) {
+			conn->add("descending", "true");
+		}
 	}
 	for (auto&& v : sink.filterArgs) {
 		String val = v.toString();

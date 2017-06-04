@@ -165,19 +165,14 @@ public:
 	std::size_t getTotal() const {return total;}
 	std::size_t getOffset() const {return offset;}
 
-	class Iterator: public json::ValueIterator {
-	public:
-		Iterator(const json::ValueIterator &src):json::ValueIterator(src) {}
-		Iterator(json::ValueIterator &&src):json::ValueIterator(std::move(src)) {}
-		Value operator *() const {return Value(json::ValueIterator::operator *());}
-	};
-	Iterator begin() const {return Value::begin();}
-	Iterator end() const {return Value::end();}
-
 	bool hasItems() const {return pos < cnt;}
 	Value getNext() {return operator[](pos++);}
 	Value peek() const {return operator[](pos);}
 	void rewind() {pos = 0;}
+
+	///Returns update_seq if available
+	Value getUpdateSeq() const {return updateSeq;}
+
 
 protected:
 
@@ -185,6 +180,7 @@ protected:
 	std::size_t offset;
 	std::size_t pos;
 	std::size_t cnt;
+	Value updateSeq;
 
 };
 
