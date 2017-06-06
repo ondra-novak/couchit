@@ -103,6 +103,10 @@ protected:
 	std::size_t sz;
 };
 
+class ChangesFeedHandler {
+public:
+	virtual bool operator()(Value v) = 0;
+};
 
 ///Receives changes from the couch database
 class ChangesFeed {
@@ -202,6 +206,8 @@ public:
 	Changes exec();
 
 
+	void continuous(ChangesFeedHandler &fn);
+
 	///Cancels any waiting or future waiting
 	/** This function can be called from another thread. It causes, that
 	 *  waiting operation will be canceled. Function cancels current or
@@ -225,10 +231,30 @@ public:
 	 * @param fn
 	 */
 	template<typename Fn>
-	void operator>> (const Fn &fn);
+	void operator>> (const Fn &fn) {
+		class FnHndl: public ChangesFeedHandler {
+		public:
+			Fn fn;
+			FnHndl(const Fn &fn):fn(fn) {}
+			virtual bool operator()(Value v) {
+				return fn(v);
+			}
+		};
+		FnHndl h(fn);
+		continuous(h);
+	}
 
 
 	Value getLastSeq() const {return seqNumber;}
+
+	ChangesFeed &includeDocs(bool v=true) {
+		forceIncludeDocs = v;
+		return *this;
+	}
+	ChangesFeed &reversedOrder(bool v=true) {
+		forceReversed = v;
+		return *this;
+	}
 
 protected:
 
@@ -238,6 +264,8 @@ protected:
 	std::size_t timeout;
 	std::unique_ptr<Filter> filter;
 	Object filterArgs;
+	bool forceIncludeDocs = false;
+	bool forceReversed = false;
 
 	CancelFunction cancelFunction;
 	std::mutex cancelFnInitLock;
@@ -250,26 +278,14 @@ protected:
 };
 
 
+
+
 template<typename T>
 inline ChangesFeed& couchit::ChangesFeed::arg(StrViewA key, T value) {
 
 	filterArgs.set(key, value);
 	return *this;
 
-}
-
-template<typename Fn>
-inline void couchit::ChangesFeed::operator >>(const Fn& fn) {
-	bool repeat;
-	do {
-		repeat = false;
-		Changes chs = exec();
-		while (chs.hasItems()) {
-			ChangedDoc chdoc = chs.getNext();
-			fn(chdoc);
-			repeat= true;
-		}
-	} while (repeat && timeout != 0);
 }
 
 

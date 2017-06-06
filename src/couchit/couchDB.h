@@ -38,6 +38,7 @@ class Document;
 class Validator;
 class Changes;
 class ChangesFeed;
+class ChangesFeedHandler;
 class Validator;
 class UpdateResult;
 class ShowResult;
@@ -121,7 +122,8 @@ public:
 	static const Flags flgNoAuth = 0x2000;
 	///use syncQueryTimeout instead normal timeout
 	static const Flags flgLongOperation = 0x4000;
-
+	///disable exception if document is missing (for function get()), instead null is returned
+	static const Flags flgNullIfMissing = 0x8000;
 
 
 	CouchDB(const Config &cfg);
@@ -513,6 +515,7 @@ protected:
 	friend class ChangesFeed;
 
 	Changes receiveChanges(ChangesFeed &sink);
+	void receiveChangesContinuous(ChangesFeed &sink, ChangesFeedHandler &fn);
 
 	class Queryable: public IQueryableObject {
 	public:
@@ -664,6 +667,9 @@ protected:
 	Value getToken();
 	void setupHttpConn(HttpClient &http, Flags flags);
 
+private:
+	int initChangesFeed(const PConnection& conn, ChangesFeed& sink);
+	static void changesFeedError(ChangesFeed& sink, const PConnection &conn);
 
 };
 

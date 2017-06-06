@@ -154,12 +154,15 @@ Value CouchDB::get(const StrViewA &docId, std::size_t flags) {
 	try {
 		return requestGET(conn,nullptr,flags & (flgDisableCache|flgRefreshCache));
 	} catch (const RequestError &e) {
-		if (e.getCode() == 404 && (flags & flgCreateNew)) {
-			return Object("_id",docId);
+		if (e.getCode() == 404) {
+			if (flags & flgCreateNew) {
+				return Object("_id",docId);
+			} else if (flags & flgNullIfMissing) {
+				return nullptr;
+			}
 		}
-		else throw;
+		throw;
 	}
-
 }
 
 UpdateResult CouchDB::execUpdateProc(StrViewA updateHandlerPath, StrViewA documentId,
@@ -478,16 +481,112 @@ bool  CouchDB::putDesignDocument(const char* content,
 
 }
 
+int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
+	if (sink.seqNumber.defined()) {
+		conn->add("since", sink.seqNumber.toString());
+	}
+	if (sink.outlimit != ((std::size_t) (-1))) {
+		conn->add("limit", sink.outlimit);
+	}
+	if (sink.filter != nullptr) {
+		const Filter& flt = *sink.filter;
+		if (!flt.viewPath.empty()) {
+			StrViewA fltpath = flt.viewPath;
+			StrViewA ddocName;
+			StrViewA filterName;
+			bool isView = false;
+			auto iter = fltpath.split("/");
+			StrViewA x = iter();
+			if (x == "_design")
+				x = iter();
+
+			ddocName = x;
+			x = iter();
+			if (x == "_view") {
+				isView = true;
+				x = iter();
+			}
+			filterName = x;
+			String fpath( { ddocName, "/", filterName });
+			if (isView) {
+				conn->add("filter", "_view");
+				conn->add("view", fpath);
+			} else {
+				conn->add("filter", fpath);
+			}
+		}
+		if (flt.flags & Filter::allRevs)
+			conn->add("style", "all_docs");
+
+		if (flt.flags & Filter::includeDocs || sink.forceIncludeDocs) {
+			conn->add("include_docs", "true");
+			if (flt.flags & Filter::attachments) {
+				conn->add("attachments", "true");
+			}
+			if (flt.flags & Filter::conflicts) {
+				conn->add("conflicts", "true");
+			}
+			if (flt.flags & Filter::attEncodingInfo) {
+				conn->add("att_encoding_info", "true");
+			}
+		}
+		if (((flt.flags & Filter::reverseOrder) != 0) != sink.forceReversed) {
+			conn->add("descending", "true");
+		}
+		for (auto&& itm : flt.args) {
+			if (!sink.filterArgs[itm.getKey()].defined()) {
+				conn->add(StrViewA(itm.getKey()), StrViewA(itm.toString()));
+			}
+		}
+	} else {
+		if (sink.forceIncludeDocs) {
+			conn->add("include_docs", "true");
+		}
+		if (sink.forceReversed) {
+			conn->add("descending", "true");
+		}
+	}
+	for (auto&& v : sink.filterArgs) {
+		String val = v.toString();
+		StrViewA key = v.getKey();
+		conn->add(key, val);
+	}
+	if (sink.timeout) {
+		sink.initCancelFunction();
+	}
+	if (!sink.cancelFunction) {
+		sink.cancelFunction = conn->http.initCancelFunction();
+	}
+	conn->http.open(conn->getUrl(), "GET", true);
+	conn->http.setTimeout(120000);
+	if (sink.timeout) {
+		conn->http.setCancelFunction(sink.cancelFunction);
+	}
+	conn->http.setHeaders(Object("Accept", "application/json"));
+	int status = conn->http.send();
+	return status;
+}
+
+void CouchDB::changesFeedError(ChangesFeed& sink, const CouchDB::PConnection &conn) {
+	if (sink.timeout) {
+		conn->http.setCancelFunction(CancelFunction());
+	}
+	//any exception
+	//terminate connection
+	conn->http.abort();
+	if (sink.canceled) {
+		sink.canceled = false;
+		throw CanceledException();
+	}
+	//throw it
+	throw;
+
+}
+
 Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 
 	PConnection conn = getConnection("_changes");
 
-	if (sink.seqNumber.defined()) {
-		conn->add("since", sink.seqNumber.toString());
-	}
-	if (sink.outlimit != ((std::size_t)-1)) {
-		conn->add("limit",sink.outlimit);
-	}
 	if (sink.timeout > 0) {
 		conn->add("feed","longpoll");
 		if (sink.timeout == ((std::size_t)-1)) {
@@ -496,80 +595,8 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 			conn->add("timeout",sink.timeout);
 		}
 	}
-	if (sink.filter != nullptr) {
-		const Filter &flt = *sink.filter;
-		if (!flt.viewPath.empty()) {
-			StrViewA fltpath = flt.viewPath;
-			StrViewA ddocName;
-			StrViewA filterName;
-			bool isView = false;
-			auto iter = fltpath.split("/");
-			StrViewA x = iter();
-			if (x == "_design") x = iter();
-			ddocName = x;
-			x = iter();
-			if (x == "_view") {
-				isView = true;
-				x = iter();
-			}
-			filterName = x;
 
-			String fpath({ddocName,"/",filterName});
-
-			if (isView) {
-				conn->add("filter","_view");
-				conn->add("view",fpath);
-			} else {
-				conn->add("filter",fpath);
-			}
-		}
-		if (flt.flags & Filter::allRevs) conn->add("style","all_docs");
-		if (flt.flags & Filter::includeDocs) {
-			conn->add("include_docs","true");
-			if (flt.flags & Filter::attachments) {
-				conn->add("attachments","true");
-			}
-			if (flt.flags & Filter::conflicts) {
-				conn->add("conflicts","true");
-			}
-			if (flt.flags & Filter::attEncodingInfo) {
-				conn->add("att_encoding_info","true");
-			}
-		}
-		if (flt.flags & Filter::reverseOrder) {
-			conn->add("descending","true");
-		}
-		for (auto &&itm: flt.args) {
-			if (!sink.filterArgs[itm.getKey()].defined()) {
-				conn->add(StrViewA(itm.getKey()),StrViewA(itm.toString()));
-			}
-		}
-	}
-	for (auto &&v : sink.filterArgs) {
-			String val = v.toString();
-			StrViewA key = v.getKey();
-			conn->add(key,val);
-	}
-
-
-	if (sink.timeout) {
-		sink.initCancelFunction();
-	}
-
-
-	if (!sink.cancelFunction) {
-		sink.cancelFunction = conn->http.initCancelFunction();
-	}
-
-	conn->http.open(conn->getUrl(),"GET",true);
-	conn->http.setTimeout(120000);
-	if (sink.timeout) {
-		conn->http.setCancelFunction(sink.cancelFunction);
-	}
-	conn->http.setHeaders(Object("Accept","application/json"));
-
-	int status = conn->http.send();
-
+	int status = initChangesFeed(conn, sink);
 
 	Value v;
 	if (status/100 != 2) {
@@ -586,19 +613,7 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 			v = Value::parse(BufferedRead<InputStream>(stream));
 
 		} catch (...) {
-
-			if (sink.timeout) {
-				conn->http.setCancelFunction(CancelFunction());
-			}
-			//any exception
-			//terminate connection
-			conn->http.abort();
-			if (sink.canceled) {
-				sink.canceled = false;
-				throw CanceledException();
-			}
-			//throw it
-			throw;
+			changesFeedError(sink, conn);
 		}
 
 		conn->http.close();
@@ -619,6 +634,77 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 	}
 
 	return results;
+}
+
+void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn) {
+
+	PConnection conn = getConnection("_changes");
+
+	conn->add("feed","continuous");
+	if (sink.timeout == ((std::size_t)-1)) {
+		conn->add("heartbeat","true");
+	} else {
+		conn->add("timeout",sink.timeout);
+	}
+
+
+	int status = initChangesFeed(conn, sink);
+
+	Value v;
+	if (status/100 != 2) {
+		if (sink.canceled) {
+			sink.canceled = false;
+			throw CanceledException();
+		}
+		handleUnexpectedStatus(conn);
+	} else {
+
+		InputStream stream = conn->http.getResponse();
+		try {
+
+			do {
+				v = Value::parse(BufferedRead<InputStream>(stream));
+				Value lastSeq = v["last_seq"];
+				if (lastSeq.defined()) {
+					sink.seqNumber = lastSeq;
+					break;
+				} else {
+
+					ChangedDoc chdoc(v);
+					sink.seqNumber = v["seq"];
+					if (!fn(chdoc)) {
+						break;
+					}
+				}
+			} while (true);
+
+
+		} catch (...) {
+
+			conn->http.setCancelFunction(CancelFunction());
+			//any exception
+			//terminate connection
+			conn->http.abort();
+			if (sink.canceled) {
+				sink.canceled = false;
+				throw CanceledException();
+			}
+			//throw it
+			throw;
+		}
+
+		conn->http.close();
+
+		if (sink.timeout) {
+			conn->http.setCancelFunction(CancelFunction());
+		}
+	}
+
+
+	SeqNumber l (sink.seqNumber);
+	LockGuard _(lock);
+	if (l > lksqid) lksqid = l;
+
 }
 
 

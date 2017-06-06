@@ -139,6 +139,7 @@ Result::Result(const Value& result):pos(0),cnt(result.size()) {
 	if (result.type() == json::object) {
 		total = result["total_rows"].getUInt();
 		offset = result["offset"].getUInt();
+		updateSeq = result["update_seq"];
 		Value::operator=(result["rows"]);
 	} else {
 		Value::operator=(result);
