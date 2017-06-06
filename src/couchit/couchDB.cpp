@@ -443,6 +443,8 @@ bool CouchDB::putDesignDocument(const Value &content, DesignDocUpdateRule update
 	} catch (UpdateException &e) {
 		if (e.getErrors()[0].errorType == "conflict") {
 			return putDesignDocument(content,updateRule);
+		} else {
+			throw;
 		}
 	}
 	return true;
