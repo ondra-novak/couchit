@@ -47,7 +47,7 @@ class SeqNumber: public Revision {
 public:
 
 	SeqNumber(const Value &sn):Revision(initRev(sn)),_isOld(false),origVal(sn) {}
-	SeqNumber():_isOld(true) {}
+	SeqNumber():_isOld(true),origVal(0) {}
 	void markOld() {_isOld = true;}
 	bool isOld() const {return _isOld;}
 	///Determines, whether given sequence number is old and requires to update

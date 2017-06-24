@@ -562,7 +562,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 	if (sink.timeout) {
 		conn->http.setCancelFunction(sink.cancelFunction);
 	}
-	conn->http.setHeaders(Object("Accept", "application/json"));
+	conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken()));
 	int status = conn->http.send();
 	return status;
 }
