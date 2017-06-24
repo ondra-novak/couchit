@@ -636,6 +636,13 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 	return results;
 }
 
+void CouchDB::updateSeqNum(const Value& seq) {
+	SeqNumber l(seq);
+	LockGuard _(lock);
+	if (l > lksqid)
+		lksqid = l;
+}
+
 void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn) {
 
 	PConnection conn = getConnection("_changes");
@@ -673,7 +680,10 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 					ChangedDoc chdoc(v);
 					sink.seqNumber = v["seq"];
 					if (!fn(chdoc)) {
-						break;
+						conn->http.setCancelFunction(CancelFunction());
+						conn->http.abort();
+						updateSeqNum(sink.seqNumber);
+						return;
 					}
 				}
 			} while (true);
@@ -687,6 +697,7 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 			conn->http.abort();
 			if (sink.canceled) {
 				sink.canceled = false;
+				updateSeqNum(sink.seqNumber);
 				throw CanceledException();
 			}
 			//throw it
@@ -701,10 +712,7 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 	}
 
 
-	SeqNumber l (sink.seqNumber);
-	LockGuard _(lock);
-	if (l > lksqid) lksqid = l;
-
+	updateSeqNum(sink.seqNumber);
 }
 
 
@@ -838,6 +846,11 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 									conn->add("keys",ser);
 								}
 							}
+						} else {
+							return Object("total_rows",0)
+									("offset",0)
+									("rows",json::array)
+									("update_seq",owner.getLastKnownSeqNumber().toValue());
 						}
 						break;
 		case qmKeyRange: {
