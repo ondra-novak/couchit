@@ -61,6 +61,7 @@ UrlBuilder &couchit::UrlBuilder::add(StrViewA key, StrViewA value) {
 }
 
 UrlBuilder &couchit::UrlBuilder::addJson(StrViewA key, Value value) {
+	if (!value.defined()) return *this;
 	addKey(key);
 	UrlEncoder enc;
 	value.serialize(json::emitUtf8, [&](char c) {

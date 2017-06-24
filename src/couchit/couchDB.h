@@ -485,7 +485,6 @@ protected:
 
 
 
-	friend class ChangeFeed;
 
 	Config cfg;
 
