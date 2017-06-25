@@ -412,6 +412,11 @@ bool CouchDB::putDesignDocument(const Value &content, DesignDocUpdateRule update
 		///design document already exists, skip uploading
 		if (updateRule == ddurSkipExisting) return false;
 
+		//need because couchapp creates empty _attachments node
+		newddoc.optimizeAttachments();
+
+/*		Value(curddoc).toStream(std::cerr);std::cerr<<std::endl;
+		Value(newddoc).toStream(std::cerr);std::cerr<<std::endl;*/
 		///no change in design document, skip uploading
 		if (Value(curddoc) == Value(newddoc)) return false;
 

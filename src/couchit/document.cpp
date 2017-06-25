@@ -81,6 +81,13 @@ void Document::deleteAttachment(const StrViewA &name) {
 	object("_attachments").unset(name);
 }
 
+void Document::optimizeAttachments() {
+	Value a = attachments();
+	if (a.defined() && a.empty()) {
+		unset("_attachments");
+	}
+}
+
 void Document::inlineAttachment(const StrViewA &name, const AttachmentDataRef &data) {
 	object("_attachments").set(name,data.toInline());
 }

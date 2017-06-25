@@ -52,6 +52,7 @@ public:
 	void deleteAttachment(const StrViewA &name);
 	void inlineAttachment(const StrViewA &name, const AttachmentDataRef &data);
 	Value getAttachment(const StrViewA &name) const;
+	void optimizeAttachments();
 
 
 
