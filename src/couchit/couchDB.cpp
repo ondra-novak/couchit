@@ -60,7 +60,7 @@ void CouchDB::setCurrentDB(String database) {
 }
 
 String CouchDB::getCurrentDB() const {
-	cfg.databaseName;
+	return cfg.databaseName;
 }
 
 
