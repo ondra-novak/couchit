@@ -106,7 +106,7 @@ SeqNumber CouchDB::getLastKnownSeqNumber() const {
 
 
 Query CouchDB::createQuery(std::size_t viewFlags) {
-	View v("_all_docs", viewFlags);
+	View v("_all_docs", viewFlags|View::update);
 	return createQuery(v);
 }
 
