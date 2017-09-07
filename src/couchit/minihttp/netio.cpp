@@ -100,6 +100,7 @@ NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot
 	int c = ::connect(socket,res->ai_addr, res->ai_addrlen);
 	if (c == -1) {
 		freeaddrinfo(res);
+		close(socket);
 		return 0;
 	}
 
