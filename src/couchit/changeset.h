@@ -144,8 +144,11 @@ public:
 
 
 	struct CommitedDoc {
+		//document id
 		StrViewA id;
+		//new revision
 		String newRev;
+		//original document
 		Value doc;
 
 		CommitedDoc(const StrViewA &id, const String &newRev, const Value &doc)

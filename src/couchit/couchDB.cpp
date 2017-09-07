@@ -924,6 +924,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 	conn->add("update_seq","true");
 	if (r.view.flags & View::stale) conn->add("stale","ok");
 	else if ((r.view.flags & View::update) == 0) conn->add("stale","update_after");
+	else conn->http.setTimeout(std::max(owner.cfg.syncQueryTimeout, owner.cfg.iotimeout));
 
 
 
@@ -998,6 +999,7 @@ CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath) {
 			b = PConnection(new Connection, ConnectionDeleter(this));
 		}
 	}
+	b->http.setTimeout(cfg.iotimeout);
 	setUrl(b,resourcePath);
 	curConnections++;
 	return std::move(b);
