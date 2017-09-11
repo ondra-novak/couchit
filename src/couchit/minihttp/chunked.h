@@ -152,55 +152,69 @@ public:
 
 	ChunkedRead(const InFn &fn):inFn(fn),curChunk(0),accChunk(0),state(skipWhite),eof(false),eofReported(false),chunkError(false) {}
 
+	json::BinaryView getBuffer() {
+		using json::BinaryView;
+
+		//if reading while eof,
+		if (eof || chunkError) {
+			//eof already reported, then throw exception
+			if (eofReported) throw std::runtime_error("Reading beyoind the chunk");
+			//mark that we now reporting the eof
+			eofReported = true;
+			//return empty buffer
+			return BinaryView(nullptr, 0);
+		}
+		//if still any data in chunk
+		if (curChunk) {
+			//read next bytes from the input
+			BinaryView b = inFn(0);
+			//trim up to given chunk
+			return b.substr(0, curChunk);
+		}
+		//no more chunk data
+		else {
+			//prepare next chunk
+			return prepareNext(0);
+		}
+
+	}
+
+	json::BinaryView commitBuffer(std::size_t processed) {
+		using json::BinaryView;
+
+		//if eof or error, return empty buffer - no report is recorded
+		if (eof || chunkError)
+			return BinaryView(nullptr, 0);
+		//processed whole chunk?
+		if (curChunk <= processed) {
+			//adjust processed
+			processed = curChunk;
+			//finish chunk
+			curChunk = 0;
+			//prepare next chunk
+			return prepareNext(processed);
+		}
+		else {
+			//decrease remaining chunk
+			curChunk -= processed;
+			//read reast of buffer
+			BinaryView b = inFn(processed);
+			//trim up to chunk
+			return b.substr(0, curChunk);
+		}
+
+	}
+
+
 	json::BinaryView operator()(std::size_t processed) {
 		using json::BinaryView;
 		//when processed == 0, stronger part folllows
 		if (processed == 0) {
-			//if reading while eof,
-			if (eof || chunkError) {
-				//eof already reported, then throw exception
-				if (eofReported) throw std::runtime_error("Reading beyoind the chunk");
-				//mark that we now reporting the eof
-				eofReported = true;
-				//return empty buffer
-				return BinaryView(nullptr, 0);
-			}
-			//if still any data in chunk
-			if (curChunk) {
-				//read next bytes from the input
-				BinaryView b = inFn(0);
-				//trim up to given chunk
-				return b.substr(0, curChunk);
-			}
-			//no more chunk data
-			else {
-				//prepare next chunk
-				return prepareNext(0);
-			}
+			return getBuffer();
 		}
 		//when processed <> 0 weaker part follows
 		else {
-			//if eof or error, return empty buffer - no report is recorded
-			if (eof || chunkError)
-			//
-				return BinaryView(nullptr, 0);
-			//processed whole chunk?
-			if (curChunk <= processed) {
-				//adjust processed
-				processed = curChunk;
-				//finish chunk
-				curChunk = 0;
-				//prepare next chunk
-				return prepareNext(processed);
-			}
-			else {
-				//decrease remaining chunk
-				curChunk -= processed;
-				//read reast of buffer
-				BinaryView b = inFn(processed);
-				//trim up to chunk
-				return b.substr(0, curChunk);
-			}
+			return commitBuffer(processed);
 
 		}
 	}

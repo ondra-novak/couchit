@@ -189,13 +189,15 @@ public:
 	}
 
 	json::BinaryView operator()(std::size_t processed) {
-		limit -= std::min(limit,processed);
+		processed = std::min(limit, processed);
+		limit -= processed;
 		if (limit) {
 			json::BinaryView b = Super::operator()(processed);
 			return b.substr(0,limit);
-		} else {
-			return json::BinaryView(nullptr, 0);
+		} else if (processed) {
+			Super::operator()(processed);
 		}
+		return json::BinaryView(nullptr, 0);
 	}
 
 	void setLimit(std::size_t limit) {

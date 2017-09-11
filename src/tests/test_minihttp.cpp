@@ -182,8 +182,8 @@ tst.test("couchdb.minihttp.postRequest",
 	HttpClient client("TestClient");
 	client.open("http://httpbin.org/post","POST",false);
 	json::Value req({10,20,30,"ahoj","nazdar","cau",{1,2,3}});
-	req.serialize(BufferedWrite<OutputStream>(client.beginBody()));
-	int status = client.send();
+	json::String x = req.stringify();
+	int status = client.send(x);
 	if (status == 200) {
 		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
 		out << StrViewA(v["data"].stringify());

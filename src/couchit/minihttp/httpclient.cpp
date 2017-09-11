@@ -185,6 +185,7 @@ void couchit::HttpClient::discardResponse() {
 			responseData->commit(b.length);
 			b = responseData->read();
 		}
+		responseData = nullptr;
 	}
 }
 
@@ -248,8 +249,12 @@ int HttpClient::readResponse() {
 	class ChunkedStream: public AbstractInputStream {
 	public:
 		ChunkedStream(const InputStream &stream, PNetworkConection conn):chread(stream),conn(conn) {}
+		~ChunkedStream() {
+			auto cs = commitSize - lastBuff.length;
+			if (cs) chread(cs);
+		}
 		virtual json::BinaryView doRead(bool) {
-			chread(commitSize);
+			if (commitSize) chread(commitSize);
 			auto x = chread(0);
 			commitSize = x.length;
 			return x;
@@ -275,6 +280,10 @@ int HttpClient::readResponse() {
 		LimitedStream(const InputStream &stream, std::size_t limit, PNetworkConection conn)
 			:chread(stream),conn(conn) {
 				chread.setLimit(limit);
+		}
+		~LimitedStream() {
+			auto cs = commitSize - lastBuff.length;
+			if (cs) chread(cs);
 		}
 		virtual json::BinaryView doRead(bool) {
 			chread(commitSize);

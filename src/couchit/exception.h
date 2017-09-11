@@ -91,7 +91,7 @@ protected:
 
 	virtual String getWhatMsg() const throw();
 };
-
+/*
 class CanceledException: public Exception{
 public:
 
@@ -103,7 +103,7 @@ protected:
 	virtual String getWhatMsg() const throw();
 
 };
-
+*/
 
 }
 

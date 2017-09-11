@@ -51,10 +51,12 @@ String UpdateException::getWhatMsg() const throw() {
 	return String(buff.str());
 }
 
+/*
 
 String CanceledException::getWhatMsg() const throw() {
 	return "Operation has been canceled.";
 }
+*/
 
 
 bool UpdateException::ErrorItem::isConflict() const {

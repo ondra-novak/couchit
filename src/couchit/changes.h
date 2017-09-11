@@ -257,10 +257,14 @@ public:
 		return *this;
 	}
 
+	bool wasCanceled() const {
+		return wasCanceledState;
+	}
+
 protected:
 
 	CouchDB &couchdb;
-	CouchDB::Connection *curConn;
+	CouchDB::Connection *curConn = nullptr;
 	Value seqNumber;
 	std::size_t outlimit;
 	std::size_t timeout;
@@ -271,11 +275,13 @@ protected:
 
 	std::mutex initLock;
 	bool canceled;
+	bool wasCanceledState = false;
 
 	friend class CouchDB;
 
 	void cancelEpilog();
 	void errorEpilog();
+	void finishEpilog();
 
 };
 

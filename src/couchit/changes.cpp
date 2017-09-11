@@ -119,7 +119,15 @@ void ChangesFeed::cancelEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
 	curConn = nullptr;
 	canceled = false;
+	wasCanceledState = true;
 }
+
+void ChangesFeed::finishEpilog() {
+	std::lock_guard<std::mutex> _(initLock);
+	curConn = nullptr;
+	wasCanceledState = false;
+}
+
 
 void ChangesFeed::errorEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
@@ -129,6 +137,7 @@ void ChangesFeed::errorEpilog() {
 	}
 	if (canceled) {
 		canceled = false;
+		wasCanceledState = true;
 		return;
 	}
 	throw;

@@ -570,21 +570,6 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 	return status;
 }
 
-void CouchDB::changesFeedError(ChangesFeed& sink) {
-	Connection *conn = sink.curConn;
-	//any exception
-	//terminate connection
-	conn->http.abort();
-	sink.curConn = nullptr;
-
-	if (sink.canceled) {
-		sink.canceled = false;
-		throw CanceledException();
-	}
-	//throw it
-	throw;
-
-}
 
 Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 
@@ -617,6 +602,7 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 			return Value(json::undefined);
 		}
 		conn->http.close();
+		sink.finishEpilog();
 	}
 
 	Value results=v["results"];
@@ -669,6 +655,7 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 				if (lastSeq.defined()) {
 					sink.seqNumber = lastSeq;
 					updateSeqNum(sink.seqNumber);
+					conn->http.close();
 					break;
 				} else {
 					ChangedDoc chdoc(v);
@@ -679,12 +666,11 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 					}
 				}
 			} while (true);
-
+			sink.finishEpilog();
 
 		} catch (...) {
 			sink.errorEpilog();
 		}
-		conn->http.close();
 	}
 	updateSeqNum(sink.seqNumber);
 }
