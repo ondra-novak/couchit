@@ -100,7 +100,7 @@ NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot
 	int c = ::connect(socket,res->ai_addr, res->ai_addrlen);
 	if (c == -1) {
 		freeaddrinfo(res);
-		close(socket);
+		::close(socket);
 		return 0;
 	}
 
@@ -110,8 +110,6 @@ NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot
 
 couchit::NetworkConnection::NetworkConnection(int socket)
 	:socket(socket)
-	,buffUsed(0)
-	,rdPos(0)
 	,eofFound(false)
 	,lastSendError(0)
 	,lastRecvError(0)
@@ -138,118 +136,36 @@ void NetworkConnection::setTimeout(std::uintptr_t timeout) {
 	timeoutTime = timeout;
 }
 
-int NetworkConnection::readToBuff() {
+json::BinaryView NetworkConnection::doRead(bool nonblock) {
 	int rc = recv(socket,inputBuff,3000,0);
 	if (rc > 0) {
-		buffUsed = rc;
-		rdPos = 0;
-		eofFound = false;
-		return 1;
+	//	std::cout << "Read: " << StrViewA(BinaryView(inputBuff,rc)) << std::endl;
+		return json::BinaryView(inputBuff,rc);
 	} else if (rc == 0) {
 		eofFound = true;
-		return 1;
+		return AbstractInputStream::eofConst;
 	} else {
 		int err = errno;
 		if (err != EWOULDBLOCK && err != EINTR && err != EAGAIN) {
 			lastRecvError = err;
 			eofFound = true;
-			return -1;
+			return AbstractInputStream::eofConst;
+		} else if (nonblock) {
+			return BinaryView(0,0);
 		} else {
-			return 0;
-		}
-
-
-	}
-
-}
-
-const unsigned char* NetworkConnection::read(std::size_t processed, std::size_t* readready) {
-	//calculate remain space
-	std::size_t remain = buffUsed - rdPos ;
-	//if processed remain space, reset position and used counters
-	if (remain <= processed) rdPos = buffUsed = 0;
-	//otherwise advance the position
-	else rdPos+=processed;
-
-	//caller request the bytes
-	if (readready) {
-		//if there are bytes or eof
-		if (rdPos < buffUsed || eofFound) {
-			//set available ready bytes
-			*readready = buffUsed - rdPos;
-			//return pointer to buffer
-			return inputBuff+rdPos;
-		} else {
-			int x;
-			//no more bytes available - repeatedly read to the buffer
-			while ((x = readToBuff()) == 0) {
-				//when it fails, perform waiting
-				if (!waitForInput(timeoutTime)) {
-					//in case of timeout report error
-					timeout = true;
-					return 0;
-				}
-			}
-			if (x < 0) {
-				//error - set readready to 0
-				*readready = 0;
-				//return nullptr
-				return 0;
-			} else {
-				//set readready (in case of error or eof it will be set to zero
-				*readready = buffUsed;
-				//return pointer to buffer
-				return inputBuff;
-			}
-		}
-	} else {
-		if (rdPos < buffUsed || eofFound) {
-			return inputBuff+rdPos;
-		} else {
-			int x = readToBuff();
-			if (x<=0) return 0;
-			else return inputBuff;
-		}
-	}
-}
-
-json::BinaryView NetworkConnection::read(std::size_t processed) {
-	//calculate remain space
-	std::size_t remain = buffUsed - rdPos ;
-	//if processed remain space, reset position and used counters
-	if (remain <= processed) rdPos = buffUsed = 0;
-	//otherwise advance the position
-	else rdPos+=processed;
-
-	if (rdPos < buffUsed || eofFound) return json::BinaryView(inputBuff+rdPos, buffUsed - rdPos);
-
-	if (processed) {
-		int x = readToBuff();
-		if (x <= 0) return json::BinaryView(nullptr,0);
-		else return json::BinaryView(inputBuff, x);
-	} else {
-		int x;
-		//no more bytes available - repeatedly read to the buffer
-		while ((x = readToBuff()) == 0) {
-			//when it fails, perform waiting
-			if (!waitForInput(timeoutTime)) {
-				//in case of timeout report error
+			if (waitRead(timeoutTime) == false) {
 				timeout = true;
-				//connection lost
 				eofFound = true;
-				return 0;
+				return AbstractInputStream::eofConst;
 			}
-		}
-		if (x < 0) {
-			return json::BinaryView(nullptr,0);
-		} else {
-			return json::BinaryView(inputBuff,buffUsed);
+			return doRead(nonblock);
 		}
 	}
 
 }
 
-bool NetworkConnection::waitForOutput(int  timeout_in_ms) {
+
+bool NetworkConnection::waitWrite(int  timeout_in_ms) {
 	struct pollfd poll_list[2];
 	int cnt = 1;
 	poll_list[0].fd = socket;
@@ -283,38 +199,33 @@ bool NetworkConnection::waitForOutput(int  timeout_in_ms) {
 	} while (true);
 }
 
-bool couchit::NetworkConnection::write(const unsigned char* buffer, std::size_t size, std::size_t *written) {
-	if (lastSendError) return false;
-	if (written) {
-		int sent = send(socket,buffer,size,0);
-		if (sent < 0) {
-			int err = errno;
-			if (err != EWOULDBLOCK || err != EINTR || err != EAGAIN) {
-				lastSendError = err;
-				return false;
-			}
-			*written = 0;
-		} else {
-			*written = sent;
+json::BinaryView NetworkConnection::write(const json::BinaryView &data, bool nonblock) {
+	if (data.empty()) return data;
+	if (lastSendError || timeout) return json::BinaryView(0,0);
+	int sent = send(socket, data.data, data.length,0);
+	if (sent < 0) {
+		int err = errno;
+		if (err != EWOULDBLOCK || err != EINTR || err != EAGAIN) {
+			lastSendError = err;
+			return json::BinaryView(0,0);
 		}
-		return true;
-	} else {
-		do {
-			std::size_t written;
-			if (!write(buffer,size,&written)) return false;
-			buffer+=written;
-			size-=written;
-			if (size && !waitForOutput(timeoutTime)) {
-				timeout = true;
-				return false;
-			}
-		} while (size);
-		timeout = false;
-		return true;
+		sent = 0;
+	}
+//	std::cout << "Write: " << StrViewA(BinaryView(data.data,sent)) << std::endl;
+
+	if (nonblock || sent == data.length) {
+		return data.substr(sent);
+	}
+	else {
+		if (waitWrite(timeoutTime) == false) {
+			timeout = true;
+			return json::BinaryView(0,0);
+		}
+		return write(data.substr(sent), nonblock);
 	}
 }
 
-bool NetworkConnection::waitForInputInternal(int timeout_in_ms) {
+bool NetworkConnection::doWait(int timeout_in_ms) {
 	struct pollfd poll_list[2];
 	poll_list[0].fd = socket;
 	poll_list[0].events = POLLIN|POLLRDHUP;
@@ -351,7 +262,17 @@ void NetworkConnection::setNonBlock() {
 	fcntl(socket, F_SETFL, fcntl(socket, F_GETFL, 0) | O_NONBLOCK);
 }
 
+void NetworkConnection::closeOutput() {
+	shutdown(socket, SHUT_WR);
+}
+void NetworkConnection::closeInput() {
+	shutdown(socket, SHUT_RD);
+}
+void NetworkConnection::close() {
+	shutdown(socket, SHUT_RDWR);
+}
+
+
 
 
 }
-

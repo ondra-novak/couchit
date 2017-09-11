@@ -127,10 +127,8 @@ tst.test("couchdb.minihttp.writeChunked",
 	std::string res;
 	res.reserve(1000);
 
-	auto outfn = [&](const unsigned char *data, std::size_t length, std::size_t *written) {
-		res.append(reinterpret_cast<const char *>(data),length);
-		if (written) *written = length;
-		return true;
+	auto outfn = [&](BinaryView data) {
+		res.append(reinterpret_cast<const char *>(data.data),data.length);
 	};
 	ChunkedWrite<decltype(outfn),20> chunks(outfn);
 
@@ -148,19 +146,17 @@ tst.test("couchdb.minihttp.writeChunked2",
 	std::string res;
 	res.reserve(1000);
 
-	auto outfn = [&](const unsigned char *data, std::size_t length, std::size_t *written) {
-		res.append(reinterpret_cast<const char *>(data),length);
-		if (written) *written = length;
-		return true;
+	auto outfn = [&](BinaryView data) {
+		res.append(reinterpret_cast<const char *>(data.data),data.length);
 	};
 	ChunkedWrite<decltype(outfn),20> chunks(outfn);
 
 	const unsigned char *data = reinterpret_cast<const unsigned char *>(source.data);
-	chunks(data,1,0);
-	chunks(data+1,4,0);
-	chunks(data+5,19,0);
-	chunks(data+24,source.length-24,0);
-	chunks(0,0,0);
+	chunks(BinaryView(data,1));
+	chunks(BinaryView(data+1,4));
+	chunks(BinaryView(data+5,19));
+	chunks(BinaryView(data+24,source.length-24));
+	chunks(nullptr);
 
 	print << res;
 

@@ -471,7 +471,7 @@ static void couchStoreAndRetrieveAttachment(std::ostream &a) {
 	Document doc = db.newDocument("data-");
 	Upload upl = db.putAttachment(doc,"testAttachment","text/plain");
 	StrViewA sentence("The quick brown fox jumps over the lazy dog");
-	upl.write(sentence.data,sentence.length);
+	upl.write(BinaryView(sentence));
 	upl.finish();
 
 	Document doc2 = db.get(doc.getID());

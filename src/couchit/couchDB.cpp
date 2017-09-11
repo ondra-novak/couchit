@@ -235,8 +235,8 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 			if (!finished) finish();
 		}
 
-		virtual void operator()(const void *buffer, std::size_t size) {
-			out(reinterpret_cast<const unsigned char *>(buffer),size,0);
+		virtual void operator()(json::BinaryView strm) {
+			out(strm);
 		}
 
 		String finish() {
@@ -287,7 +287,7 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 String CouchDB::putAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData) {
 
 	Upload upld = putAttachment(document,attachmentName,attachmentData.contentType);
-	upld.write(attachmentData.data, attachmentData.length);
+	upld.write(BinaryView(attachmentData));
 	return upld.finish();
 }
 
@@ -351,7 +351,7 @@ public:
 								(c == ')' && t != '(') ||
 								(c == '}' && t != '{') ||
 								(c == ']' && t != '['))
-							throw json::ParseError(functionBuff);
+							throw json::ParseError(functionBuff, this->rd.getLastInput());
 						levelStack.pop_back();
 						if (levelStack.empty() && c == '}') break;
 					} else if (c == '"') {
@@ -361,7 +361,7 @@ public:
 				}
 				return json::Value(functionBuff);
 			} else {
-				throw json::ParseError("Unexpected token");
+				throw json::ParseError("Unexpected token", this->rd.getLastInput());
 			}
 		} else {
 			return Super::parse();
@@ -487,6 +487,12 @@ bool  CouchDB::putDesignDocument(const char* content,
 }
 
 int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
+	std::lock_guard<std::mutex> _(sink.initLock);
+	if (sink.curConn != nullptr) {
+		throw std::runtime_error("Changes feed is already in progress");
+	}
+	if (sink.canceled) return 0;
+
 	if (sink.seqNumber.defined()) {
 		conn->add("since", sink.seqNumber.toString());
 	}
@@ -556,29 +562,21 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 		StrViewA key = v.getKey();
 		conn->add(key, val);
 	}
-	if (sink.timeout) {
-		sink.initCancelFunction();
-	}
-	if (!sink.cancelFunction) {
-		sink.cancelFunction = conn->http.initCancelFunction();
-	}
 	conn->http.open(conn->getUrl(), "GET", true);
 	conn->http.setTimeout(120000);
-	if (sink.timeout) {
-		conn->http.setCancelFunction(sink.cancelFunction);
-	}
 	conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken()));
 	int status = conn->http.send();
+	sink.curConn = conn.get();
 	return status;
 }
 
-void CouchDB::changesFeedError(ChangesFeed& sink, const CouchDB::PConnection &conn) {
-	if (sink.timeout) {
-		conn->http.setCancelFunction(CancelFunction());
-	}
+void CouchDB::changesFeedError(ChangesFeed& sink) {
+	Connection *conn = sink.curConn;
 	//any exception
 	//terminate connection
 	conn->http.abort();
+	sink.curConn = nullptr;
+
 	if (sink.canceled) {
 		sink.canceled = false;
 		throw CanceledException();
@@ -602,33 +600,24 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 	}
 
 	int status = initChangesFeed(conn, sink);
+	if (status == 0) {
+		sink.cancelEpilog();
+		return Value(json::undefined);
+	}
 
 	Value v;
 	if (status/100 != 2) {
-		if (sink.canceled) {
-			sink.canceled = false;
-			throw CanceledException();
-		}
 		handleUnexpectedStatus(conn);
 	} else {
-
 		InputStream stream = conn->http.getResponse();
 		try {
-
 			v = Value::parse(BufferedRead<InputStream>(stream));
-
 		} catch (...) {
-			changesFeedError(sink, conn);
+			sink.errorEpilog();
+			return Value(json::undefined);
 		}
-
 		conn->http.close();
-
-		if (sink.timeout) {
-			conn->http.setCancelFunction(CancelFunction());
-		}
 	}
-
-
 
 	Value results=v["results"];
 	sink.seqNumber = v["last_seq"];
@@ -661,13 +650,13 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 
 
 	int status = initChangesFeed(conn, sink);
+	if (status == 0) {
+		sink.cancelEpilog();
+		return;
+	}
 
 	Value v;
 	if (status/100 != 2) {
-		if (sink.canceled) {
-			sink.canceled = false;
-			throw CanceledException();
-		}
 		handleUnexpectedStatus(conn);
 	} else {
 
@@ -679,44 +668,24 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 				Value lastSeq = v["last_seq"];
 				if (lastSeq.defined()) {
 					sink.seqNumber = lastSeq;
+					updateSeqNum(sink.seqNumber);
 					break;
 				} else {
-
 					ChangedDoc chdoc(v);
 					sink.seqNumber = v["seq"];
 					if (!fn(chdoc)) {
-						conn->http.setCancelFunction(CancelFunction());
 						conn->http.abort();
-						updateSeqNum(sink.seqNumber);
-						return;
+						break;
 					}
 				}
 			} while (true);
 
 
 		} catch (...) {
-
-			conn->http.setCancelFunction(CancelFunction());
-			//any exception
-			//terminate connection
-			conn->http.abort();
-			if (sink.canceled) {
-				sink.canceled = false;
-				updateSeqNum(sink.seqNumber);
-				throw CanceledException();
-			}
-			//throw it
-			throw;
+			sink.errorEpilog();
 		}
-
 		conn->http.close();
-
-		if (sink.timeout) {
-			conn->http.setCancelFunction(CancelFunction());
-		}
 	}
-
-
 	updateSeqNum(sink.seqNumber);
 }
 
@@ -1197,12 +1166,12 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
 					outstr = http.beginBody();
 					hdrSent = true;
 				}
-				outstr(buffer,bpos,0);
+				outstr(BinaryView(buffer,bpos));
 				bpos = 0;
 			}
 		});
 		if (bpos && hdrSent) {
-			outstr(buffer,bpos);
+			outstr(BinaryView(buffer,bpos));
 		}
 		outstr = nullptr;
 		http.send(buffer,bpos);

@@ -36,36 +36,31 @@ public:
 		}
 	}
 
-	bool operator()(const unsigned char *data, std::size_t sz) {
-		if (sz == 0) {
+	void operator()(const json::BinaryView &buff) {
+		if (buff.empty()) {
 			close();
-		} else if (sz < (buffSize - bufferUsed)) {
-			std::memcpy(buffer+bufferUsed,data,sz);
-			bufferUsed+=sz;
-		} else if (sz < buffSize) {
-			if (!flush()) return false;
-			std::memcpy(buffer,data,sz);
-			bufferUsed+=sz	;
+		} else if (buff.length < (buffSize - bufferUsed)) {
+			std::memcpy(buffer+bufferUsed,buff.data,buff.length);
+			bufferUsed+=buff.length;
+		} else if (buff.length < buffSize) {
+			std::memcpy(buffer,buff.data,buff.length);
+			bufferUsed+=buff.length;
 		} else {
-			if (!flush()) return false;
-			return outFn(data,sz);
+			return outFn(buff);
 		}
-		return true;
 	}
 
 
 	void close() {
 		flush();
-		outFn(0,0,0);
+		outFn(nullptr);
 	}
 
-	bool flush() {
+	void flush() {
 		if (bufferUsed) {
 			std::size_t x = bufferUsed;
 			bufferUsed = 0;
-			return outFn(buffer,x,0);
-		} else {
-			return true;
+			outFn(json::BinaryView(buffer,x));
 		}
 	}
 

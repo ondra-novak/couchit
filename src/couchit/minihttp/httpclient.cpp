@@ -75,27 +75,37 @@ bool HttpClient::handleSendError() {
 
 OutputStream couchit::HttpClient::beginBody() {
 
-	class ChunkedStream: public IOutputStream {
+	class ChunkedStream: public AbstractOutputStream {
 	public:
 
-		ChunkedStream(const OutputStream &stream):wr(stream) {}
-		virtual bool write(const unsigned char *buffer, std::size_t size, std::size_t *written = 0) {
-			return wr(buffer,size,written);
+		ChunkedStream(const PNetworkConection &stream):stream(stream),wr(OutputStream(stream)) {}
+		virtual json::BinaryView write(const json::BinaryView &data, bool) {
+			wr(data);
+			return json::BinaryView(0,0);
 		}
 		~ChunkedStream() {
-			wr(0,0,0);
+			wr(nullptr);
+		}
+		virtual void closeOutput() {
+			wr(nullptr);
+		}
+		virtual bool waitWrite(int tm) {
+			return stream->waitWrite(tm);
 		}
 
 	protected:
+		const PNetworkConection &stream;
 		ChunkedWrite<OutputStream> wr;
 
 	};
 
-	class ErrorStream: public IOutputStream {
+	class ErrorStream: public AbstractOutputStream {
 	public:
-		virtual bool write(const unsigned char *, std::size_t , std::size_t *) {
-			return false;
+		virtual json::BinaryView write(const json::BinaryView &, bool ) {
+			return json::BinaryView(0,0);
 		}
+		virtual void closeOutput() {}
+		virtual bool waitWrite(int) {return true;}
 
 	};
 
@@ -106,7 +116,7 @@ OutputStream couchit::HttpClient::beginBody() {
 		if (handleSendError()) {
 			return OutputStream(new ErrorStream);
 		} else {
-			return OutputStream(new ChunkedStream(OutputStream(conn)));
+			return OutputStream(new ChunkedStream(conn));
 		}
 	}
 }
@@ -132,7 +142,7 @@ int couchit::HttpClient::send(const void* body, std::size_t body_length) {
 			return curStatus;
 		}
 		OutputStream stream(conn);
-		stream(reinterpret_cast<const unsigned char *>(body), body_length);
+		stream(json::BinaryView(reinterpret_cast<const unsigned char *>(body), body_length));
 	}
 	if (handleSendError()) {
 		return curStatus;
@@ -146,33 +156,34 @@ Value couchit::HttpClient::getHeaders() {
 
 InputStream couchit::HttpClient::getResponse() {
 
-	class EmptyStream: public IInputStream {
+	class EmptyStream: public AbstractInputStream {
 	public:
-		virtual const unsigned char *read(std::size_t , std::size_t *readready) {
-			if (readready) *readready = 0;
-			return 0;
+		virtual json::BinaryView doRead(bool) {
+			return json::BinaryView(0,0);
 		}
-		virtual json::BinaryView read(std::size_t processed) {
-			return json::BinaryView(nullptr, 0);
+		virtual bool doWait(int) {
+			return true;
 		}
+		virtual void closeInput() {}
 	};
 	if (responseData == nullptr) {
 		return new EmptyStream;
 	} else {
-		return static_cast<IInputStream *>(responseData);
+		return static_cast<AbstractInputStream *>(responseData);
 	}
 }
 
-bool couchit::HttpClient::waitForData(unsigned int timeout) {
-	return conn->waitForInput(timeout);
+bool couchit::HttpClient::waitForData(int timeout) {
+	return conn->waitRead(timeout);
 }
 
 void couchit::HttpClient::discardResponse() {
 	if (responseData != nullptr) {
 		std::size_t p = 0;
-		BinaryView b = responseData->read(0);
+		BinaryView b = responseData->read();
 		while (!b.empty()) {
-			b = responseData->read(b.length);
+			responseData->commit(b.length);
+			b = responseData->read();
 		}
 	}
 }
@@ -234,30 +245,56 @@ void HttpClient::initRequest(bool haveBody, std::size_t contentLength) {
 
 int HttpClient::readResponse() {
 
-	class ChunkedStream: public IInputStream {
+	class ChunkedStream: public AbstractInputStream {
 	public:
-		ChunkedStream(const InputStream &stream):chread(stream) {}
-		virtual json::BinaryView read(std::size_t processed) {
-			return chread(processed);
+		ChunkedStream(const InputStream &stream, PNetworkConection conn):chread(stream),conn(conn) {}
+		virtual json::BinaryView doRead(bool) {
+			chread(commitSize);
+			auto x = chread(0);
+			commitSize = x.length;
+			return x;
+		}
+
+		virtual bool doWait(int ms) {
+			return conn->waitRead(ms);
+		}
+
+		virtual void closeInput() {
+			conn->closeInput();
 		}
 
 
 	protected:
 		ChunkedRead<InputStream> chread;
+		PNetworkConection conn;
+		std::size_t commitSize = 0;
 	};
 
-	class LimitedStream: public IInputStream {
+	class LimitedStream: public AbstractInputStream {
 	public:
-		LimitedStream(const InputStream &stream, std::size_t limit)
-			:chread(stream) {
+		LimitedStream(const InputStream &stream, std::size_t limit, PNetworkConection conn)
+			:chread(stream),conn(conn) {
 				chread.setLimit(limit);
 		}
-		virtual json::BinaryView read(std::size_t processed) {
-			return chread(processed);
+		virtual json::BinaryView doRead(bool) {
+			chread(commitSize);
+			auto x = chread(0);
+			commitSize = x.length;
+			return x;
 		}
+
+		virtual bool doWait(int ms) {
+			return conn->waitRead(ms);
+		}
+		virtual void closeInput() {
+			return conn->closeInput();
+		}
+
 
 	protected:
 		BufferedReadWLimit<InputStream> chread;
+		std::size_t commitSize = 0;
+		PNetworkConection conn;
 	};
 
 	if (conn == nullptr) {
@@ -282,14 +319,14 @@ int HttpClient::readResponse() {
 	curStatus = v["_status"].getUInt();
 	StrViewA te = v["Transfer-Encoding"].getString();
 	if (te == "chunked") {
-		responseData = new ChunkedStream(InputStream(conn));
+		responseData = new ChunkedStream(InputStream(conn),conn);
 	} else {
 		json::Value ctv = v["Content-Length"];
 		if (ctv.defined()) {
 			std::size_t limit = ctv.getUInt();
-			responseData = new LimitedStream(InputStream(conn), limit);
+			responseData = new LimitedStream(InputStream(conn), limit,conn);
 		} else {
-			responseData = static_cast<IInputStream *>(conn);
+			responseData = static_cast<AbstractInputStream *>(conn);
 			conn = nullptr;
 		}
 	}
@@ -302,7 +339,7 @@ int HttpClient::readResponse() {
 
 }
 
-bool HttpClient::everythingRead(IInputStream* stream) {
+bool HttpClient::everythingRead(AbstractInputStream* stream) {
 	json::BinaryView b = stream->read(0);
 	return b.empty();
 }
@@ -331,10 +368,14 @@ json::String HttpClient::crackURL(StrViewA urlWithoutProtocol) {
 }
 
 void HttpClient::close() {
-	discardResponse();
+	if (conn != nullptr)
+		discardResponse();
 }
 
 void HttpClient::abort() {
+	if (conn != nullptr) {
+		conn->close();
+	}
 	conn = nullptr;
 }
 

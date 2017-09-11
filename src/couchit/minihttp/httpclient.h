@@ -120,7 +120,7 @@ public:
 	 * @retval true, data arrived
 	 * @retval false timeout happened
 	 */
-	bool waitForData(unsigned int timeout);
+	bool waitForData(int timeout);
 
 	///Discards response data to allow to reuse connection
 	/** You have to call this function to finish response. This is not
@@ -165,9 +165,9 @@ protected:
 	int readResponse();
 
 
-	json::RefCntPtr<IInputStream> responseData;
+	json::RefCntPtr<AbstractInputStream> responseData;
 
-	static bool everythingRead(IInputStream *stream);
+	static bool everythingRead(AbstractInputStream *stream);
 	bool handleSendError();
 
 

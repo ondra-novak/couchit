@@ -22,19 +22,12 @@ namespace couchit {
 using json::StrViewA;
 
 
-class NetworkConnection: public IInputStream, public IOutputStream {
+class NetworkConnection: public AbstractInputStream, public AbstractOutputStream {
 public:
 
 	static NetworkConnection *connect(const StrViewA &addr_ddot_port, int defaultPort);
 
 	static ICancelWait *createCancelFunction();
-
-
-	bool waitForInput(int  timeout_in_ms) {
-		if (rdPos < buffUsed) return true;
-		return waitForInputInternal(timeout_in_ms);
-	}
-	bool waitForOutput(int  timeout_in_ms);
 
 	int getLastRecvError() const {
 		return lastRecvError;
@@ -59,17 +52,24 @@ public:
 
 	~NetworkConnection();
 
+	virtual json::BinaryView write(const json::BinaryView &data, bool nonblock = false);
+	virtual void closeOutput();
+	virtual void closeInput();
+	void close();
+	virtual bool waitWrite(int milisecs) ;
+
+
 
 
 protected:
 
 	NetworkConnection(int socket);
-	virtual const unsigned char *read(std::size_t processed, std::size_t *readready);
-	virtual bool write(const unsigned char *buffer, std::size_t size, std::size_t *written);
-	virtual json::BinaryView read(std::size_t processed);
 
 
-	bool waitForInputInternal(int timeout_in_ms);
+	virtual json::BinaryView doRead(bool nonblock = false);
+	virtual bool doWait(int milisecs) ;
+
+
 	void setNonBlock();
 
 	int socket;
@@ -77,8 +77,6 @@ protected:
 	void *waitHandle; //<used by some platforms (Windows)
 
 	unsigned char inputBuff[3000];
-	std::size_t buffUsed;
-	std::size_t rdPos;
 	bool eofFound;
 	int lastSendError;
 	int lastRecvError;

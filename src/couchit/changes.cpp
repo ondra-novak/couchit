@@ -93,18 +93,13 @@ ChangesFeed& ChangesFeed::setFilterFlags(std::size_t flags) {
 }
 
 void ChangesFeed::cancelWait() {
-	initCancelFunction();
+	std::lock_guard<std::mutex> _(initLock);
 	canceled = true;
-	cancelFunction();
-}
-
-void ChangesFeed::initCancelFunction() {
-	if (!cancelFunction) {
-		std::lock_guard<std::mutex> _(cancelFnInitLock);
-		if (!cancelFunction)
-			cancelFunction = NetworkConnection::createCancelFunction();
+	if (curConn != nullptr) {
+		curConn->http.abort();
 	}
 }
+
 
 ChangesFeed::ChangesFeed(ChangesFeed&& other)
 	:couchdb(other.couchdb)
@@ -113,7 +108,6 @@ ChangesFeed::ChangesFeed(ChangesFeed&& other)
 	,timeout(std::move(other.timeout))
 	,filter(std::move(other.filter))
 	,filterArgs(std::move(other.filterArgs))
-	,cancelFunction(std::move(other.cancelFunction))
 	,canceled(false)
 
 
@@ -121,6 +115,24 @@ ChangesFeed::ChangesFeed(ChangesFeed&& other)
 
 }
 
+void ChangesFeed::cancelEpilog() {
+	std::lock_guard<std::mutex> _(initLock);
+	curConn = nullptr;
+	canceled = false;
+}
+
+void ChangesFeed::errorEpilog() {
+	std::lock_guard<std::mutex> _(initLock);
+	if (curConn != nullptr) {
+		curConn->http.abort();
+		curConn = nullptr;
+	}
+	if (canceled) {
+		canceled = false;
+		return;
+	}
+	throw;
+}
 
 }
 

@@ -92,7 +92,7 @@ public:
 	class Target: public RefCntObj {
 	public:
 		virtual ~Target() noexcept(false) {}
-		virtual void operator()(const void *buffer, std::size_t size) = 0;
+		virtual void operator()(json::BinaryView) = 0;
 		virtual String finish() = 0;
 	};
 

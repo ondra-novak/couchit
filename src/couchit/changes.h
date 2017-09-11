@@ -16,6 +16,7 @@
 
 
 #include "view.h"
+#include "couchDB.h"
 
 
 
@@ -259,6 +260,7 @@ public:
 protected:
 
 	CouchDB &couchdb;
+	CouchDB::Connection *curConn;
 	Value seqNumber;
 	std::size_t outlimit;
 	std::size_t timeout;
@@ -267,13 +269,13 @@ protected:
 	bool forceIncludeDocs = false;
 	bool forceReversed = false;
 
-	CancelFunction cancelFunction;
-	std::mutex cancelFnInitLock;
+	std::mutex initLock;
 	bool canceled;
 
-	void initCancelFunction();
-
 	friend class CouchDB;
+
+	void cancelEpilog();
+	void errorEpilog();
 
 };
 

@@ -24,66 +24,67 @@ template<typename OutFn, std::size_t chunkSize = 65536>
 class ChunkedWrite {
 public:
 
-	ChunkedWrite(const OutFn &fn):outFn(fn),chunkUsed(0),noError(true) {}
+	ChunkedWrite(const OutFn &fn):outFn(fn),chunkUsed(0) {}
 	~ChunkedWrite() {
 		flush();
 	}
 
-	bool operator()(int c) {
-		if (c == -1) return operator()(0,0,0);
+	void operator()(int c) {
+		if (c == -1) {
+			close();
+		}
 		else {
 			unsigned char z = (char)c;
-			return operator()(&z,1,0);
+			operator()(BinaryView(&z,1));
 		}
 	}
 
-	bool operator()(const unsigned char *data, std::size_t sz, std::size_t *wrt) {
-		if (sz == 0) {
+	void operator()(std::nullptr_t) {
+		close();
+	}
+
+	void operator()(const json::BinaryView &buff) {
+		if (buff.empty()) {
 			close();
-		} else if (sz <= (chunkSize- chunkUsed)) {
-			std::memcpy(chunk+chunkUsed,data,sz);
-			chunkUsed+=sz;
-		} else if (sz <= chunkSize) {
-			if (!flush()) return false;
-			std::memcpy(chunk,data,sz);
-			chunkUsed+=sz	;
+		} else if (buff.length <= (chunkSize- chunkUsed)) {
+			std::memcpy(chunk+chunkUsed,buff.data,buff.length);
+			chunkUsed+=buff.length;
+		} else if (buff.length <= chunkSize) {
+			flush();
+			std::memcpy(chunk,buff.data, buff.length);
+			chunkUsed=buff.length;
 		} else {
-			return flush() && sendChunk(data,sz);
+			flush();
+			sendChunk(buff);
 		}
-		if (wrt) *wrt = sz;
-		return noError;
+
 	}
 
-	bool close() {
-		return flush() && sendChunk(chunk,0);
+	void close() {
+		flush() ;
+		sendChunk(BinaryView(0,0));
 	}
 
-	bool flush() {
+	void flush() {
 		if (chunkUsed) {
-			std::size_t end = chunkUsed;
+			BinaryView chk(chunk, chunkUsed);
 			chunkUsed = 0;
-			return sendChunk(chunk,end);
-		} else {
-			return true;
+			sendChunk(chk);
 		}
 	}
 
-	bool isError() const {
-		return !noError;
-	}
 
 
 protected:
 	OutFn outFn;
 	unsigned char chunk[chunkSize];
 	std::size_t chunkUsed;
-	bool noError;
 
 
 
-	char *writeHex(char *buff, std::size_t num) {
+	unsigned char *writeHex(unsigned char *buff, std::size_t num) {
 		if (num) {
-			char *c = writeHex(buff, num>>4);
+			unsigned char *c = writeHex(buff, num>>4);
 			std::size_t rem = num & 0xF;
 			*c = (char)(rem<10?rem+'0':rem+'A'-10);
 			return c+1;
@@ -92,8 +93,8 @@ protected:
 		}
 	}
 
-	std::size_t writeChunkSize(char *buff, std::size_t num) {
-		char *end = buff+1;
+	std::size_t writeChunkSize(unsigned char *buff, std::size_t num) {
+		unsigned char *end = buff+1;
 		if (num == 0) {
 			buff[0] = '0';
 		} else {
@@ -104,13 +105,14 @@ protected:
 		return end-buff+2;
 	}
 
-	bool sendChunk(const unsigned char *data, std::size_t datasz) {
-		char printbuff[50];
-		std::size_t sz = writeChunkSize(printbuff,datasz);
-		noError =  outFn(reinterpret_cast<unsigned char *>(printbuff),sz,0)
-				&& outFn(data,datasz,0)
-				&& outFn(reinterpret_cast<unsigned char *>(printbuff)+sz-2,2,0);
-		return noError;
+	void sendChunk(const json::BinaryView &data) {
+		unsigned char printbuff[50];
+		std::size_t sz = writeChunkSize(printbuff,data.length);
+		BinaryView chksz(printbuff, sz);
+		BinaryView enter = chksz.substr(chksz.length-2);
+		outFn(chksz);
+		outFn(data);
+		outFn(enter);
 
 	}
 };

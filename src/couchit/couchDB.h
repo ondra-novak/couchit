@@ -668,7 +668,7 @@ protected:
 
 private:
 	int initChangesFeed(const PConnection& conn, ChangesFeed& sink);
-	static void changesFeedError(ChangesFeed& sink, const PConnection &conn);
+	static void changesFeedError(ChangesFeed& sink);
 	void updateSeqNum(const Value& seq);
 };
 
