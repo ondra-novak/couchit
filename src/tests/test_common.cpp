@@ -40,7 +40,6 @@ Config loadConfig() {
 
 Config getTestCouch() {
 	static Config cfg = loadConfig();
-	cfg.baseUrl = "http://localhost:5984/";
 	return cfg;
 
 }

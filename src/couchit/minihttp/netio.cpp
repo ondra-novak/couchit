@@ -16,6 +16,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include "../exception.h"
 
 #include "../json.h"
 
@@ -26,7 +27,11 @@ public:
 
 	LinuxCancel() {
 		int fds[2];
-		pipe2(fds,O_NONBLOCK|O_CLOEXEC);
+		int c = pipe2(fds,O_NONBLOCK|O_CLOEXEC);
+		if (c == -1) {
+			int e = errno;
+			throw SystemException("Unable to create pipe2", e);
+		}
 		fdrecv = fds[0];
 		fdsend = fds[1];
 	}
@@ -50,7 +55,11 @@ public:
 
 	void cancelWait() {
 		unsigned char b = 1;
-		(void)::write(fdsend,&b,1);
+		int x = ::write(fdsend,&b,1);
+		if (x == -1) {
+			int e = errno;
+			throw SystemException("Failed to trigger event", e);
+		}
 	}
 
 
@@ -153,7 +162,7 @@ json::BinaryView NetworkConnection::doRead(bool nonblock) {
 		} else if (nonblock) {
 			return BinaryView(0,0);
 		} else {
-			if (waitRead(timeoutTime) == false) {
+			if (doWait(timeoutTime) == false) {
 				timeout = true;
 				eofFound = true;
 				return AbstractInputStream::eofConst;
@@ -229,18 +238,20 @@ bool NetworkConnection::doWait(int timeout_in_ms) {
 	struct pollfd poll_list[2];
 	poll_list[0].fd = socket;
 	poll_list[0].events = POLLIN|POLLRDHUP;
+	poll_list[0].revents = 0;
 	int cnt = 1;
 	LinuxCancel *lc = dynamic_cast<LinuxCancel *>(static_cast<ICancelWait *>(cancelFunction));
 	if (lc != nullptr) {
 		poll_list[1].fd = lc->getRecvFd();
 		poll_list[1].events = POLLIN;
+		poll_list[1].revents = 0;
 		cnt++;
 	}
 	do {
 		int r = poll(poll_list,cnt,timeout_in_ms);
 		if (r < 0) {
 			int err = errno;
-			if (err != EINTR) {
+			if (err != EINTR && err != EAGAIN && err != EWOULDBLOCK) {
 				lastRecvError = err;
 				return false;
 			}

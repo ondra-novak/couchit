@@ -183,7 +183,7 @@ public:
 		using json::BinaryView;
 
 		//if eof or error, return empty buffer - no report is recorded
-		if (eof || chunkError)
+		if (eof || chunkError )
 			return BinaryView(nullptr, 0);
 		//processed whole chunk?
 		if (curChunk <= processed) {
@@ -192,7 +192,10 @@ public:
 			//finish chunk
 			curChunk = 0;
 			//prepare next chunk
-			return prepareNext(processed);
+			if (processed)
+				inFn(processed);
+
+			return json::BinaryView(0,0);
 		}
 		else {
 			//decrease remaining chunk

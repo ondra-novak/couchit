@@ -84,6 +84,9 @@ public:
 	json::BinaryView read(bool nonblock = false) {
 		if (lastBuff.empty()) {
 			lastBuff = doRead(nonblock);
+			if (lastBuff.empty()) {
+				errno=2;
+			}
 		}
 		return lastBuff;
 	}

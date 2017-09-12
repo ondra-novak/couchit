@@ -590,6 +590,27 @@ static void testRecreate(std::ostream &a) {
 	a << doc3["ccc"].getString();
 }
 
+static void couchLarge(std::ostream &a) {
+
+	CouchDB db(getTestCouch());
+	db.setCurrentDB(DATABASENAME);
+
+	Changeset chg = db.createChangeset();
+	for (int i = 0; i < 100000; i++) {
+		Document doc = db.newDocument();
+		doc.set("index",i);
+		chg.update(doc);
+	}
+
+	chg.commit();
+
+	for (int i = 0; i < 10; i++) {
+		Query q = db.createQuery(View::includeDocs);
+		Result r = q.exec();
+		a << r.size();
+	}
+}
+
 void runTestBasics(TestSimple &tst) {
 
 tst.test("couchdb.connect","Welcome") >> &couchConnect;
@@ -615,6 +636,7 @@ tst.test("couchdb.changesWaitingForThree","ok") >> &couchChangeSetWaitForData3;
 tst.test("couchdb.changesStopWait","Welcome") >> &couchChangesStopWait;
 tst.test("couchdb.getSeqNumber","ok") >> &couchGetSeqNumber;
 tst.test("couchdb.attachments","text/plain-The quick brown fox jumps over the lazy dog") >> &couchStoreAndRetrieveAttachment;
+tst.test("couchdb.large","100019100019100019100019100019100019100019100019100019100019") >> &couchLarge;
 tst.test("couchdb.deleteDB","") >> &deleteDB;
 }
 

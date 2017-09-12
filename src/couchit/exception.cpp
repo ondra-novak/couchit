@@ -95,4 +95,11 @@ String HttpStatusException::getWhatMsg() const throw () {
 	return String(buff.str());
 }
 
+String couchit::SystemException::getWhatMsg() const throw () {
+	std::ostringstream buff;
+	buff << StrViewA(text) << " errno=" << errn;
+	return String(buff.str());
 }
+
+}
+

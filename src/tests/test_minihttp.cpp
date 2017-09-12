@@ -112,7 +112,8 @@ tst.test("couchdb.minihttp.readChunked", "Wikipedia in\r\n\r\nchunks.-Wikipedia 
 			std::size_t rd = c.length;
 			if (rd > 4) rd = 4;
 			res2.append(reinterpret_cast<const char *>(c.data), rd);
-			c = chunks(rd);
+			chunks(rd);
+			c = chunks(0);
 		}
 	}
 

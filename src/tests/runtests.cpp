@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
 		couchit::runMiniHttpTests(tst);
 		couchit::testUUIDs(tst);
 		couchit::runTestBasics(tst);
-		couchit::runTestQueryServer(lang, tst);
+//		couchit::runTestQueryServer(lang, tst);
 
 
 		return tst.didFail()?1:0;

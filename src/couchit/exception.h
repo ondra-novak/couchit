@@ -91,6 +91,19 @@ protected:
 
 	virtual String getWhatMsg() const throw();
 };
+
+class SystemException: public Exception {
+public:
+
+	SystemException(String text, int errn):text(text),errn(errn) {}
+	int getErrorNo() const {return errn;}
+protected:
+	String text;
+	int errn;
+	virtual String getWhatMsg() const throw();
+
+};
+
 /*
 class CanceledException: public Exception{
 public:

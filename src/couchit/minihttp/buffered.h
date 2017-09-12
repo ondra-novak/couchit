@@ -122,17 +122,18 @@ protected:
 			if (pos > curBuffer.length) 
 				return -1;
 			curBuffer = inFn(pos);
+			if (curBuffer.empty())
+				curBuffer = inFn(0);
 			if (!curBuffer.empty()) {
 				pos = 0;
 				return curBuffer[pos++];
 			} else {
-				if (pos) curBuffer = inFn(0);
-				if (!curBuffer.empty()) {
-					pos = 0;
-					return curBuffer[pos++];
+				pos = 0;
+				curBuffer = inFn(0);
+				if (curBuffer.empty()) {
+					return -1;
 				}
-				pos = 1;
-				return -1;
+				return curBuffer[pos++];
 			}
 		}
 	}
