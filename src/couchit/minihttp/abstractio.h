@@ -9,6 +9,7 @@
 #define LIGHTCOUCH_MINIHTTP_ABSTRACTIO_H_
 
 #include <imtjson/refcnt.h>
+#include <cstring>
 
 #pragma once
 
@@ -84,9 +85,6 @@ public:
 	json::BinaryView read(bool nonblock = false) {
 		if (lastBuff.empty()) {
 			lastBuff = doRead(nonblock);
-			if (lastBuff.empty()) {
-				errno=2;
-			}
 		}
 		return lastBuff;
 	}
@@ -101,10 +99,6 @@ public:
 		return lastBuff;
 	}
 
-	///get data available in the buffer without reading
-	json::BinaryView getBuffer() const {
-		return lastBuff;
-	}
 
 	///reads next byte
 	/**
@@ -144,7 +138,7 @@ public:
 	 * @retval false timeout
 	 */
 	virtual bool waitRead(int milisecs) {
-		if (lastBuff.empty()) return doWait(milisecs);
+		if (lastBuff.empty()) return doWaitRead(milisecs);
 		return true;
 	}
 
@@ -160,7 +154,7 @@ protected:
 	json::BinaryView lastBuff = json::BinaryView(0,0);
 
 	virtual json::BinaryView doRead(bool nonblock = false) = 0;
-	virtual bool doWait(int milisecs) = 0;
+	virtual bool doWaitRead(int milisecs) = 0;
 };
 
 
@@ -169,6 +163,74 @@ class AbstractOutputStream:  virtual public json::RefCntObj {
 public:
 
 	virtual ~AbstractOutputStream() {}
+
+
+	struct Buffer {
+		unsigned char * buff;
+		std::size_t size;
+
+
+		Buffer (unsigned char *buff,std::size_t size):buff(buff),size(size) {}
+		Buffer ():buff(0),size(0) {}
+	};
+
+
+	///Creates and prepares buffer for writting
+	/**
+	 * @param reqSize required size to write. Default value 0 means, that
+	 *   size of the buffer can vary depend on current stream state. You can specify
+	 *   a size, but this is taken as a hint. However, in most of cases, for small
+	 *   values up to 256 bytes, the function should always supply a buffer of specified
+	 *   size (with exception see noblock). Highter value can cause, that smaller buffer
+	 *   will be returned.
+	 * @param nonblock set true to perform this operation in nonblocking mode. Note that
+	 *  if operation cannot be performed in nonblocking mode, smaller or empty buffer
+	 *  can be returned
+	 *
+	 * @return returns buffer. Note that in nonblocking mode, none or empty buffer can be
+	 * returned.
+	 */
+	Buffer getBuffer(std::size_t reqSize = 0, bool nonblock = false) {
+		if (availBuff.buff == nullptr) {
+			availBuff = createBuffer();
+			wrpos = 0;
+		}
+		std::size_t avl = availBuff.size - wrpos;
+		if (reqSize == 0) reqSize = availBuff.size/2+1;
+		if (reqSize > avl) {
+			json::BinaryView b (availBuff.buff, wrpos);
+			json::BinaryView c = doWrite(b, nonblock);
+			if (!c.empty()) {
+				if (c != b) {
+					std::memmove(availBuff.buff, c.data, c.length);
+					wrpos = c.length;
+				}
+			} else {
+				wrpos = 0;
+			}
+		}
+		return Buffer(availBuff.buff+ wrpos, availBuff.size - wrpos);
+	}
+
+
+
+	///Commits writes to the buffer
+	/**
+	 * @param size count of bytes written to the buffer
+	 * @param flush set true to flush data to the stream. Note that operation is blocking.
+	 *
+	 */
+	void commit(std::size_t size, bool flush = false) {
+		wrpos+=size;
+		if (flush && wrpos) {
+			json::BinaryView b (availBuff.buff, wrpos);
+			doWrite(b,true);
+			availBuff = createBuffer();
+			wrpos = 0;
+		}
+	}
+
+
 	///Writes data to the stream
 	/**
 	 * Function can buffer the data at internal buffer until the buffer is filled.
@@ -182,11 +244,19 @@ public:
 	 * the argument data in case, that there is no room to write more data
 	 *
 	 * If there is error during the writting, the exception is thrown
-	 *
-	 * @note writting can be synced / flushed at the end. Please use maximum buffering, do not write per character
-	 *
 	 */
-	virtual json::BinaryView write(const json::BinaryView &data, bool nonblock = false) = 0;
+	json::BinaryView write(const json::BinaryView &data, bool nonblock = false) {
+		Buffer b = getBuffer(data.length, nonblock);
+		if (b.size >= data.length) {
+
+			std::size_t towr = std::min(b.size, data.length);
+			std::memmove(b.buff,data.data, towr);
+			commit(towr);
+			return data.substr(towr);
+		} else {
+			return doWrite(data, nonblock);
+		}
+	}
 
 
 	///Closes the output by writting the eof character
@@ -199,7 +269,20 @@ public:
 	 * @retval true data available
 	 * @retval false timeout
 	 */
-	virtual bool waitWrite(int milisecs)  = 0;
+	bool waitWrite(int milisecs)  {
+		if (wrpos < availBuff.size) return true;
+		return doWaitWrite(milisecs);
+
+	}
+protected:
+
+	Buffer availBuff;
+	std::size_t wrpos = 0;
+
+	virtual Buffer createBuffer() = 0;
+	virtual json::BinaryView doWrite(const json::BinaryView &data, bool nonblock) = 0;
+	virtual bool doWaitWrite(int milisecs) = 0;
+
 };
 
 
@@ -211,6 +294,11 @@ public:
 		else return impl->read();
 	}
 	AbstractInputStream *operator->() const {return impl;}
+
+	int operator()() const {
+		return impl->getNextByte();
+	}
+
 
 protected:
 	json::RefCntPtr<AbstractInputStream> impl;
@@ -225,6 +313,10 @@ public:
 	///sending nullptr causes closing the output
 	void operator()(std::nullptr_t) {
 		impl->closeOutput();
+	}
+	void operator()(char c) {
+		AbstractOutputStream::Buffer b = impl->getBuffer(1);
+		impl->commit(1);
 	}
 
 	AbstractOutputStream *operator->() const {return impl;}

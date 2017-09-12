@@ -52,11 +52,9 @@ public:
 
 	~NetworkConnection();
 
-	virtual json::BinaryView write(const json::BinaryView &data, bool nonblock = false);
 	virtual void closeOutput();
 	virtual void closeInput();
 	void close();
-	virtual bool waitWrite(int milisecs) ;
 
 
 
@@ -65,9 +63,11 @@ protected:
 
 	NetworkConnection(int socket);
 
-
+	virtual json::BinaryView doWrite(const json::BinaryView &data, bool nonblock = false);
+	virtual bool doWaitWrite(int milisecs) ;
 	virtual json::BinaryView doRead(bool nonblock = false);
-	virtual bool doWait(int milisecs) ;
+	virtual bool doWaitRead(int milisecs) ;
+	virtual Buffer createBuffer();
 
 
 	void setNonBlock();
@@ -77,6 +77,7 @@ protected:
 	void *waitHandle; //<used by some platforms (Windows)
 
 	unsigned char inputBuff[3000];
+	unsigned char outputBuff[3000];
 	bool eofFound;
 	int lastSendError;
 	int lastRecvError;

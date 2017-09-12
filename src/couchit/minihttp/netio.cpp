@@ -162,7 +162,7 @@ json::BinaryView NetworkConnection::doRead(bool nonblock) {
 		} else if (nonblock) {
 			return BinaryView(0,0);
 		} else {
-			if (doWait(timeoutTime) == false) {
+			if (doWaitRead(timeoutTime) == false) {
 				timeout = true;
 				eofFound = true;
 				return AbstractInputStream::eofConst;
@@ -174,7 +174,7 @@ json::BinaryView NetworkConnection::doRead(bool nonblock) {
 }
 
 
-bool NetworkConnection::waitWrite(int  timeout_in_ms) {
+bool NetworkConnection::doWaitWrite(int  timeout_in_ms) {
 	struct pollfd poll_list[2];
 	int cnt = 1;
 	poll_list[0].fd = socket;
@@ -208,7 +208,7 @@ bool NetworkConnection::waitWrite(int  timeout_in_ms) {
 	} while (true);
 }
 
-json::BinaryView NetworkConnection::write(const json::BinaryView &data, bool nonblock) {
+json::BinaryView NetworkConnection::doWrite(const json::BinaryView &data, bool nonblock) {
 	if (data.empty()) return data;
 	if (lastSendError || timeout) return json::BinaryView(0,0);
 	int sent = send(socket, data.data, data.length,0);
@@ -234,7 +234,7 @@ json::BinaryView NetworkConnection::write(const json::BinaryView &data, bool non
 	}
 }
 
-bool NetworkConnection::doWait(int timeout_in_ms) {
+bool NetworkConnection::doWaitRead(int timeout_in_ms) {
 	struct pollfd poll_list[2];
 	poll_list[0].fd = socket;
 	poll_list[0].events = POLLIN|POLLRDHUP;
@@ -283,7 +283,11 @@ void NetworkConnection::close() {
 	shutdown(socket, SHUT_RDWR);
 }
 
+NetworkConnection::Buffer NetworkConnection::createBuffer() {
+	return Buffer(outputBuff,sizeof(outputBuff));
+}
 
 
 
 }
+

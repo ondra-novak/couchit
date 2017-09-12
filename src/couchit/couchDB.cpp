@@ -23,7 +23,6 @@
 #include "queryCache.h"
 
 #include "document.h"
-#include "minihttp/buffered.h"
 #include "showProc.h"
 #include "updateProc.h"
 
@@ -250,7 +249,7 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 
 					Value errorVal;
 					try{
-						errorVal = Value::parse(BufferedRead<InputStream>(http.getResponse()));
+						errorVal = Value::parse(http.getResponse());
 					} catch (...) {
 
 					}
@@ -258,7 +257,7 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 					StrViewA url(*urlline);
 					throw RequestError(url,status, http.getStatusMessage(), errorVal);
 				} else {
-					Value v = Value::parse(BufferedRead<InputStream>(http.getResponse()));
+					Value v = Value::parse(http.getResponse());
 					http.close();
 					response = v["rev"];
 					return String(response);
@@ -596,7 +595,7 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 	} else {
 		InputStream stream = conn->http.getResponse();
 		try {
-			v = Value::parse(BufferedRead<InputStream>(stream));
+			v = Value::parse(stream);
 		} catch (...) {
 			sink.errorEpilog();
 			return Value(json::undefined);
@@ -650,7 +649,7 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 		try {
 
 			do {
-				v = Value::parse(BufferedRead<InputStream>(stream));
+				v = Value::parse(stream);
 				Value lastSeq = v["last_seq"];
 				if (lastSeq.defined()) {
 					sink.seqNumber = lastSeq;
@@ -977,7 +976,7 @@ void CouchDB::handleUnexpectedStatus(PConnection& conn) {
 
 	Value errorVal;
 	try{
-		errorVal = Value::parse(BufferedRead<InputStream>(conn->http.getResponse()));
+		errorVal = Value::parse(conn->http.getResponse());
 	} catch (...) {
 
 	}
@@ -986,7 +985,7 @@ void CouchDB::handleUnexpectedStatus(PConnection& conn) {
 }
 
 Value CouchDB::parseResponse(PConnection& conn) {
-	return Value::parse(BufferedRead<InputStream>(conn->http.getResponse()));
+	return Value::parse(conn->http.getResponse());
 }
 
 
@@ -1009,10 +1008,11 @@ Value CouchDB::postRequest(PConnection& conn, const StrViewA &cacheKey, Value *h
 			}
 		} else {
 			std::vector<std::uint8_t> data;
-			BufferedRead<InputStream> rd(http.getResponse());
+			InputStream rd = http.getResponse();
 			int i = rd();
 			while (i != json::eof) {
 				data.push_back((std::uint8_t)i);
+				i = rd();
 			}
 			Object r;
 			r.set("content", Value(BinaryView(&data[0],data.size()),json::defaultBinaryEncoding));

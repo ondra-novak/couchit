@@ -3,12 +3,26 @@
 
 #include "../couchit/minihttp/hdrrd.h"
 #include "../couchit/minihttp/hdrwr.h"
-#include "../couchit/minihttp/chunked.h"
 #include "../couchit/minihttp/httpclient.h"
 #include "testClass.h"
+#include "../couchit/minihttp/stringstreams.h"
+#include "../couchit/minihttp/chunkstream.h"
 
 
 namespace couchit {
+
+StrViewA testdata =
+	"4\r\n"
+	"Wiki\r\n"
+	"5\r\n"
+	"pedia\r\n"
+	"E\r\n"
+	" in\r\n"
+	"\r\n"
+	"chunks.\r\n"
+	"0\r\n"
+	"\r\n"
+	"Blableblaebalbqeq";
 
 
 void runMiniHttpTests(TestSimple &tst) {
@@ -69,55 +83,81 @@ tst.test("couchdb.minihttp.serializeHeaders",
 	print << StrViewA(out);
 };
 
+
+
 tst.test("couchdb.minihttp.readChunked", "Wikipedia in\r\n\r\nchunks.-Wikipedia in\r\n\r\nchunks.") >> [](std::ostream &print){
 
-	StrViewA data =
-		"4\r\n"
-		"Wiki\r\n"
-		"5\r\n"
-		"pedia\r\n"
-		"E\r\n"
-		" in\r\n"
-		"\r\n"
-		"chunks.\r\n"
-		"0\r\n"
-		"\r\n"
-		"Blableblaebalbqeq";
-	std::size_t pos = 0;
+/*	std::size_t pos = 0;
 	auto infn = [&data,&pos](std::size_t processed) -> BinaryView {
 		pos+=processed;
 		std::size_t l = data.length;
 		return BinaryView(reinterpret_cast<const unsigned char *>(pos >= l ? nullptr : data.data + pos),
 			std::min(l - pos, std::size_t(10)));
-	};
+	};*/
+
+
+	std::size_t pos = 0;
+
 	std::string res;
 	res.reserve(2000);
 	{
-	ChunkedRead<decltype(infn)> chunks(infn);
-	BufferedRead<ChunkedRead<decltype(infn)> > buffered(chunks);
-	do {
-		int i = buffered();
-		if (i == -1) break;
-		res.push_back((char)i);
-	} while (true);
+
+		InputStream stream(new ChunkedInputStream(new StringInputStream(BinaryView(testdata))));
+		do {
+			int i = stream();
+			if (i == -1) break;
+			res.push_back((char)i);
+		} while (true);
 	}
 
 	std::string res2;
 	res2.reserve(2000);
 	 {
-		pos = 0;
-		ChunkedRead<decltype(infn)> chunks(infn);
-		BinaryView c = chunks(0);
+		InputStream stream(new ChunkedInputStream(new StringInputStream(BinaryView(testdata))));
+		BinaryView c = stream(0);
 		while (!c.empty()) {
 			std::size_t rd = c.length;
 			if (rd > 4) rd = 4;
 			res2.append(reinterpret_cast<const char *>(c.data), rd);
-			chunks(rd);
-			c = chunks(0);
+			stream(rd);
+			c = stream(0);
 		}
 	}
 
 	print << res << "-" << res2;
+
+};
+
+tst.test("couchdb.minihttp.readChunked2", "Wikipedia in\r\n\r\nchunks.") >> [](std::ostream &print){
+
+
+
+	std::size_t pos = 0;
+	auto infn = [&](){
+		if (pos < testdata.length) {
+			BinaryView x(StrViewA(testdata.data+pos,1));
+			pos++;
+			return x;
+		} else {
+			return BinaryView(0,0);
+		}
+	};
+
+	std::string res;
+	res.reserve(2000);
+	{
+
+		InputStream stream(new ChunkedInputStream(new ProducerInputStream<decltype(infn)>(infn,BinaryView(0,0))));
+		do {
+			int i = stream();
+			if (i == -1) break;
+			res.push_back((char)i);
+		} while (true);
+	}
+
+
+
+	print << res ;
 
 };
 
@@ -131,10 +171,29 @@ tst.test("couchdb.minihttp.writeChunked",
 	auto outfn = [&](BinaryView data) {
 		res.append(reinterpret_cast<const char *>(data.data),data.length);
 	};
-	ChunkedWrite<decltype(outfn),20> chunks(outfn);
+	OutputStream out (new ChunkedOutputStream<20>(new ConsumentOutputStream<decltype(outfn)>(outfn)));
 
-	for (auto &&c : source) chunks(c);
-	chunks(-1);
+	for (auto &&c : source) out(c);
+	out(nullptr);
+
+	print << StrViewA(res);
+
+};
+
+tst.test("couchdb.minihttp.writeChunked",
+		"14\r\nThis is long string \r\n14\r\nwritten in chunks...\r\n2\r\n..\r\n0\r\n\r\n") >> [](std::ostream &print){
+
+	StrViewA source = "This is long string written in chunks.....";
+	std::string res;
+	res.reserve(1000);
+
+	auto outfn = [&](BinaryView data) {
+		res.append(reinterpret_cast<const char *>(data.data),data.length);
+	};
+	OutputStream out (new ChunkedOutputStream<20>(new ConsumentOutputStream<decltype(outfn)>(outfn)));
+
+	for (auto &&c : source) out(c);
+	out(nullptr);
 
 	print << StrViewA(res);
 
@@ -150,14 +209,14 @@ tst.test("couchdb.minihttp.writeChunked2",
 	auto outfn = [&](BinaryView data) {
 		res.append(reinterpret_cast<const char *>(data.data),data.length);
 	};
-	ChunkedWrite<decltype(outfn),20> chunks(outfn);
+	OutputStream out (new ChunkedOutputStream<20>(new ConsumentOutputStream<decltype(outfn)>(outfn)));
 
 	const unsigned char *data = reinterpret_cast<const unsigned char *>(source.data);
-	chunks(BinaryView(data,1));
-	chunks(BinaryView(data+1,4));
-	chunks(BinaryView(data+5,19));
-	chunks(BinaryView(data+24,source.length-24));
-	chunks(nullptr);
+	out(BinaryView(data,1));
+	out(BinaryView(data+1,4));
+	out(BinaryView(data+5,19));
+	out(BinaryView(data+24,source.length-24));
+	out(nullptr);
 
 	print << res;
 
@@ -169,7 +228,7 @@ tst.test("couchdb.minihttp.getRequest","TestClient"
 	client.open("http://httpbin.org/get","GET",false);
 	int status = client.send();
 	if (status == 200) {
-		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
+		json::Value v = json::Value::parse(client.getResponse());
 		out << v["headers"]["User-Agent"].getString();
 	} else {
 		out << "Status: " << status;
@@ -186,7 +245,7 @@ tst.test("couchdb.minihttp.postRequest",
 	json::String x = req.stringify();
 	int status = client.send(x);
 	if (status == 200) {
-		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
+		json::Value v = json::Value::parse(client.getResponse());
 		out << StrViewA(v["data"].stringify());
 	} else {
 		out<< "Status: " << status;
@@ -203,7 +262,7 @@ tst.test("couchdb.minihttp.postRequestFromString",
 	json::String strReq = req.stringify();
 	int status = client.send(strReq);
 	if (status == 200) {
-		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
+		json::Value v = json::Value::parse(client.getResponse());
 		out  << StrViewA(v["data"].stringify());
 	} else {
 		out << "Status:" << status;
@@ -218,7 +277,7 @@ tst.test("couchdb.minihttp.getAuth","user"
 	client.open("http://user:passwd@httpbin.org/basic-auth/user/passwd","GET",false);
 	int status = client.send();
 	if (status == 200) {
-		json::Value v = json::Value::parse(BufferedRead<InputStream>(client.getResponse()));
+		json::Value v = json::Value::parse(client.getResponse());
 		out << v["user"].getString();
 	} else {
 		out << "Status: " << status;

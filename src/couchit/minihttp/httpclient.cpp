@@ -9,23 +9,23 @@
 
 
 
-#include "chunked.h"
+#include "chunkstream.h"
 #include "hdrrd.h"
 #include "hdrwr.h"
 namespace couchit {
 
 
-couchit::HttpClient::HttpClient()
+HttpClient::HttpClient()
 	:curTimeout(70000)
 {
 }
 
-couchit::HttpClient::HttpClient(StrViewA userAgent)
+HttpClient::HttpClient(StrViewA userAgent)
 	:userAgent(userAgent),curTimeout(70000)
 {
 }
 
-HttpClient& couchit::HttpClient::open(StrViewA url, StrViewA method, bool keepAlive) {
+HttpClient& HttpClient::open(StrViewA url, StrViewA method, bool keepAlive) {
 	this->keepAlive = keepAlive;
 
 	curStatus = 0;
@@ -50,7 +50,7 @@ HttpClient& couchit::HttpClient::open(StrViewA url, StrViewA method, bool keepAl
 	return *this;
 }
 
-HttpClient& couchit::HttpClient::setHeaders(Value headers) {
+HttpClient& HttpClient::setHeaders(Value headers) {
 	customHeaders = headers;
 	return *this;
 
@@ -73,39 +73,22 @@ bool HttpClient::handleSendError() {
 
 }
 
-OutputStream couchit::HttpClient::beginBody() {
+OutputStream HttpClient::beginBody() {
 
-	class ChunkedStream: public AbstractOutputStream {
-	public:
-
-		ChunkedStream(const PNetworkConection &stream):stream(stream),wr(OutputStream(stream)) {}
-		virtual json::BinaryView write(const json::BinaryView &data, bool) {
-			wr(data);
-			return json::BinaryView(0,0);
-		}
-		~ChunkedStream() {
-			wr(nullptr);
-		}
-		virtual void closeOutput() {
-			wr(nullptr);
-		}
-		virtual bool waitWrite(int tm) {
-			return stream->waitWrite(tm);
-		}
-
-	protected:
-		const PNetworkConection &stream;
-		ChunkedWrite<OutputStream> wr;
-
-	};
 
 	class ErrorStream: public AbstractOutputStream {
 	public:
-		virtual json::BinaryView write(const json::BinaryView &, bool ) {
+		virtual json::BinaryView doWrite(const json::BinaryView &, bool ) {
 			return json::BinaryView(0,0);
 		}
 		virtual void closeOutput() {}
-		virtual bool waitWrite(int) {return true;}
+		virtual bool doWaitWrite(int) {return true;}
+
+		virtual Buffer createBuffer() {
+			static unsigned char buff[256];
+			return Buffer(buff,sizeof(buff));
+		}
+
 
 	};
 
@@ -116,12 +99,12 @@ OutputStream couchit::HttpClient::beginBody() {
 		if (handleSendError()) {
 			return OutputStream(new ErrorStream);
 		} else {
-			return OutputStream(new ChunkedStream(conn));
+			return OutputStream(new ChunkedOutputStream<>(OutputStream(conn)));
 		}
 	}
 }
 
-int couchit::HttpClient::send() {
+int HttpClient::send() {
 	if (!headersSent) {
 		initRequest(false,0);
 	}
@@ -131,11 +114,11 @@ int couchit::HttpClient::send() {
 	return readResponse();
 }
 
-int couchit::HttpClient::send(const StrViewA& body) {
+int HttpClient::send(const StrViewA& body) {
 	return send(body.data,body.length);
 }
 
-int couchit::HttpClient::send(const void* body, std::size_t body_length) {
+int HttpClient::send(const void* body, std::size_t body_length) {
 	if (!headersSent) {
 		initRequest(true,body_length);
 		if (handleSendError()) {
@@ -150,18 +133,18 @@ int couchit::HttpClient::send(const void* body, std::size_t body_length) {
 	return readResponse();
 }
 
-Value couchit::HttpClient::getHeaders() {
+Value HttpClient::getHeaders() {
 	return responseHeaders;
 }
 
-InputStream couchit::HttpClient::getResponse() {
+InputStream HttpClient::getResponse() {
 
 	class EmptyStream: public AbstractInputStream {
 	public:
 		virtual json::BinaryView doRead(bool) {
 			return json::BinaryView(0,0);
 		}
-		virtual bool doWait(int) {
+		virtual bool doWaitRead(int) {
 			return true;
 		}
 		virtual void closeInput() {}
@@ -173,11 +156,11 @@ InputStream couchit::HttpClient::getResponse() {
 	}
 }
 
-bool couchit::HttpClient::waitForData(int timeout) {
+bool HttpClient::waitForData(int timeout) {
 	return conn->waitRead(timeout);
 }
 
-void couchit::HttpClient::discardResponse() {
+void HttpClient::discardResponse() {
 	if (responseData != nullptr) {
 		std::size_t p = 0;
 		BinaryView b = responseData->read();
@@ -234,76 +217,56 @@ void HttpClient::initRequest(bool haveBody, std::size_t contentLength) {
 	}
 
 	OutputStream stream(conn);
-	BufferedWrite<OutputStream> bufferedOutput(stream);
 
-	HeaderWrite<BufferedWrite<OutputStream> > hdrwr(bufferedOutput);
+	HeaderWrite<OutputStream> hdrwr(stream);
 
 	hdrwr.serialize(hdr);
-	bufferedOutput.flush();
+
+	stream->commit(0,true);
 
 	headersSent = true;
 }
 
 int HttpClient::readResponse() {
 
-	class ChunkedStream: public AbstractInputStream {
-	public:
-		ChunkedStream(const InputStream &stream, PNetworkConection conn):chread(stream),conn(conn) {}
-		~ChunkedStream() {
-			auto cs = commitSize - lastBuff.length;
-			if (cs) chread(cs);
-		}
-		virtual json::BinaryView doRead(bool) {
-			if (commitSize) chread(commitSize);
-			auto x = chread(0);
-			commitSize = x.length;
-			return x;
-		}
-
-		virtual bool doWait(int ms) {
-			return conn->waitRead(ms);
-		}
-
-		virtual void closeInput() {
-			conn->closeInput();
-		}
-
-
-	protected:
-		ChunkedRead<InputStream> chread;
-		PNetworkConection conn;
-		std::size_t commitSize = 0;
-	};
-
 	class LimitedStream: public AbstractInputStream {
 	public:
-		LimitedStream(const InputStream &stream, std::size_t limit, PNetworkConection conn)
-			:chread(stream),conn(conn) {
-				chread.setLimit(limit);
-		}
+		LimitedStream(const InputStream &stream, std::size_t limit)
+			:stream(stream), limit(limit) {}
+
 		~LimitedStream() {
-			auto cs = commitSize - lastBuff.length;
-			if (cs) chread(cs);
+			if (commitSize) {
+				stream->commit(commitSize);
+			}
 		}
-		virtual json::BinaryView doRead(bool) {
-			chread(commitSize);
-			auto x = chread(0);
+
+		virtual void closeInput() {
+			stream->closeInput();
+		}
+
+	protected:
+
+		virtual json::BinaryView doRead(bool nonblock = false) {
+			if (commitSize) {
+				stream->commit(commitSize);
+				limit -= commitSize;
+				commitSize = 0;
+			}
+			if (limit == 0) return eofConst;
+
+			auto x = stream->read(nonblock).substr(0,limit);
 			commitSize = x.length;
 			return x;
 		}
-
-		virtual bool doWait(int ms) {
-			return conn->waitRead(ms);
-		}
-		virtual void closeInput() {
-			return conn->closeInput();
+		virtual bool doWaitRead(int milisecs) {
+			return stream->waitRead(milisecs);
 		}
 
 
 	protected:
-		BufferedReadWLimit<InputStream> chread;
+		InputStream stream;
+		std::size_t limit;
 		std::size_t commitSize = 0;
-		PNetworkConection conn;
 	};
 
 	if (conn == nullptr) {
@@ -312,9 +275,8 @@ int HttpClient::readResponse() {
 
 
 	InputStream stream(conn);
-	BufferedRead<InputStream> bufferedInput(stream);
 
-	HeaderRead<BufferedRead<InputStream> > hdrrd(bufferedInput);
+	HeaderRead<InputStream> hdrrd(stream);
 
 	json::Value v = hdrrd.parseHeaders();
 	if (!v.defined()) {
@@ -328,12 +290,12 @@ int HttpClient::readResponse() {
 	curStatus = v["_status"].getUInt();
 	StrViewA te = v["Transfer-Encoding"].getString();
 	if (te == "chunked") {
-		responseData = new ChunkedStream(InputStream(conn),conn);
+		responseData = new ChunkedInputStream(InputStream(conn));
 	} else {
 		json::Value ctv = v["Content-Length"];
 		if (ctv.defined()) {
 			std::size_t limit = ctv.getUInt();
-			responseData = new LimitedStream(InputStream(conn), limit,conn);
+			responseData = new LimitedStream(InputStream(conn), limit);
 		} else {
 			responseData = static_cast<AbstractInputStream *>(conn);
 			conn = nullptr;
