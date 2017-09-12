@@ -76,8 +76,8 @@ protected:
 	
 	void *waitHandle; //<used by some platforms (Windows)
 
-	unsigned char inputBuff[3000];
-	unsigned char outputBuff[3000];
+	unsigned char inputBuff[4096];
+	unsigned char outputBuff[4096];
 	bool eofFound;
 	int lastSendError;
 	int lastRecvError;

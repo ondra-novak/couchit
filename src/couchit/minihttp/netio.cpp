@@ -148,7 +148,7 @@ void NetworkConnection::setTimeout(std::uintptr_t timeout) {
 json::BinaryView NetworkConnection::doRead(bool nonblock) {
 	int rc = recv(socket,inputBuff,3000,0);
 	if (rc > 0) {
-	//	std::cout << "Read: " << StrViewA(BinaryView(inputBuff,rc)) << std::endl;
+//		std::cout << "Read: " << StrViewA(BinaryView(inputBuff,rc)) << std::endl;
 		return json::BinaryView(inputBuff,rc);
 	} else if (rc == 0) {
 		eofFound = true;
@@ -214,7 +214,7 @@ json::BinaryView NetworkConnection::doWrite(const json::BinaryView &data, bool n
 	int sent = send(socket, data.data, data.length,0);
 	if (sent < 0) {
 		int err = errno;
-		if (err != EWOULDBLOCK || err != EINTR || err != EAGAIN) {
+		if (err != EWOULDBLOCK && err != EINTR && err != EAGAIN) {
 			lastSendError = err;
 			return json::BinaryView(0,0);
 		}
@@ -226,11 +226,11 @@ json::BinaryView NetworkConnection::doWrite(const json::BinaryView &data, bool n
 		return data.substr(sent);
 	}
 	else {
-		if (waitWrite(timeoutTime) == false) {
+		if (doWaitWrite(timeoutTime) == false) {
 			timeout = true;
 			return json::BinaryView(0,0);
 		}
-		return write(data.substr(sent), nonblock);
+		return doWrite(data.substr(sent), nonblock);
 	}
 }
 

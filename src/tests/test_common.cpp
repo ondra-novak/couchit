@@ -31,6 +31,7 @@ Config loadConfig() {
 		x = jcfg["password"];
 		if (x.defined()) cfg.authInfo.password= x.getString();
 	}
+	cfg.iotimeout = 120000;
 	return cfg;
 
 

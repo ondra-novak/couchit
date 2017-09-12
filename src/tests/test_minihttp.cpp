@@ -171,33 +171,17 @@ tst.test("couchdb.minihttp.writeChunked",
 	auto outfn = [&](BinaryView data) {
 		res.append(reinterpret_cast<const char *>(data.data),data.length);
 	};
-	OutputStream out (new ChunkedOutputStream<20>(new ConsumentOutputStream<decltype(outfn)>(outfn)));
+	{
+		OutputStream out (new ChunkedOutputStream<20>(new ConsumentOutputStream<decltype(outfn)>(outfn)));
 
-	for (auto &&c : source) out(c);
-	out(nullptr);
-
-	print << StrViewA(res);
-
-};
-
-tst.test("couchdb.minihttp.writeChunked",
-		"14\r\nThis is long string \r\n14\r\nwritten in chunks...\r\n2\r\n..\r\n0\r\n\r\n") >> [](std::ostream &print){
-
-	StrViewA source = "This is long string written in chunks.....";
-	std::string res;
-	res.reserve(1000);
-
-	auto outfn = [&](BinaryView data) {
-		res.append(reinterpret_cast<const char *>(data.data),data.length);
-	};
-	OutputStream out (new ChunkedOutputStream<20>(new ConsumentOutputStream<decltype(outfn)>(outfn)));
-
-	for (auto &&c : source) out(c);
-	out(nullptr);
-
-	print << StrViewA(res);
+		for (auto &&c : source) out(c);
+		out(nullptr);
+	}
+	print << res;
 
 };
+
+
 tst.test("couchdb.minihttp.writeChunked2",
 		"5\r\nThis \r\n13\r\nis long string writ\r\n47\r\nten in chunks..... And because it should be long enough, make it longer\r\n0\r\n\r\n"
 		) >> [](std::ostream &print){
@@ -209,14 +193,16 @@ tst.test("couchdb.minihttp.writeChunked2",
 	auto outfn = [&](BinaryView data) {
 		res.append(reinterpret_cast<const char *>(data.data),data.length);
 	};
-	OutputStream out (new ChunkedOutputStream<20>(new ConsumentOutputStream<decltype(outfn)>(outfn)));
+	{
+		OutputStream out (new ChunkedOutputStream<20>(new ConsumentOutputStream<decltype(outfn)>(outfn)));
 
-	const unsigned char *data = reinterpret_cast<const unsigned char *>(source.data);
-	out(BinaryView(data,1));
-	out(BinaryView(data+1,4));
-	out(BinaryView(data+5,19));
-	out(BinaryView(data+24,source.length-24));
-	out(nullptr);
+		const unsigned char *data = reinterpret_cast<const unsigned char *>(source.data);
+		out(BinaryView(data,1));
+		out(BinaryView(data+1,4));
+		out(BinaryView(data+5,19));
+		out(BinaryView(data+24,source.length-24));
+		out(nullptr);
+	}
 
 	print << res;
 

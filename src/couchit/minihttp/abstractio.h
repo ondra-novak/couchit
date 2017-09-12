@@ -260,9 +260,13 @@ public:
 
 
 	///Closes the output by writting the eof character
-	virtual void closeOutput() = 0;
+	virtual void closeOutput() {}
 
-
+	///flush the buffer and all buffers in the chain.
+	/** function calls commit(0,true); but can be overwritten by handling
+	 * additional flushes
+	 */
+	virtual void flush() {this->commit(0,true);}
 	///Wait for write
 	/**
 	 * @param milisecs miliseconds to wait, set -1 to infinite
@@ -316,8 +320,13 @@ public:
 	}
 	void operator()(char c) {
 		AbstractOutputStream::Buffer b = impl->getBuffer(1);
+		*b.buff = c;
 		impl->commit(1);
 	}
+	void flush() {
+		impl->flush();
+	}
+
 
 	AbstractOutputStream *operator->() const {return impl;}
 

@@ -67,6 +67,9 @@ class ConsumentOutputStream: public AbstractOutputStream {
 public:
 
 	ConsumentOutputStream(const Fn &consument): consument(consument),outputClosed(false) {}
+	~ConsumentOutputStream() {
+		commit(0,true);
+	}
 
 	virtual void closeOutput() {
 		outputClosed = true;

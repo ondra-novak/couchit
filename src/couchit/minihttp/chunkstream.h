@@ -95,7 +95,14 @@ public:
 	virtual void closeOutput() {
 		commit(0,true);
 		sendChunk(json::BinaryView(0,0));
+		flush();
 	}
+
+	virtual void flush() override {
+		AbstractOutputStream::flush();
+		stream->flush();
+	}
+
 
 protected:
 	virtual Buffer createBuffer() {

@@ -126,6 +126,7 @@ int HttpClient::send(const void* body, std::size_t body_length) {
 		}
 		OutputStream stream(conn);
 		stream(json::BinaryView(reinterpret_cast<const unsigned char *>(body), body_length));
+		stream->commit(0,true);
 	}
 	if (handleSendError()) {
 		return curStatus;

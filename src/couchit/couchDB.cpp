@@ -242,7 +242,7 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 				if (finished) return String(response);
 				finished = true;
 
-				out = OutputStream(nullptr);
+				out(nullptr);
 				int status = http.send();
 				if (status != 201) {
 
@@ -1158,6 +1158,7 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
 		});
 		if (bpos && hdrSent) {
 			outstr(BinaryView(buffer,bpos));
+			outstr(nullptr);
 		}
 		outstr = nullptr;
 		http.send(buffer,bpos);
