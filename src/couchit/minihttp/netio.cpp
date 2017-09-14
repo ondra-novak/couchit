@@ -102,7 +102,7 @@ NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot
 			return 0;
 	}
 
-	int socket = ::socket(res->ai_family,res->ai_socktype|SOCK_NONBLOCK|SOCK_CLOEXEC,res->ai_protocol);
+	int socket = ::socket(res->ai_family,res->ai_socktype|SOCK_CLOEXEC,res->ai_protocol);
 
 	if (socket == -1) {
 		freeaddrinfo(res);
