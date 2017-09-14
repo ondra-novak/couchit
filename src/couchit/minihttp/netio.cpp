@@ -18,6 +18,8 @@
 #include <unistd.h>
 #include "../exception.h"
 
+#include <netinet/tcp.h>
+
 #include "../json.h"
 
 namespace couchit {
@@ -100,7 +102,8 @@ NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot
 			return 0;
 	}
 
-	int socket = ::socket(res->ai_family,res->ai_socktype,res->ai_protocol);
+	int socket = ::socket(res->ai_family,res->ai_socktype|SOCK_NONBLOCK|SOCK_CLOEXEC,res->ai_protocol);
+
 	if (socket == -1) {
 		freeaddrinfo(res);
 		return 0;
@@ -126,6 +129,7 @@ couchit::NetworkConnection::NetworkConnection(int socket)
 	,timeoutTime(30000)
 {
 	setNonBlock();
+	disableNagle();
 
 }
 
@@ -270,7 +274,24 @@ bool NetworkConnection::doWaitRead(int timeout_in_ms) {
 }
 
 void NetworkConnection::setNonBlock() {
-	fcntl(socket, F_SETFL, fcntl(socket, F_GETFL, 0) | O_NONBLOCK);
+	if (fcntl(socket, F_SETFL, fcntl(socket, F_GETFL, 0) | O_NONBLOCK | O_CLOEXEC) != 0) {
+		 int e = errno;
+		 throw SystemException("Unable to setup socket (O_NONBLOCK)", e);
+	}
+}
+
+void NetworkConnection::disableNagle() {
+	int flag = 1;
+	int result = setsockopt(socket,            /* socket affected */
+	                        IPPROTO_TCP,     /* set option at TCP level */
+	                        TCP_NODELAY,     /* name of option */
+	                        (char *) &flag,  /* the cast is historical cruft */
+	                        sizeof(int));    /* length of option value */
+	 if (result < 0) {
+		 int e = errno;
+		 throw SystemException("Unable to setup socket (TCP_NODELA)", e);
+	 }
+
 }
 
 void NetworkConnection::closeOutput() {

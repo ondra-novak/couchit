@@ -71,6 +71,7 @@ protected:
 
 
 	void setNonBlock();
+	void disableNagle();
 
 	int socket;
 	
