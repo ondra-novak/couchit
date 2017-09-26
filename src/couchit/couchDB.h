@@ -660,7 +660,8 @@ protected:
 
 	void handleUnexpectedStatus(PConnection& conn);
 	Download downloadAttachmentCont(PConnection &conn, const StrViewA &etag);
-	Value parseResponse(PConnection &conn);
+	static Value parseResponse(PConnection &conn);
+	static Value parseResponseBin(PConnection &conn);
 	void releaseConnection(Connection *b);
 	Value postRequest(PConnection &conn, const StrViewA &cacheKey, Value *headers, Flags flags);
 	Value getToken();

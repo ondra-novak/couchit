@@ -13,6 +13,9 @@
 #include "changeset.h"
 #include "couchDB.h"
 #include <imtjson/json.h>
+#include <imtjson/value.h>
+#include <imtjson/binjson.tcc>
+
 #include "exception.h"
 #include "query.h"
 
@@ -987,6 +990,9 @@ void CouchDB::handleUnexpectedStatus(PConnection& conn) {
 Value CouchDB::parseResponse(PConnection& conn) {
 	return Value::parse(conn->http.getResponse());
 }
+Value CouchDB::parseResponseBin(PConnection& conn) {
+	return Value::parseBinary(conn->http.getResponse());
+}
 
 
 Value CouchDB::postRequest(PConnection& conn, const StrViewA &cacheKey, Value *headers, std::size_t flags) {
@@ -998,7 +1004,15 @@ Value CouchDB::postRequest(PConnection& conn, const StrViewA &cacheKey, Value *h
 	} else {
 		Value ctt = http.getHeaders()["Content-Type"];
 		Value v;
-		if (ctt.getString() == "application/json") {
+		if (ctt.getString() == "application/binjson") {
+			v = parseResponseBin(conn);
+			if (!cacheKey.empty()) {
+				Value fld = http.getHeaders()["ETag"];
+				if (fld.defined()) {
+					cfg.cache->set(QueryCache::CachedItem(cacheKey, fld.getString(), v));
+				}
+			}
+		} else if (ctt.getString() == "application/json") {
 			v = parseResponse(conn);
 			if (!cacheKey.empty()) {
 				Value fld = http.getHeaders()["ETag"];
@@ -1065,7 +1079,7 @@ Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) 
     	redirectRetry = false;
     	Object hdr(headers?*headers:Value());
     	if (!hdr["Accept"].defined())
-    		hdr("Accept","application/json");
+    		hdr("Accept","application/binjson, application/json");
 		if (cachedItem.isDefined()) {
 			hdr("If-None-Match", cachedItem.etag);
 		}
@@ -1112,7 +1126,7 @@ Value CouchDB::requestDELETE(PConnection& conn, Value* headers,
 	http.open(path,"DELETE",true);
 	Object hdr(headers?*headers:Value());
 	if (!hdr["Accept"].defined())
-		hdr("Accept","application/json");
+		hdr("Accept","application/binjson, application/json");
 
 	if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
 
@@ -1131,7 +1145,7 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
 	http.open(path,methodPost?"POST":"PUT",true);
 	Object hdr(headers?*headers:Value());
 	if (!hdr["Accept"].defined())
-		hdr("Accept","application/json");
+		hdr("Accept","application/binjson, application/json");
 	hdr("Content-Type","application/json");
 	if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
 	http.setHeaders(hdr);

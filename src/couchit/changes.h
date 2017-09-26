@@ -52,7 +52,7 @@ public:
 
 
 ///Collection that contains all changed documents (or references) received from ChangesSink
-class Changes {
+class Changes: public json::Value  {
 public:
 	///Initialize the collection
 	/**
@@ -91,15 +91,14 @@ public:
 	void rewind();
 
 	///Retrieve whole result as array of rows;
-	Value getAllChanges() const {return rows;}
+	Value getAllChanges() const {return *this;}
 
-	std::size_t length() const {return rows.size();}
+	std::size_t length() const {return size();}
 
-	std::size_t getRemain() const {return rows.size() - pos;}
+	std::size_t getRemain() const {return size() - pos;}
 
 protected:
 
-	Value rows;
 	std::size_t pos;
 	std::size_t sz;
 };

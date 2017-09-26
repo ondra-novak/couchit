@@ -25,17 +25,17 @@ ChangedDoc::ChangedDoc(const Value& allData)
 }
 
 Changes::Changes(Value jsonResult)
-:rows(jsonResult),pos(0),sz(jsonResult.size())
+:Value(jsonResult),pos(0),sz(jsonResult.size())
 {
 
 }
 
 Value Changes::getNext() {
-	return  rows[pos++];
+	return (*this)[pos++];
 }
 
 Value Changes::peek() const {
-	return  rows[pos];
+	return (*this)[pos];
 
 }
 
