@@ -327,7 +327,7 @@ public:
 	virtual json::Value parse() {
 		const char *functionkw = "function";
 		const char *falsekw = "false";
-		char x = Super::rd.next();
+		int x = Super::rd.next();
 		if (x == 'f') {
 			Super::rd.commit();
 			x = Super::rd.next();
@@ -343,7 +343,7 @@ public:
 
 				std::vector<char> levelStack;
 				while(true) {
-					char c = Super::rd.nextCommit();
+					int c = Super::rd.nextCommit();
 					functionBuff.push_back(c);
 					if (c == '(' || c == '[' || c == '{') {
 						levelStack.push_back(c);
@@ -353,7 +353,7 @@ public:
 								(c == ')' && t != '(') ||
 								(c == '}' && t != '{') ||
 								(c == ']' && t != '['))
-							throw json::ParseError(functionBuff, this->rd.getLastInput());
+							throw json::ParseError(functionBuff, c);
 						levelStack.pop_back();
 						if (levelStack.empty() && c == '}') break;
 					} else if (c == '"') {
@@ -363,7 +363,7 @@ public:
 				}
 				return json::Value(functionBuff);
 			} else {
-				throw json::ParseError("Unexpected token", this->rd.getLastInput());
+				throw json::ParseError("Unexpected token", x);
 			}
 		} else {
 			return Super::parse();
