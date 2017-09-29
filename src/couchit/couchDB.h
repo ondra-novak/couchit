@@ -181,9 +181,21 @@ public:
 	/** Creates database. Database is specified by function use()*/
 	void createDatabase();
 
+	///creates database
+	/** Creates database. Database is specified by function use()
+	 * This function works well on CouchDB 2.0. In erlier versions, arguments
+	 * are ignored
+	 *
+	 *
+	 * @param numShards specify count of shards. Thi
+	 *
+	 * */
+	void createDatabase(unsigned int numShards, unsigned int numReplicas);
+
 	///Deletes database
 	/** Deletes current database. Database is specified by function use */
 	void deleteDatabase();
+
 
 
 	///Bulk upload

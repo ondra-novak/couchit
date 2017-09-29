@@ -71,6 +71,13 @@ void CouchDB::createDatabase() {
 	requestPUT(conn,Value());
 }
 
+void CouchDB::createDatabase(unsigned int numShards, unsigned int numReplicas) {
+	PConnection conn = getConnection();
+	conn->add("n", numReplicas);
+	conn->add("q", numShards);
+	requestPUT(conn,Value());
+}
+
 void CouchDB::deleteDatabase() {
 	PConnection conn = getConnection();
 	requestDELETE(conn,nullptr);
