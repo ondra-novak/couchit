@@ -488,6 +488,10 @@ public:
 	 */
 	std::size_t updateView(const View &view, bool wait = false);
 
+
+
+	///retrieves current configuration
+	const Config &getConfig() const {return cfg;}
 protected:
 
 	mutable std::mutex lock;
