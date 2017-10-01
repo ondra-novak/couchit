@@ -129,6 +129,15 @@ public:
 	CouchDB(const Config &cfg);
 	~CouchDB();
 
+	///Creates copy of instance
+	/**
+	 * @param other source instance
+	 *
+	 * @note Function creates new instance using the configuration of the source instance.
+	 *
+	 */
+	CouchDB(const CouchDB &source);
+
 
 
 	///Generates new UID using preconfigured generator
@@ -686,6 +695,7 @@ protected:
 private:
 	int initChangesFeed(const PConnection& conn, ChangesFeed& sink);
 	void updateSeqNum(const Value& seq);
+	void operator=(const CouchDB &other) = delete;
 };
 
 

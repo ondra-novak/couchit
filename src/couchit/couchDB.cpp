@@ -56,6 +56,15 @@ CouchDB::CouchDB(const Config& cfg)
 }
 
 
+CouchDB::CouchDB(const CouchDB& other)
+	:cfg(other.cfg)
+	,curConnections(0)
+	,uidGen(other.uidGen)
+	,queryable(*this)
+	,authObj(other.authObj)
+{
+}
+
 
 void CouchDB::setCurrentDB(String database) {
 	cfg.databaseName = database;
