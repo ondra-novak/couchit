@@ -140,26 +140,6 @@ public:
 
 
 
-	///Generates new UID using preconfigured generator
-	/** See Config how to setup custom generator
-	 *
-	 * @return string reference to UID. Note that reference is valid until method is called again. You
-	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
-	 * lost in time of return
-	 *
-	 */
-	StrViewA genUID();
-
-	///Generates new UID using preconfigured generator
-	/**See Config how to setup custom generator
-	 *
-	 * @param prefix user defined prefix which is put at the beginning of the ID
-	 * @return string reference to UID. Note that reference is valid until method is called again. You
-	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
-	 * lost in time of return
-	 */
-	StrViewA genUID(StrViewA prefix);
-
 	///Generates new UID and returns it as Value. It can be directly used to create new document.
 	/**
 	 * @return UID stored as Value object
@@ -168,7 +148,7 @@ public:
 	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
 	 * in MT environment or use additional synchronization
 	 */
-	Value genUIDValue();
+	Value genUIDValue() const;
 	///Generates new UID and returns it as Value. It can be directly used to create new document.
 	/**
 	 * @param prefix user defined prefix which is put at the beginning of the ID
@@ -178,7 +158,16 @@ public:
 	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
 	 * in MT environment or use additional synchronization
 	 */
-	Value genUIDValue(StrViewA prefix);
+	Value genUIDValue(StrViewA prefix) const;
+
+
+	///Generates new UID
+	/** Function is alias to genUIDValue() - for compatibility reasons */
+	Value genUID() const {return genUIDValue();}
+
+	///Generates new UID
+	/** Function is alias to genUIDValue() - for compatibility reasons */
+	Value genUID(StrViewA prefix) const {return genUIDValue(prefix);}
 
 
 	///Changes current database
@@ -515,7 +504,7 @@ protected:
 
 	std::size_t lastStatus = 0;
 	std::size_t curConnections;
-	std::vector<char> uidBuffer;
+	mutable std::vector<char> uidBuffer;
 	IIDGen& uidGen;
 	SeqNumber lksqid;
 
@@ -696,6 +685,27 @@ private:
 	int initChangesFeed(const PConnection& conn, ChangesFeed& sink);
 	void updateSeqNum(const Value& seq);
 	void operator=(const CouchDB &other) = delete;
+
+	///Generates new UID using preconfigured generator
+	/** See Config how to setup custom generator
+	 *
+	 * @return string reference to UID. Note that reference is valid until method is called again. You
+	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
+	 * lost in time of return
+	 *
+	 */
+	StrViewA lkGenUID() const;
+
+	///Generates new UID using preconfigured generator
+	/**See Config how to setup custom generator
+	 *
+	 * @param prefix user defined prefix which is put at the beginning of the ID
+	 * @return string reference to UID. Note that reference is valid until method is called again. You
+	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
+	 * lost in time of return
+	 */
+	StrViewA lkGenUID(StrViewA prefix) const;
+
 };
 
 

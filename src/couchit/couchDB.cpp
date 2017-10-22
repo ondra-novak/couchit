@@ -141,13 +141,12 @@ Value CouchDB::getLocal(const StrViewA &localId, std::size_t flags) {
 	}
 }
 
-StrViewA CouchDB::genUID() {
+StrViewA CouchDB::lkGenUID() const {
 	LockGuard _(lock);
 	return uidGen(uidBuffer,StrViewA());
 }
 
-StrViewA CouchDB::genUID(StrViewA prefix) {
-	LockGuard _(lock);
+StrViewA CouchDB::lkGenUID(StrViewA prefix) const {
 	return uidGen(uidBuffer,prefix);
 }
 
@@ -310,23 +309,23 @@ String CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 }
 
 
-Value CouchDB::genUIDValue() {
+Value CouchDB::genUIDValue() const {
 	LockGuard _(lock);
-	return StrViewA(genUID());
+	return StrViewA(lkGenUID());
 }
 
-Value CouchDB::genUIDValue(StrViewA prefix) {
+Value CouchDB::genUIDValue(StrViewA prefix)  const {
 	LockGuard _(lock);
-	return StrViewA(genUID(prefix));
+	return lkGenUID(prefix);
 }
 
 
 Document CouchDB::newDocument() {
-	return Document(genUID(),StrViewA());
+	return Document(lkGenUID(),StrViewA());
 }
 
 Document CouchDB::newDocument(const StrViewA &prefix) {
-	return Document(genUID(StrViewA(prefix)),StrViewA());
+	return Document(lkGenUID(StrViewA(prefix)),StrViewA());
 }
 
 template<typename Fn>

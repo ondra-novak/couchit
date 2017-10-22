@@ -27,7 +27,7 @@ static void genFastUUIDS(std::ostream &print) {
 	CouchDB db(getTestCouch());
 
 	for (std::size_t i = 0; i < 50; i++) {
-		String uuid = db.genUID("test-");
+		String uuid = db.lkGenUID("test-");
 		std::cout << uuid << std::endl;
 		uuidmap.insert(uuid);
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
