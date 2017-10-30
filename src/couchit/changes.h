@@ -221,14 +221,12 @@ public:
 
 	///Process all results using specified function
 	/**
-	 * You can easy chain sink with run operator to a function which receives all results one by one.
-	 * This function will run until empty result received. In case that
-	 * the timeout is set to ((std::size_t)-1), the function will never return.
+	 * Starts to monitor changes calling the function for every change that happen.
 	 *
-	 * The only way how to stop this cycle is to call cancelWait() which causes the throwing the CanceledException
-	 * out of the function
+	 * Monitoring stops when there is no change for specified timeout or by function
+	 * cancelWait() depend on which happened first.
 	 *
-	 * @param fn
+	 * @param fn function called with every change
 	 */
 	template<typename Fn>
 	void operator>> (const Fn &fn) {
@@ -260,6 +258,20 @@ public:
 		return wasCanceledState;
 	}
 
+	///specifies list of docs to monitor for changes
+	/**
+	 * @param docIds string or array of strings.The string contains document id
+	 *  to monitor for changes
+	 * @return this feed
+	 *
+	 * @note functions setFilter and forDocs are mutualy exclusive. If both
+	 * are set, filter has priority.
+	 */
+	ChangesFeed &forDocs(Value docIds) {
+		docFilter = docIds;
+		return *this;
+	}
+
 protected:
 
 	CouchDB &couchdb;
@@ -268,6 +280,7 @@ protected:
 	std::size_t outlimit;
 	std::size_t timeout;
 	std::unique_ptr<Filter> filter;
+	Value docFilter;
 	Object filterArgs;
 	bool forceIncludeDocs = false;
 	bool forceReversed = false;

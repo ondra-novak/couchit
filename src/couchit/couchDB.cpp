@@ -505,6 +505,8 @@ bool  CouchDB::putDesignDocument(const char* content,
 
 int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 	std::lock_guard<std::mutex> _(sink.initLock);
+	Value jsonBody;
+	StrViewA method = "GET";
 	if (sink.curConn != nullptr) {
 		throw std::runtime_error("Changes feed is already in progress");
 	}
@@ -573,15 +575,35 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 		if (sink.forceReversed) {
 			conn->add("descending", "true");
 		}
+		if (sink.docFilter.defined()) {
+			conn->add("filter","_doc_ids");
+			Value docIds;
+			if (sink.docFilter.type() == json::string) {
+				docIds = Value(json::array, {sink.docFilter});
+			} else {
+				docIds = sink.docFilter;
+			}
+			jsonBody = Object("doc_ids", docIds);
+			method="POST";
+		}
 	}
+
+
 	for (auto&& v : sink.filterArgs) {
 		String val = v.toString();
 		StrViewA key = v.getKey();
 		conn->add(key, val);
 	}
-	conn->http.open(conn->getUrl(), "GET", true);
+	conn->http.open(conn->getUrl(), method, true);
 	conn->http.setTimeout(120000);
-	conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken()));
+	conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
+	OutputStream out(nullptr);
+	if (jsonBody.defined()) {
+		out = conn->http.beginBody();
+		jsonBody.serialize(out);
+		out(nullptr);
+		out.flush();
+	}
 	int status = conn->http.send();
 	sink.curConn = conn.get();
 	return status;
