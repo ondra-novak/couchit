@@ -326,7 +326,7 @@ static void couchChangeSetWaitForData(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 
-	StrViewA uid = db.lkGenUID();
+	String uid ( db.genUID());
 
 	std::thread thr([&]{loadSomeDataThread(db,uid);});
 
@@ -383,7 +383,7 @@ static void couchChangeSetWaitForData3(std::ostream &a) {
 	CouchDB db(getTestCouch());
 	db.setCurrentDB(DATABASENAME);
 
-	String uid = db.lkGenUID();
+	String uid ( db.genUID());
 	int counter=0;
 
 	Event event;

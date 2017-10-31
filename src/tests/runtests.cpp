@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
 
 	if (argc == 2 && json::StrViewA(argv[1]) == "qserver") {
 
-		couchit::runQueryServer(lang, argv[0]);
+	//	couchit::runQueryServer(lang, argv[0]);
 		return 0;
 
 
