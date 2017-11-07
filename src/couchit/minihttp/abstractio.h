@@ -224,7 +224,7 @@ public:
 		wrpos+=size;
 		if (flush && wrpos) {
 			json::BinaryView b (availBuff.buff, wrpos);
-			doWrite(b,true);
+			doWrite(b,false);
 			availBuff = createBuffer();
 			wrpos = 0;
 		}
