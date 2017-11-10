@@ -17,6 +17,7 @@
 
 #include "view.h"
 #include "couchDB.h"
+#include "changeObserver.h"
 
 
 
@@ -309,9 +310,32 @@ inline ChangesFeed& couchit::ChangesFeed::arg(StrViewA key, T value) {
 }
 
 
+class ChangesDistributor: public ChangesFeed {
+public:
 
+	typedef std::function<void(IChangeObserver *)>  Deleter;
+	typedef std::unique_ptr<IChangeObserver, Deleter>Observer;
+
+
+	ChangesDistributor(ChangesFeed &&feed):ChangesFeed(std::move(feed)) {}
+
+	void add(IChangeObserver *observer, bool ownership = true);
+	void add(IChangeObserver &observer);
+	void add(IChangeObserver *observer, const Deleter & deleter);
+	IChangeObserver *add(Observer &&observer);
+
+	void remove(IChangeObserver *observer);
+	void remove(IChangeObserver &observer);
+
+	void run();
+
+protected:
+
+	std::vector<Observer> observers;
+
+};
 }
-;
+
 
 
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGEDDOC_H_ */

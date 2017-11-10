@@ -143,5 +143,62 @@ void ChangesFeed::errorEpilog() {
 	throw;
 }
 
+static void stdDeleteObserver(IChangeObserver *obs) {
+	delete obs;
 }
 
+static void stdLeaveObserver(IChangeObserver *) {
+
+}
+
+
+void ChangesDistributor::add(IChangeObserver* observer, bool ownership) {
+	if (ownership) {
+		static std::function<void(IChangeObserver *)> obsDel (&stdDeleteObserver);
+		add(Observer(observer, obsDel));
+	} else {
+		static std::function<void(IChangeObserver *)> obsLeave (&stdLeaveObserver);
+		add(Observer(observer, obsLeave));
+	}
+}
+
+void ChangesDistributor::add(IChangeObserver& observer) {
+	add(&observer, false);
+}
+
+void ChangesDistributor::add(IChangeObserver* observer, const Deleter & deleter) {
+	add(Observer(observer,deleter));
+}
+
+IChangeObserver* ChangesDistributor::add(Observer&& observer) {
+	std::unique_lock<std::mutex> _(initLock);
+	IChangeObserver* ret = observer.get();
+	observers.push_back(std::move(observer));
+	return ret;
+}
+
+void ChangesDistributor::remove(IChangeObserver* observer) {
+	std::unique_lock<std::mutex> _(initLock);
+	auto e = observers.end();
+	for (auto b = observers.begin(); b != e; ++b) {
+		if (b->get() == observer) {
+			observers.erase(b);
+			break;
+		}
+	}
+
+}
+
+void ChangesDistributor::remove(IChangeObserver& observer) {
+	remove(&observer);
+}
+
+void ChangesDistributor::run() {
+	this->operator >>([&](const ChangedDoc &doc) {
+		std::unique_lock<std::mutex> _(initLock);
+		for (auto &&x : observers) x->onChange(doc);
+		return true;
+	});
+}
+
+}
