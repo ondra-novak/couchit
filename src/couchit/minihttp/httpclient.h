@@ -37,9 +37,6 @@ public:
 	 */
 	HttpClient &open(StrViewA url, StrViewA method, bool keepAlive = true);
 
-	///Sets cancel function for the current request
-	void setCancelFunction(const CancelFunction &cancelFn);
-
 	///Sets i/o timeout
 	void setTimeout(std::uintptr_t timeoutInMS);
 
@@ -137,10 +134,12 @@ public:
 
 	json::String getStatusMessage();
 
-	//status < 0 = -errno
-	//status 0-99 = this object error
-	//status 100+ = http status
-
+	///ensures that connection exists
+	/** This allows to have connection before request.
+	 *  Once you have connection, then abort() can cancel this connection
+	 *  (otherwise, calling abort() before request is sent is not MT safe)
+	 */
+	void connect();
 
 
 

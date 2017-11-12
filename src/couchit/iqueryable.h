@@ -91,6 +91,8 @@ struct QueryRequest {
 	bool docIdFromGetKey;
 	///disable caching
 	bool nocache;
+	///request for update seq
+	bool needUpdateSeq;
 	///data send as POST request to the list. It can be also used for view when keys are directly send as post data
 	Value postData;
 
@@ -104,7 +106,8 @@ struct QueryRequest {
 		,reversedOrder(false)
 		,nosort(false)
 		,exclude_end(false)
-		,nocache(false) {}
+		,nocache(false)
+		,needUpdateSeq(false) {}
 	void reset() {
 		mode = qmAllItems;
 		offset = 0;
@@ -118,6 +121,7 @@ struct QueryRequest {
 		keys.clear();
 		ppargs.clear();
 		postData = json::undefined;
+		needUpdateSeq = false;
 	}
 };
 

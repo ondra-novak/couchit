@@ -26,6 +26,7 @@ HttpClient::HttpClient(StrViewA userAgent)
 }
 
 HttpClient& HttpClient::open(StrViewA url, StrViewA method, bool keepAlive) {
+	close();
 	this->keepAlive = keepAlive;
 
 	curStatus = 0;
@@ -270,6 +271,8 @@ int HttpClient::readResponse() {
 		std::size_t commitSize = 0;
 	};
 
+	PNetworkConection conn = this->conn;
+
 	if (conn == nullptr) {
 		return curStatus;
 	}
@@ -299,12 +302,12 @@ int HttpClient::readResponse() {
 			responseData = new LimitedStream(InputStream(conn), limit);
 		} else {
 			responseData = static_cast<AbstractInputStream *>(conn);
-			conn = nullptr;
+			this->conn = nullptr;
 		}
 	}
 
 	if (v["Connection"].getString() == "close") {
-		conn = nullptr;
+		this->keepAlive = false;
 	}
 
 	return curStatus;
@@ -314,6 +317,12 @@ int HttpClient::readResponse() {
 bool HttpClient::everythingRead(AbstractInputStream* stream) {
 	json::BinaryView b = stream->read(0);
 	return b.empty();
+}
+
+void HttpClient::connect() {
+	if (conn == nullptr) {
+		connectTarget();
+	}
 }
 
 void HttpClient::connectTarget() {
@@ -340,15 +349,24 @@ json::String HttpClient::crackURL(StrViewA urlWithoutProtocol) {
 }
 
 void HttpClient::close() {
-	if (conn != nullptr)
-		discardResponse();
+	if (conn != nullptr) {
+		if (keepAlive) {
+			discardResponse();
+		} else {
+			conn = nullptr;
+		}
+	}
 }
 
 void HttpClient::abort() {
-	if (conn != nullptr) {
-		conn->close();
+	PNetworkConection c (conn);
+	keepAlive = false;
+
+	if (c != nullptr) {
+		c->close();
+		conn = nullptr;
 	}
-	conn = nullptr;
+
 }
 
 int HttpClient::getStatus() {
@@ -363,16 +381,6 @@ json::String HttpClient::custromPotocol(StrViewA) {
 	return json::String();
 }
 
-void HttpClient::setCancelFunction(const CancelFunction& cancelFn) {
-	cancelFunction = cancelFn;
-	if (conn != nullptr) {
-		conn->setCancelFunction(cancelFn);
-	}
-}
-
-CancelFunction HttpClient::initCancelFunction() {
-	return NetworkConnection::createCancelFunction();
-}
 
 
 void HttpClient::setTimeout(std::uintptr_t timeoutInMS) {

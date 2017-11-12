@@ -195,6 +195,12 @@ Query& couchit::Query::conflicts() {
 
 Query& couchit::Query::setPostData(Value postData) {
 	request.postData = postData;
+	return *this;
+}
+
+Query& couchit::Query::needUpdateSeq() {
+	request.needUpdateSeq = true;
+	return *this;
 }
 
 

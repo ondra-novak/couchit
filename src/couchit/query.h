@@ -123,6 +123,18 @@ public:
 	///Set POST data for the list as additional arguments
 	Query &setPostData(Value postData);
 
+	///Requests for valid update_seq
+	/** The query is always asks for update_seq, however, there are bugs in serveral
+	 * versions of the couchdb. Sometimes an invalid update_seq can be stored
+	 * with the view and then your code can fail if it relly thightly to that number.
+	 *
+	 * By setting this flag, the query ensures that update_seq is valid. If not,
+	 * it performs some other actions to receive last known update_seq. This can
+	 * have a negative performance impact on the query, so the option is disabled by
+	 * default.
+	 *
+	 */
+	Query &needUpdateSeq();
 	///Join two queries into one
 	/**
 	 * @param rightSide other query

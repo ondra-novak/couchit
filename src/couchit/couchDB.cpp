@@ -504,7 +504,7 @@ bool  CouchDB::putDesignDocument(const char* content,
 }
 
 int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
-	std::lock_guard<std::mutex> _(sink.initLock);
+	std::unique_lock<std::mutex> _(sink.initLock);
 	Value jsonBody;
 	StrViewA method = "GET";
 	if (sink.curConn != nullptr) {
@@ -595,17 +595,20 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 		conn->add(key, val);
 	}
 	conn->http.open(conn->getUrl(), method, true);
+	conn->http.connect();
+	sink.curConn = conn.get();
+	_.unlock();
+
 	conn->http.setTimeout(120000);
 	conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
 	OutputStream out(nullptr);
 	if (jsonBody.defined()) {
-		out = conn->http.beginBody();
-		jsonBody.serialize(out);
-		out(nullptr);
-		out.flush();
-	}
+			out = conn->http.beginBody();
+			jsonBody.serialize(out);
+			out(nullptr);
+			out.flush();
+		}
 	int status = conn->http.send();
-	sink.curConn = conn.get();
 	return status;
 }
 
@@ -624,7 +627,7 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 	}
 
 	int status = initChangesFeed(conn, sink);
-	if (status == 0) {
+	if (status == 0 || sink.canceled) {
 		sink.cancelEpilog();
 		return Value(json::undefined);
 	}
@@ -811,6 +814,11 @@ CouchDB::Queryable::Queryable(CouchDB& owner):owner(owner) {
 
 Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
+	SeqNumber lastSeq = owner.getLastKnownSeqNumber();
+	if (lastSeq.getRevId() == 0 || lastSeq.isOld() && r.needUpdateSeq)
+		lastSeq = owner.getLastSeqNumber();
+
+
 	PConnection conn = owner.getConnection(r.view.viewPath);
 
 	StrViewA startKey = "startkey";
@@ -818,6 +826,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 	StrViewA startKeyDocId = "startkey_docid";
 	StrViewA endKeyDocId = "endkey_docid";
 	bool useCache;
+
 
 	bool desc = (r.view.flags & View::reverseOrder) != 0;
 	if (r.reversedOrder) desc = !desc;
@@ -939,8 +948,15 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 	if (r.view.postprocess) result = r.view.postprocess(&owner, r.ppargs, result);
 	Value sq = result["update_seq"];
 	if (sq.defined()) {
-		LockGuard _(owner.lock);
 		SeqNumber l(sq);
+
+		if (l.getRevId() == 0) {
+			//HACK: https://github.com/apache/couchdb/issues/984
+			l = lastSeq;
+			result = result.replace("update_seq", l.toValue());
+		}
+
+		LockGuard _(owner.lock);
 		if (l > owner.lksqid) owner.lksqid = l;
 	}
 	return result;

@@ -298,6 +298,7 @@ public:
 		else return impl->read();
 	}
 	AbstractInputStream *operator->() const {return impl;}
+	AbstractInputStream *get() const {return impl;}
 
 	int operator()() const {
 		return impl->getNextByte();
