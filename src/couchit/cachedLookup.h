@@ -17,7 +17,7 @@ class CachedLookup: public IChangeObserver {
 public:
 
 	///Create lookup on database and view
-	CachedLookup(CouchDB &db, const View &view);
+	CachedLookup(CouchDB &db, const View &view, bool forceUpdate = true);
 
 	///Create lookup from prepared query
 	explicit CachedLookup(const Query &query);

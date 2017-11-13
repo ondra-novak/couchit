@@ -10,10 +10,12 @@
 #include "couchDB.h"
 
 #include "changes.h"
+#include <imtjson/binjson.tcc>
 
 namespace couchit {
 
-couchit::CachedLookup::CachedLookup(CouchDB& db, const View& view):query(db.createQuery(view)) {
+couchit::CachedLookup::CachedLookup(CouchDB& db, const View& view, bool forceUpdate):query(db.createQuery(view)) {
+	if (forceUpdate) query.update();
 
 }
 
@@ -23,17 +25,24 @@ couchit::CachedLookup::CachedLookup(const Query& query):query(query) {
 couchit::CachedLookup::CachedLookup(CouchDB& db, unsigned int flags ):query(db.createQuery(flags)) {
 }
 
+static void binser(std::ostream &s, json::Value v) {
+	v.serializeBinary([&](unsigned int x) {s << x << " ";});
+}
+
 Result couchit::CachedLookup::lookup(const json::Value keys) {
 
 	Array rows;
 	Array keysToAsk;
+	std::vector<std::size_t> offsets;
 	auto iend = keyToRes.end();
 
 	Sync _(lock);
 	for (Value v : keys) {
 		auto iter = keyToRes.find(v);
-		if (iter == iend) keysToAsk.push_back(v);
-		else {
+		if (iter == iend) {
+			keysToAsk.push_back(v);
+			offsets.push_back(rows.size());
+		} else {
 			rows.addSet(iter->second);
 		}
 	}
@@ -44,27 +53,40 @@ Result couchit::CachedLookup::lookup(const json::Value keys) {
 		Array vals;
 		Value curKey;
 		for (Row v : res) {
-			if (v.key != curKey) {
+			Value k = v.key.stripKey();
+			if (k != curKey) {
 				if (!vals.empty()) {
 					mockLk(curKey, vals);
 					vals.clear();
 				}
-				curKey = v.key;
+				curKey = k;
 			}
 			vals.push_back(v);
 		}
 		if (!vals.empty()) {
+//			std::cerr << curKey.toString() << " "; binser(std::cerr, curKey); std::cerr << std::endl;
 			mockLk(curKey,vals);
 		}
 
-		for (Value v : keysToAsk) {
-			auto iter = keyToRes.find(v);
-			if (iter == iend) {
-				keyToRes.insert(std::make_pair(v, Value()));
-			} else {
-				rows.addSet(iter->second);
+		Array newRows;
+		std::size_t pos = 0;
+		for (std::size_t i = 0, cnt = rows.size(), kcnt = keysToAsk.size();i< cnt || pos < kcnt;) {
+			if (pos<kcnt && offsets[pos] == i) {
+				Value v = keysToAsk[pos];
+				auto iter = keyToRes.find(v);
+				if (iter == iend) {
+					keyToRes.insert(std::make_pair(v, Value()));
+				} else {
+					newRows.addSet(iter->second);
+				}
+				pos++;
+			} else if (i < cnt) {
+				newRows.push_back(rows[i]);
+					i++;
 			}
 		}
+		std::swap(rows,newRows);
+
 		resHdr = res.replace("rows",Value());
 	}
 	return resHdr.replace("rows",rows);
