@@ -327,7 +327,7 @@ public:
 	ReversedIterator operator--(int x) {
 		return ReversedIterator<T>(T::operator++(x));
 	}
-	auto operator *() -> decltype(std::declval<T>().operator *()) const {
+	auto operator *() -> decltype(std::declval<T>().operator *())  {
 		T x = *this;
 		--x;
 		return *x;
