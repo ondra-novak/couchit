@@ -4,7 +4,7 @@
  *  Created on: 5. 6. 2016
  *      Author: ondra
  */
-
+#include <utility>
 #include "localView.h"
 
 #include "changes.h"
@@ -327,7 +327,7 @@ public:
 	ReversedIterator operator--(int x) {
 		return ReversedIterator<T>(T::operator++(x));
 	}
-	auto operator *() -> decltype(T::operator *()) const {
+	auto operator *() -> decltype(std::declval<T>().operator *()) const {
 		T x = *this;
 		--x;
 		return *x;
