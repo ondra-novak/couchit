@@ -160,6 +160,7 @@ protected:
 	bool headersSent;
 	CancelFunction cancelFunction;
 
+
 	void initRequest(bool haveBody, std::size_t contentLength);
 	int readResponse();
 

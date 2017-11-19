@@ -558,12 +558,14 @@ public:
 	public:
 		HttpClient http;
 
+		Connection();
+
 		StrViewA getUrl() const {return UrlBuilder::operator json::StringView<char>();}
 		String lastConnectError;
 
 	protected:
 		friend class CouchDB;
-		SysTime lastUse;
+		SysTime lastUse, firstUse;
 	};
 
 	class ConnectionDeleter {

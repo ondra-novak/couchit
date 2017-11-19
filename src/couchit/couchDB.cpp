@@ -1002,12 +1002,18 @@ CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath) {
 	} else {
 		b = PConnection(connPool[connPool.size()-1].release(), ConnectionDeleter(this));
 		connPool.pop_back();
-		auto dur = SysClock::now() - b->lastUse;
+		auto now = SysClock::now();
+		auto dur =  now - b->lastUse;
+		auto durf = now - b->firstUse;
 		if (dur > std::chrono::milliseconds(this->cfg.keepAliveTimeout)) {
 			connPool.clear();
 			delete b.release();
 			b = PConnection(new Connection, ConnectionDeleter(this));
+		} else if (durf > std::chrono::milliseconds(this->cfg.keepAliveMaxAge)) {
+			delete b.release();
+			b = PConnection(new Connection, ConnectionDeleter(this));
 		}
+
 	}
 	b->http.setTimeout(cfg.iotimeout);
 	setUrl(b,resourcePath);
@@ -1278,6 +1284,10 @@ void CouchDB::setupHttpConn(HttpClient &http, Flags flags) {
 	if (flags & flgLongOperation) {
 		http.setTimeout(cfg.syncQueryTimeout);
 	}
+}
+
+CouchDB::Connection::Connection():firstUse(SysClock::now()) {
+
 }
 
 

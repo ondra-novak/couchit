@@ -74,6 +74,12 @@ struct Config {
 	///Defines, how long is connection to the database keep alive. Older connections are closed
 	std::size_t keepAliveTimeout = 3000;
 
+	///Defines, how long the connection can be used in row. Too old connections are closed
+	/** because BUG in couchdb creates file descriptor leaks, it needs to close connection
+	 * after 5 minutes of use. The 5 minutes is default interval for compaction daemon
+	 */
+	std::size_t keepAliveMaxAge= 60000*5;
+
 	///Defines timeout for synchronous query.
 	/** Queries can rebuild for long time. Default value is 10 minutes.
 	 * This timeout is applied only for queries with sync flag, where
