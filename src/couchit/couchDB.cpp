@@ -667,7 +667,7 @@ void CouchDB::updateSeqNum(const Value& seq) {
 
 void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn) {
 
-	PConnection conn = getConnection("_changes");
+	PConnection conn = getConnection("_changes",true);
 
 	conn->add("feed","continuous");
 	if (sink.timeout == ((std::size_t)-1)) {
@@ -986,8 +986,22 @@ void CouchDB::put(Document& doc) {
 
 
 
-CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath) {
+CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath, bool fresh) {
 	std::unique_lock<std::mutex> _(lock);
+
+	auto now = SysClock::now();
+	auto lpcd =  now - lastPoolCheck;
+	auto keepAliveTm = std::chrono::milliseconds(cfg.keepAliveTimeout);
+	auto keepAliveMaxAge = std::chrono::milliseconds(cfg.keepAliveMaxAge);
+	if (lpcd > keepAliveTm) {
+		ConnPool newConPool;
+		for (auto && x: connPool) {
+			auto dur =  now - x->lastUse;
+			if (dur < keepAliveTm) newConPool.push_back(std::move(x));
+		}
+		connPool = std::move(newConPool);
+		lastPoolCheck = now;
+	}
 
 	if (cfg.databaseName.empty() && resourcePath.substr(0,1) != StrViewA("/"))
 		throw std::runtime_error("No database selected");
@@ -997,19 +1011,22 @@ CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath) {
 	}
 
 	PConnection b(nullptr);
+
 	if (connPool.empty()) {
+		b = PConnection(new Connection, ConnectionDeleter(this));
+	} else if (fresh) {
+		connPool.erase(connPool.begin());
 		b = PConnection(new Connection, ConnectionDeleter(this));
 	} else {
 		b = PConnection(connPool[connPool.size()-1].release(), ConnectionDeleter(this));
 		connPool.pop_back();
-		auto now = SysClock::now();
 		auto dur =  now - b->lastUse;
 		auto durf = now - b->firstUse;
-		if (dur > std::chrono::milliseconds(this->cfg.keepAliveTimeout)) {
+		if (dur > keepAliveTm) {
 			connPool.clear();
 			delete b.release();
 			b = PConnection(new Connection, ConnectionDeleter(this));
-		} else if (durf > std::chrono::milliseconds(this->cfg.keepAliveMaxAge)) {
+		} else if (durf > keepAliveMaxAge) {
 			delete b.release();
 			b = PConnection(new Connection, ConnectionDeleter(this));
 		}

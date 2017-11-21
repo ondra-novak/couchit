@@ -592,6 +592,7 @@ public:
 	 * If the path starts by slash '/', then the path refers to
 	 * the whole couchDB server. Otherwise (without the slash) the path
 	 * refers current database.
+	 * @param fresh request for fresh connection (do not reuse any opened keep-alive connection).
 	 *
 	 * @return Function returns connection object along with url builder.
 	 * You should release the connection object as soon as possible.
@@ -602,7 +603,7 @@ public:
 	 * allows to use CouchDB instance by multiple threads, where each
 	 * thread acquired connection
 	 */
-	PConnection getConnection(StrViewA resourcePath = StrViewA());
+	PConnection getConnection(StrViewA resourcePath = StrViewA(), bool fresh = false);
 
 	///Allows to reuse connection to additional request
 	/** Function just sets the url of the connection to be in relation
@@ -671,6 +672,7 @@ public:
 protected:
 	typedef std::vector<PConnection> ConnPool;
 	ConnPool connPool;
+	SysTime lastPoolCheck;
 
 	Value jsonPUTPOST(PConnection &conn, bool methodPost, Value data, Value *headers, Flags flags);
 
