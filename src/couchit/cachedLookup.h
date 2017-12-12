@@ -62,10 +62,12 @@ protected:
 
 	typedef std::unordered_map<Value, Value> ValValMap;
 	typedef std::unordered_multimap<Value, Value> ValMultiValMap;
+//	typedef std::unordered_set<Value> UnknownKeys;
 
 	Query query;
 	ValValMap keyToRes;
 	ValMultiValMap docToKey;
+//	UnknownKeys unknownKeys;
 	json::Value resHdr;
 	std::mutex lock;
 	typedef std::lock_guard<std::mutex> Sync;

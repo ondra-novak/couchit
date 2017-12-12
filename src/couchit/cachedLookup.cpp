@@ -35,11 +35,15 @@ Result couchit::CachedLookup::lookup(const json::Value keys) {
 	Array keysToAsk;
 	std::vector<std::size_t> offsets;
 	auto iend = keyToRes.end();
+	bool hasMissing = false;
 
 	Sync _(lock);
 	for (Value v : keys) {
 		auto iter = keyToRes.find(v);
 		if (iter == iend) {
+/*			if (!hasMissing) {
+				auto iter2 = unknownKeys.find(v);
+				if (iter2*/
 			keysToAsk.push_back(v);
 			offsets.push_back(rows.size());
 		} else {
