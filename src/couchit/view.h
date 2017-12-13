@@ -75,8 +75,7 @@ public:
 	 * @param ConstValue result from map-reduce-list executed by the query
 	 * @return Modified result
 	 *
-	 * Function have to update result and return it as return value. It have allowed to
-	 * perform other
+	 * Function have to update result and return it as return value.
 	 */
 	typedef std::function<Value(CouchDB *, Value, Value)> Postprocessing;
 
