@@ -148,10 +148,15 @@ Result::Result(const Value& result):pos(0),cnt(result.size()) {
 	cnt = size();
 }
 
-Result::Result(const Value &resultArray, const Value &total, const Value &offset)
-	:Result(Object("rows",resultArray)("total_rows",total)("offset",offset))
-{
 
+Result::Result(const Value &resultArray, std::size_t total, std::size_t offset, const Value &updateSeq)
+:Value(resultArray)
+,total(std::min(total,resultArray.size()))
+,offset(offset)
+,pos(0)
+,cnt(resultArray.size())
+,updateSeq(updateSeq)
+{
 
 }
 

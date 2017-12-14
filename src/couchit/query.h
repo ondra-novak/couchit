@@ -172,7 +172,7 @@ class Result: public Value {
 public:
 
 	Result(const Value &result);
-	Result(const Value &resultArray, const Value &total, const Value &offset);
+	Result(const Value &resultArray, std::size_t total, std::size_t offset, const Value &updateSeq = json::undefined);
 
 	std::size_t getTotal() const {return total;}
 	std::size_t getOffset() const {return offset;}

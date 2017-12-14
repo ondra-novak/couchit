@@ -1,6 +1,8 @@
 #pragma once
 #include <imtjson/value.h>
 #include <shared_mutex>
+
+#include "abstractCheckpoint.h"
 #include "couchDB.h"
 #include "revision.h"
 #include "view.h"
@@ -36,19 +38,6 @@ public:
 };
 
 
-class CheckpointDef {
-public:
-	typedef std::function<void(const Result &)> StoreFn;
-	typedef std::function<Result()> LoadFn;
-
-	StoreFn storeFn;
-	LoadFn loadFn;
-
-
-	CheckpointDef(const LoadFn &loadFn, const StoreFn &storeFn)
-		:storeFn(storeFn),loadFn(loadFn) {}
-};
-
 ///Memory view
 /** a view materialized in the memory. It brings similar functionality as couchdb's view but
  * faster, however if has some limitations
@@ -82,11 +71,13 @@ public:
 	 * @param saveInterval interval in updates.Default value is 1000 updates so every 1000th
 	 * update new checkpoint is stored (replacing the oldone)
 	 */
-	void setCheckpointConfig(const CheckpointDef &checkpointFile, std::size_t saveInterval = 1000);
+	void setCheckpointFile(const PCheckpoint &checkpointFile, std::size_t saveInterval = 1000);
 
 
 	virtual void mapDoc(const Value &document, const EmitFn &emitFn);
 
+
+	bool haveDoc(const String &docId) const;
 
 
 	///Directly erases the document from the view
@@ -256,14 +247,16 @@ protected:
 	Value getItemsByKeys(const json::Array &keys) const;
 	Value getItemsByRange(const json::Value &from, const json::Value &to, bool exclude_end, bool extractDocIDs) const;
 	void updateLk(CouchDB &db);
+	void eraseDocLk(const String &docId);
 
 	MemViewDef viewDef;
-	SeqNumber updateSeq;
+	Value updateSeq;
 
-	CheckpointDef::StoreFn chkpStore;
+	PCheckpoint chkpStore;
+	std::size_t chkpNextUpdate = 0;
 	std::size_t chkpInterval = 0;
-	std::size_t chkpRemain = 0;
 
+	void onUpdate(const Value &seqNum);
 
 public:
 	class DirectAccess {
