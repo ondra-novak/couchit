@@ -193,23 +193,23 @@ void MemView::onChange(const ChangedDoc& doc) {
 				d = Object("_id", doc["id"])
 						("_rev", doc["rev"]);
 			}
-			addDoc(d, doc.seqId);
+			addDoc(d);
 		}
 
 	}
+	updateSeq = doc.seqId;
 }
 
-void MemView::addDoc(const Value& doc, const Value &updateSeq) {
+void MemView::addDoc(const Value& doc) {
 
 	class Emit: public EmitFn {
 	public:
-		Emit(MemView &owner, const Value &doc, const Value &updateSeq)
-			:sync(owner.lock, std::defer_lock), first(true), owner(owner),doc(doc),updateSeq(updateSeq) {}
+		Emit(MemView &owner, const Value &doc)
+			:sync(owner.lock, std::defer_lock), first(true), owner(owner),doc(doc){}
 		virtual void operator()(const Value &key, const Value &value) const {
 			if (first) {
 				first = true;
 				sync.lock();
-				if (updateSeq.defined()) owner.updateSeq = updateSeq;
 			}
 			owner.addDocLk(doc, key, value);
 		}
@@ -220,10 +220,9 @@ void MemView::addDoc(const Value& doc, const Value &updateSeq) {
 		mutable bool first;
 		MemView &owner;
 		const Value &doc;
-		const Value &updateSeq;
 	};
 
-	mapDoc(doc, Emit(*this, doc,updateSeq));
+	mapDoc(doc, Emit(*this, doc));
 
 }
 

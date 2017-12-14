@@ -24,8 +24,8 @@ public:
 class MemViewDef {
 public:
 
-	typedef void (*MapFn)(const Value &document, const EmitFn &emitFn);
-	typedef Value (*ListFn)(const Result &viewResult);
+	typedef std::function<void(const Value &, const EmitFn &Fn)> MapFn;
+	typedef std::function<Value(const Result &)> ListFn;
 
 	MapFn mapFn;
 	ListFn listFn;
@@ -35,6 +35,19 @@ public:
 
 };
 
+
+class CheckpointDef {
+public:
+	typedef std::function<void(const Result &)> StoreFn;
+	typedef std::function<Result()> LoadFn;
+
+	StoreFn storeFn;
+	LoadFn loadFn;
+
+
+	CheckpointDef(const LoadFn &loadFn, const StoreFn &storeFn)
+		:storeFn(storeFn),loadFn(loadFn) {}
+};
 
 ///Memory view
 /** a view materialized in the memory. It brings similar functionality as couchdb's view but
@@ -58,6 +71,18 @@ public:
 	SeqNumber load(const Query &q);
 	SeqNumber load(CouchDB &db, const View &view);
 
+
+	///Sets config of generating checkpoints
+	/**
+	 * Checkpoint is the view stored as file on the HDD. To maintain abstract level, the abstract
+	 * checkpoint service requires just storing a loading functions. Function also loads the data
+	 * from the last checkpoint and initializes updateSeq. You can call update() after checkpoint
+	 * is loaded. Checkpoints are generated after reasoned updates are made.
+	 * @param checkpointFile definition of checkpoint file.
+	 * @param saveInterval interval in updates.Default value is 1000 updates so every 1000th
+	 * update new checkpoint is stored (replacing the oldone)
+	 */
+	void setCheckpointConfig(const CheckpointDef &checkpointFile, std::size_t saveInterval = 1000);
 
 
 	virtual void mapDoc(const Value &document, const EmitFn &emitFn);
@@ -139,7 +164,7 @@ public:
 	virtual void onChange(const ChangedDoc &doc);
 
 
-	void addDoc(const Value &doc, const Value &updateSeq = Value());
+	void addDoc(const Value &doc);
 
 	///Updates the view from the changes feed
 	/** The view must be previously loaded by load(), or cleared by clear();
@@ -235,6 +260,9 @@ protected:
 	MemViewDef viewDef;
 	SeqNumber updateSeq;
 
+	CheckpointDef::StoreFn chkpStore;
+	std::size_t chkpInterval = 0;
+	std::size_t chkpRemain = 0;
 
 
 public:
