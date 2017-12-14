@@ -10,5 +10,5 @@ add_subdirectory (src/tests)
   endif()
 add_compile_options(-std=c++11)
 add_custom_target( test bin/couchit_test DEPENDS bin/couchit_test)
-cmake_policy(POP) 
+cmake_policy(POP)  
  

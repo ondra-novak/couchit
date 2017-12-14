@@ -51,6 +51,7 @@ public:
 	typedef unsigned int Flags;
 
 	static const Flags  flgIncludeDocs = 0x1;
+	static const Flags  flgIncludeDesignDocs = 0x2;
 
 
 	MemView(Flags flags = 0):flags(flags),queryable(*this),viewDef(&defaultMapFn) {}
@@ -68,10 +69,11 @@ public:
 	 * from the last checkpoint and initializes updateSeq. You can call update() after checkpoint
 	 * is loaded. Checkpoints are generated after reasoned updates are made.
 	 * @param checkpointFile definition of checkpoint file.
+	 * @param serialNr serial number of current database
 	 * @param saveInterval interval in updates.Default value is 1000 updates so every 1000th
 	 * update new checkpoint is stored (replacing the oldone)
 	 */
-	void setCheckpointFile(const PCheckpoint &checkpointFile, std::size_t saveInterval = 1000);
+	void setCheckpointFile(const PCheckpoint &checkpointFile, Value serialNr, std::size_t saveInterval = 1000);
 
 
 	virtual void mapDoc(const Value &document, const EmitFn &emitFn);
@@ -95,7 +97,7 @@ public:
 	 * Function will not add document if already exists with the same key. However, document can
 	 * be inserted with a different key.
 	 */
-	void addDoc(const Value &doc, const Value &key, const Value &value);
+	void addDoc(const String &id, const Value &doc, const Value &key, const Value &value);
 
 
 	///Asks for a document
@@ -180,6 +182,8 @@ public:
 	bool updateIfNeeded(CouchDB &db, bool wait = false);
 
 
+	Value getUpdateSeq() const;
+
 protected:
 
 	Flags flags;
@@ -231,7 +235,7 @@ protected:
 	friend class Queryable;
 	Value runQuery(const QueryRequest& r) const;
 
-	void addDocLk(const Value &doc, const Value &key, const Value &value);
+	void addDocLk(const String &id, const Value &doc, const Value &key, const Value &value);
 
 
 	typedef std::shared_timed_mutex Lock;
@@ -240,7 +244,7 @@ protected:
 	typedef std::unique_lock<std::mutex> USync;
 
 	mutable Lock lock;
-	std::mutex updateLock;
+	mutable std::mutex updateLock;
 
 
 	Value getAllItems() const;
@@ -255,6 +259,7 @@ protected:
 	PCheckpoint chkpStore;
 	std::size_t chkpNextUpdate = 0;
 	std::size_t chkpInterval = 0;
+	Value chkSrNr;
 
 	void onUpdate(const Value &seqNum);
 

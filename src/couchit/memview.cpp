@@ -1,3 +1,4 @@
+#include <unordered_set>
 #include "memview.h"
 
 #include "iterrange.h"
@@ -13,7 +14,7 @@ SeqNumber MemView::load(const Query& q) {
 	Result res = q.exec();
 
 	for (Row rw : res) {
-		addDoc(rw.doc,rw.key, rw.value);
+		addDoc(String(rw.id), rw.doc,rw.key, rw.value);
 	}
 
 	return updateSeq = res.getUpdateSeq();
@@ -43,9 +44,9 @@ void MemView::eraseDocLk(const String& docId) {
 	docToKeyMap.erase(docId);
 }
 
-void MemView::addDoc(const Value& doc, const Value& key, const Value& value) {
+void MemView::addDoc(const String &id, const Value& doc, const Value& key, const Value& value) {
 	Sync _(lock);
-	addDocLk(doc,key, value);
+	addDocLk(id,doc,key, value);
 }
 
 Value MemView::getDocument(const String& docId) const {
@@ -186,20 +187,14 @@ void MemView::defaultMapFn(const Value& document, const EmitFn& emitFn) {
 }
 
 void MemView::onChange(const ChangedDoc& doc) {
+	String docId(doc["id"]);
 	USync _(updateLock);
 	{
-		SharedSync _(lock);
-		String docId(doc["id"]);
-		auto iter  = docToKeyMap.find(docId);
-		if (iter != docToKeyMap.end()) {
-			_.unlock();
-			eraseDoc(docId);
-		} else {
-			_.unlock();
-		}
 		if (!doc.deleted) {
 			Value d = doc.doc;
 			addDoc(d);
+		} else {
+			eraseDoc(docId);
 		}
 
 	}
@@ -208,19 +203,23 @@ void MemView::onChange(const ChangedDoc& doc) {
 }
 
 void MemView::addDoc(const Value& doc) {
-	if (doc["_id"].type() == json::string) {
+	Value vid = doc["_id"];
+	if (vid.type() == json::string) {
+
+		String id(vid);
+		if ((flags &  flgIncludeDesignDocs) == 0 && id.substr(0,1) == "_") return;
 
 		class Emit: public EmitFn {
 		public:
-			Emit(MemView &owner, const Value &doc, bool &mapped)
-				:sync(owner.lock, std::defer_lock), mapped(mapped), owner(owner),doc(doc){}
+			Emit(MemView &owner, const String &id, const Value &doc, bool &mapped)
+				:sync(owner.lock, std::defer_lock), mapped(mapped), owner(owner),doc(doc),id(id) {}
 			virtual void operator()(const Value &key, const Value &value) const {
 				if (!mapped) {
 					mapped = true;
 					sync.lock();
-					owner.eraseDocLk(String(doc["_id"]));
+					owner.eraseDocLk(id);
 				}
-				owner.addDocLk(doc, key, value);
+				owner.addDocLk(id, doc, key, value);
 			}
 
 		protected:
@@ -228,27 +227,28 @@ void MemView::addDoc(const Value& doc) {
 			MemView &owner;
 			const Value &doc;
 			bool &mapped;
+			const String &id;
 		};
 
 		bool mapped = false;
-		mapDoc(doc, Emit(*this, doc, mapped));
+		mapDoc(doc, Emit(*this, id, doc, mapped));
 		if (!mapped) {
-			String id(doc["_id"]);
-			Value e = getDocument(id);
-			if (e.defined()) {
-				eraseDoc(id);
-			}
+			eraseDoc(String(doc["_id"]));
 		}
 		//todo erase doc if no addition
 	}
 }
 
-void MemView::addDocLk(const Value& doc, const Value& key, const Value& value) {
-	String id (doc["_id"]);
-	Value idocs = flags & flgIncludeDocs? doc : Value(nullptr);
+void MemView::addDocLk(const String &id, const Value& doc, const Value& key, const Value& value) {
+	Value idocs = flags & flgIncludeDocs? doc.stripKey() : Value(nullptr);
 
-	keyToValueMap.insert(std::make_pair(KeyAndDocId(key,id),ValueAndDoc(value,idocs)));
-	docToKeyMap.insert(std::make_pair(String(id),key));
+	Value skey = key.stripKey();
+	Value svalue = value.stripKey();
+
+	if (id == skey.getString()) skey = id;
+
+	keyToValueMap.insert(std::make_pair(KeyAndDocId(skey,id),ValueAndDoc(svalue,idocs)));
+	docToKeyMap.insert(std::make_pair(id,skey));
 }
 
 void MemView::update(CouchDB& db) {
@@ -256,20 +256,55 @@ void MemView::update(CouchDB& db) {
 	updateLk(db);
 }
 
-void MemView::setCheckpointFile(const PCheckpoint& checkpointFile, std::size_t saveInterval) {
+void MemView::setCheckpointFile(const PCheckpoint& checkpointFile,  Value serialNr, std::size_t saveInterval) {
+	USync _(updateLock);
 	chkpStore = checkpointFile;
 	clear();
-	Result res = chkpStore->load();
+	Value res = chkpStore->load();
 
-	USync _(updateLock);
+
 	Sync __(lock);
-	updateSeq = res.getUpdateSeq();
+	if (!res.defined()) {
+		updateSeq = "0";
+	} else {
 
-	for (Row r : res) {
-		addDocLk(r.doc, r.key, r.value);
+		updateSeq = res["updateSeq"];
+		Value sr = res["serial"];
+		if (sr != serialNr) {
+			updateSeq = "0";
+		} else {
+			Value index = res["data"];
+			Value prevKey;
+			std::unordered_set<Value> usedIds;
+
+			for (Value kv : index) {
+				Value k = kv[0];
+				Value i = kv[1];
+				Value v = kv[2];
+				Value d = kv[3];
+				auto ii = usedIds.find(i);
+				if (ii == usedIds.end())
+					usedIds.insert(i);
+				else
+					i = *ii;
+
+				String id(i);
+				if (k == prevKey) k = prevKey;
+				prevKey = k;
+				addDocLk(id,d,k,v);
+			}
+		}
 	}
+
 	chkpInterval = saveInterval;
 	chkpNextUpdate = SeqNumber(updateSeq).getRevId() + chkpInterval;
+	chkSrNr = serialNr;
+
+}
+
+Value MemView::getUpdateSeq() const {
+	USync _(updateLock);
+	return updateSeq;
 
 }
 
@@ -277,13 +312,19 @@ void MemView::onUpdate(const Value &seqNum) {
 	if (chkpStore == nullptr) return;
 	std::size_t curUpdate = SeqNumber(seqNum).getRevId();
 	if (curUpdate > chkpNextUpdate) {
-		Value out;
+		Array out;
 		{
 			SharedSync _(lock);
-			out = getAllItems();
+			out.reserve(keyToValueMap.size());
+
+
+			for (auto &&itm : keyToValueMap) {
+				out.push_back({itm.first.key, itm.first.docId, itm.second.value, itm.second.doc});
+			}
 		}
-		Result r(out,0,0,seqNum);
-		chkpStore->store(r);
+
+		Value d  = Object("updateSeq",seqNum)("data",out)("serial",chkSrNr);
+		chkpStore->store(d);
 		chkpNextUpdate = curUpdate+chkpInterval;
 	}
 }
@@ -293,8 +334,11 @@ void MemView::updateLk(CouchDB& db) {
 	feed.includeDocs(true).since(updateSeq);
 	Changes chs = feed.exec();
 	for (ChangedDoc cdoc : chs) {
-		eraseDoc(String(cdoc["id"]));
-		addDoc(cdoc.doc);
+		if (cdoc.deleted) {
+			eraseDoc(String(cdoc["id"]));
+		} else {
+			addDoc(cdoc.doc);
+		}
 	}
 	updateSeq = feed.getLastSeq();
 	onUpdate(updateSeq);

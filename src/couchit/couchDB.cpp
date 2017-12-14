@@ -142,7 +142,6 @@ Value CouchDB::getLocal(const StrViewA &localId, std::size_t flags) {
 }
 
 StrViewA CouchDB::lkGenUID() const {
-	LockGuard _(lock);
 	return uidGen(uidBuffer,StrViewA());
 }
 
@@ -1304,6 +1303,26 @@ void CouchDB::setupHttpConn(HttpClient &http, Flags flags) {
 }
 
 CouchDB::Connection::Connection():firstUse(SysClock::now()) {
+
+}
+
+Value CouchDB::getSerialNr()  {
+	if (serialNr.defined()) return serialNr;
+	//there is no such database serial number.
+	//so we will emulate serial number using local document _local/serialNr;
+	//on the very first access, serial number is generated
+	Document doc = getLocal("serialNr",flgCreateNew);;
+	serialNr = doc["serialNr"];
+	if (serialNr.defined()) return serialNr;
+	doc.set("serialNr", serialNr = genUID());
+	try {
+		this->put(doc);
+	} catch (UpdateException &e) {
+		if (e.getErrors()[0].isConflict()) return getSerialNr();
+		throw;
+	}
+	return serialNr;
+
 
 }
 

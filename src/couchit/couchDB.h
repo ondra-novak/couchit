@@ -490,6 +490,9 @@ public:
 
 	///retrieves current configuration
 	const Config &getConfig() const {return cfg;}
+
+	///Retrieves serial number of the database
+	Value getSerialNr() ;
 protected:
 
 	mutable std::mutex lock;
@@ -545,7 +548,7 @@ protected:
 
 	Queryable queryable;
 
-
+	Value serialNr;
 
 public:
 
