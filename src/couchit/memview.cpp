@@ -275,7 +275,7 @@ void MemView::setCheckpointFile(const PCheckpoint& checkpointFile,  Value serial
 		} else {
 			Value index = res["data"];
 			Value prevKey;
-			std::unordered_set<Value> usedIds;
+			std::unordered_map<Value,Value> usedIds;
 
 			for (Value kv : index) {
 				Value k = kv[0];
@@ -284,9 +284,13 @@ void MemView::setCheckpointFile(const PCheckpoint& checkpointFile,  Value serial
 				Value d = kv[3];
 				auto ii = usedIds.find(i);
 				if (ii == usedIds.end())
-					usedIds.insert(i);
-				else
-					i = *ii;
+					usedIds.insert(std::make_pair(i, kv));
+				else {
+					i = ii->first;
+					if (v == ii->second[2])
+						v = ii->second[2];
+					d = ii->second[3];
+				}
 
 				String id(i);
 				if (k == prevKey) k = prevKey;
