@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Checkpoint Viewer</title>
+</head>
+<style>
+
+body {
+margin:0;
+padding:0;
+font-family: monospace;
+font-size: 10px;
+}
+#drop_zone {
+    border: 2px dashed #bbb;
+    border-radius: 5px;
+    padding: 25px;
+    text-align: center;
+    font: 20pt bold 'Vollkorn';
+    color: #bbb;
+    line-height: 1.5;
+    
+    
+}
+#browse_file {
+	display: none;
+}
+
+#panel {
+	display:flex;
+	flex-direction:column;
+	height: 100vh;
+}
+
+#panel > div{
+	flex-grow: 1;
+	margin: 5px;
+}
+
+#panel > .control {
+	flex-grow: 0;
+	
+}
+.control {
+	display: flex;
+	flex-direction:row;
+}
+#inputs {
+	flex-grow: 1;
+}
+
+#inputs input {
+	width: 100%;
+	box-sizing: border-box;
+}
+#search_butt {
+	display:block;
+	height: 100%;
+	width: 100%;
+}
+.control table {
+width: 100%;
+}
+
+.control table .button{
+max-width: 20px;
+
+}
+
+.results {
+overflow-y: scroll;
+}
+
+.control input {
+text-align: center
+}
+
+.results table {
+width: 100%;
+border: 2px solid;
+ border-collapse: collapse;
+}
+
+.results table th{
+background-color:#CCC;
+border-bottom: 1px solid;
+border-right: 1px solid;
+margin: 0;
+padding: 5px;
+}
+
+.results table td{
+border-right: 1px solid;
+margin: 0;
+padding: 5px;
+}
+
+.results table tr:nth-child(even) {background: #EEE;}
+.results table tr:nth-child(odd) {background: #FFF;}
+.results table tr:hover {background: #FE8;}
+
+
+
+</style>
+<body onload="start()">
+<div id="drop_zone">Drop file here (or click to browse)</div>
+<input type="file" id="browse_file">
+<div class="panel" id="panel">
+<div class="control">
+<div>
+	<select id="searchType">
+		<option value="equal">=</option>
+		<option value="lq">&lt;=</option>
+		<option value="gq">&gt;=</option>
+		<option value="range">between</option>
+	</select>
+</div>
+<div>
+	<select id="searchCols">
+		<option value="json">Single key</option>
+		<option value="col1">1 column</option>
+		<option value="col2">2 columns</option>
+		<option value="col3">3 columns</option>
+		<option value="col4">4 columns</option>
+		<option value="col5">5 columns</option>
+		<option value="col6">6 columns</option>
+		<option value="col7">7 columns</option>
+		
+	</select>
+</div>
+<div id="inputs">
+<table>
+<colgroup>
+	<col id="inputs_col1">
+	<col id="inputs_col2">
+	<col id="inputs_col3">
+	<col id="inputs_col4">
+	<col id="inputs_col5">
+	<col id="inputs_col6">
+	<col id="inputs_col7">
+</colgroup>
+<tr id="inputs_row1">
+	<td class="inputs_col1"><input type="text" class="input1"></td>
+	<td class="inputs_col2"><input type="text" class="input2"></td>
+	<td class="inputs_col3"><input type="text" class="input3"></td>
+	<td class="inputs_col4"><input type="text" class="input4"></td>
+	<td class="inputs_col5"><input type="text" class="input5"></td>
+	<td class="inputs_col6"><input type="text" class="input6"></td>
+	<td class="inputs_col7"><input type="text" class="input7"></td>
+</tr>
+<tr id="inputs_row2">
+	<td class="inputs_col1"><input type="text" class="input1"></td>
+	<td class="inputs_col2"><input type="text" class="input2"></td>
+	<td class="inputs_col3"><input type="text" class="input3"></td>
+	<td class="inputs_col4"><input type="text" class="input4"></td>
+	<td class="inputs_col5"><input type="text" class="input5"></td>
+	<td class="inputs_col6"><input type="text" class="input6"></td>
+	<td class="inputs_col7"><input type="text" class="input7"></td>
+</tr>
+</table>
+</div>
+<div>
+	<button id="search_butt">Find</button>
+</div>
+</div>
+<div class="results" id="results">
+</div>
+</div>
+
+
+<script type="text/javascript">
+"use strict";
+
+function start() {
+	var finput = document.getElementById("browse_file");
+	finput.addEventListener("change",  function(evt) {
+		var files = evt.target.files; // FileList object
+    	if (files.length) {
+    		document.getElementById("drop_zone").hidden=true;
+    		readFile(files[0]).then(initPanel);
+    	}
+	});
+	var fdrop = document.getElementById("drop_zone");
+	fdrop.addEventListener("click", function() {finput.click();});
+	fdrop.addEventListener('dragover', function(evt) {		
+	    evt.stopPropagation();
+	    evt.preventDefault();
+		    evt.dataTransfer.dropEffect = 'copy'; 
+	});
+	fdrop.addEventListener('drop', function(evt) {
+	    evt.stopPropagation();
+	    evt.preventDefault();
+	    	var files = evt.dataTransfer.files; 
+	    	if (files.length) {
+	    		document.getElementById("drop_zone").hidden=true;
+	    		readFile(files[0]).then(initPanel);
+	    	}
+	});
+	var ssrchtype = document.getElementById("searchType");	
+	function updateRowCount() {
+		var row2 = document.getElementById("inputs_row2");
+		row2.hidden = ssrchtype.value != "range";
+	}
+	ssrchtype.addEventListener("change", updateRowCount);
+	updateRowCount();
+	
+	var ssrchcols = document.getElementById("searchCols");
+	function updateColCount() {
+		var cnt =  ssrchcols.value;
+		if (cnt.substr(0,3) == "col") cnt = parseInt(cnt.substr(3));
+		else cnt = 1;
+		
+		for (var i = 1; i <= 7; i++) {
+			var id = "inputs_col"+i;
+			var itms = document.getElementsByClassName(id);
+			for (var j = 0; j < itms.length; j++) itms[j].hidden = i > cnt;
+		}
+		
+	}
+	ssrchcols.addEventListener("change", updateColCount);
+	updateColCount();
+	
+	var srchbutt = document.getElementById("search_butt");
+	srchbutt.addEventListener("click",doSearch);
+	
+	var inputs = document.getElementById("inputs");
+	inputs.addEventListener("keyup", function(evt){
+		var x = evt.which || evt.keyCode;
+		if (x ==13 ) {
+			evt.preventDefault();
+			evt.stopPropagation();
+			doSearch();
+		}
+	});
+	
+	
+}
+
+function readFile(f) {
+	return new Promise(function(ok,fail) {
+		var fr = new FileReader();
+		fr.onload = function() {
+			var json = parseBinaryJSON(fr.result);
+			var data = json.data;
+			var hdr = json;
+			delete json.data;
+			ok([defineSearchFunctions(data, function(x) {return x[0];}),hdr]); 			
+		}
+		fr.readAsArrayBuffer(f);
+	});
+}
+
+
+
+function parseBinaryJSON(buffer) {
+	
+	function ArrayIterator(str) {
+		var s = new Uint8Array(str);
+		var len = str.byteLength;
+		var pos = 0;
+		
+		this.next = function() {
+			if (pos < len)
+				return s[pos++];
+			else 
+				return -1;
+		}
+	}
+	
+	var iter = new ArrayIterator(buffer);
+	var keyHistory = [];
+
+	var op_padding = 0;
+	var op_null = 1;
+	var op_undefined = 2;
+	var op_booltrue = 3;
+	var op_boolfalse = 4;
+	var op_numberFloat = 5;
+	var op_numberDouble = 6;
+	var op_size8bit = 0xA;
+	var op_size16bit = 0xB;
+	var op_size32bit = 0xC;
+	var op_size64bit = 0xD;
+	var op_diff = 0x0F;
+	var op_binstring = 0x10;
+	var op_posint = 0x20;
+	var op_negint = 0x30;
+	var op_string = 0x40;	
+	var op_object= 0x50;
+	var op_array= 0x60;
+	var op_key= 0x70;
+	
+	function KeyedValue(key, val) {
+		this.key = key;
+		this.value = val;
+	};
+	
+	function parseItem() {
+		var tag = iter.next();
+		switch (tag & 0xF0) {
+		case 0: switch (tag) {
+			case op_null: return null;
+			case op_boolfalse: return false;
+			case op_booltrue: return true;
+			case op_undefined: return undefined;
+			case op_numberDouble: return parseNumberDouble();
+			case op_numberFloat: return parseNumberFloat();
+			case op_diff: return parseDiff();			
+			default: throw {parseError:"Found unknown byte", "byte":tag};
+		};
+		case op_array:
+			return parseArray(tag);
+		case op_object:
+			return parseObject(tag);
+		case op_string:
+			return parseString(tag);
+		case op_binstring:
+			return parseBlob(tag);
+		case op_posint:
+			return parseInteger(tag);
+		case op_negint:
+			return -parseInteger(tag);
+		case op_key: {
+			var s = parseString(tag);
+			keyHistory.push(s);
+			return new KeyedValue(s, parseItem());
+		}
+		default:
+			var s = keyHistory[keyHistory.length-1-(tag-128)];
+			return new KeyedValue(s, parseItem());
+		}
+		
+	};
+	
+	function parseNumberDouble() {
+		var b = new ArrayBuffer(8);
+		for (var i = 0 ; i < 8; i++) b[i] = iter.next();
+		var f = Float64Array(b);
+		return f[0];
+	}
+	
+	function parseNumberFloat() {
+		var b = new ArrayBuffer(8);
+		for (var i = 0 ; i < 4; i++) b[i] = iter.next();
+		var f = Float32Array(b);
+		return f[0];
+	}
+	function parseDiff() {
+		return parseItem();
+	}
+	
+	function parseArray(tag) {
+		var len = parseInteger(tag);
+		var arr = [];
+		for (var i =0; i < len; i++) {
+			var item = parseItem();
+			if (typeof item == "object" && item instanceof KeyedValue) {
+				arr.push(item.value);						
+			} else {
+				arr.push(item);
+			}
+		}
+		return arr;
+	}
+	function parseObject(tag) {
+		var len = parseInteger(tag);
+		var arr = {};
+		for (var i =0; i < len; i++) {
+			var item = parseItem();
+			if (typeof item == "object" && item instanceof KeyedValue) {
+				arr[item.key]= item.value;						
+			} else {
+				arr[""+i] = item;
+			}
+		}
+		return arr;
+	}
+	
+		
+	function parseString(tag) {
+		var len = parseInteger(tag);
+		
+		var encoded = [];
+		for (var i = 0; i < len ; i++) {
+			var tmp = []
+			tmp.push('%');
+			var x = iter.next();
+			var l = x & 0x0F;
+			var h = (x & 0xF0)/16;
+			tmp.push(String.fromCharCode(h<10?(h+48):(h+55)));
+			tmp.push(String.fromCharCode(l<10?(l+48):(l+55)));
+			encoded.push(tmp.join(""));
+		}
+		var raw = encoded.join("");
+		return decodeURIComponent(raw);
+	}
+	
+	function parseBlob(tag) {
+		var len = parseInteger(tag);		
+		var data = new Uint8Array(len);
+		for (var i = 0; i < len ; i++) {
+			data[i] = iter.next();
+		}
+		return data;
+	}
+	
+	function parseInteger(tag) {
+		var tmp = 0;
+		switch (tag & 0xF) {
+			case op_size8bit: return iter.next();
+			case op_size16bit: {
+				tmp = iter.next();
+				tmp += 256 * iter.next();
+				return tmp;
+			}
+			case op_size32bit: {
+				tmp = iter.next();
+				tmp += 256 * iter.next();
+				tmp += 256 * 256 * iter.next();
+				tmp += 256 * 256 * 256 * iter.next();
+				return tmp;
+			}
+			case op_size64bit: {
+				tmp = iter.next();
+				tmp += 256 * iter.next();
+				tmp += 65536 * iter.next();
+				tmp += 16777216 * iter.next();
+				tmp += 4294967296 * iter.next();
+				tmp += 1099511627776 * iter.next();
+				tmp += 281474976710656 * iter.next();
+				tmp += 72057594037927936 * iter.next();
+				return tmp;
+			}
+			default: return tag & 0xF;
+		}
+	}
+	
+	return parseItem();
+}
+
+function RangeMax() {}
+function RangeMin() {}
+
+
+function JSONtype(a) {
+	var t = typeof a;
+	if (t == "object") {
+		if (a === null) return "null";
+		else if (a instanceof Array) return "array";
+		else if (a instanceof RangeMax) return "rangeMax";
+		else if (a instanceof RangeMin) return "rangeMin";
+		else return t;
+	}
+	return t;
+}
+
+function orderJSON(a, b) {
+	var ta = JSONtype(a);
+	var tb = JSONtype(b);
+	if (ta != tb) {
+		switch (ta){
+		case "rangeMax": if (tb == "object") return 1;
+		  //nobreak
+		case "object": if (tb == "array") return 1;
+		  //nobreak
+		case "array": if (tb == "string") return 1;
+		  //nobreak
+		case "string": if (tb == "number") return 1;
+		  //nobreak
+		case "number": if (tb == "boolean") return 1;
+		  //nobreak
+		case "boolean": if (tb == "null") return 1;
+		  //nobreak
+		case "null": if (tb == "rangeMin") return 1;
+		  //nobreak
+		 default: return -1;
+		}
+		
+	} else {
+		switch (ta) {
+		case "null": return 0;
+		case "boolean": return a==b?0:(a?1:-1);
+		case "number": return (a>b?1:0)-(b>a?1:0);
+		case "string": return (a>b?1:0)-(b>a?1:0);
+		case "array": {
+			var c = a.length < b.length?a.length:b.length;
+			for (var i = 0; i < c; i++) {
+				var x = orderJSON(a[i],b[i]); 
+				if (x) return x;
+			}
+			return orderJSON(a.length, b.length);	
+		}
+		case "object": {
+			var ka = Object.keys(a);
+			var kb = Object.keys(b);
+			var c = ka.length < kb.length?ka.length:kb.length;
+			for (var i = 0; i < c; i++) {
+				var x = orderJSON(ka[i],kb[i]); 
+				if (x) return x;
+				x = orderJSON(a[ka[i]],b[kb[i]]);
+				if (x) return x;
+			}
+			return orderJSON(ka.length, kb.length);		
+		}
+		default:
+			return 0;
+		}
+	}
+}
+
+
+function defineSearchFunctions(rows, keyfn) {
+	var out = rows;
+	function search(upperBound,  keyfn, key) {
+		var l = 0;
+		var h = this.length;
+		while (l<h) {
+			var m = Math.floor((l+h)/2);
+			var itm = orderJSON(key,keyfn(this[m]));
+			if (itm < 0) {
+				h = m;
+			} else if (itm > 0) {
+				l = m+1;  				
+			} else if (upperBound) {
+				l = m+1;
+			} else {
+				h = m;	
+			}							
+		}
+		return l;
+	}
+	
+	out.lowerBound = function(k) {return search.call(this, false, keyfn, k);}
+	out.upperBound = function(k) {return search.call(this, true, keyfn, k);}
+	out.search = function(k) {
+		var l = this.lowerBound(k);
+		var h = this.upperBound(k);
+		return this.slice(l,h);
+	};
+	out.range = function(k1,k2) {
+		var l = this.lowerBound(k1);
+		var h = this.upperBound(k2);
+		return this.slice(l,h);
+	};
+	out.range_from = function(k1) {
+		var l = this.lowerBound(k1);
+		return this.slice(l);
+	};
+	out.range_to = function(k2) {
+		var h = this.upperBound(k2);
+		return this.slice(0,h);
+	}
+	return out;
+}
+
+function showResults(data) {
+	var respage = document.getElementById("results");
+	while (respage.firstChild) respage.removeChild(respage.firstChild);
+	
+	function appendField(row, el, x) {
+		var y = document.createElement(el);
+		y.appendChild(document.createTextNode(x));
+		row.appendChild(y);		
+	}
+	
+	
+	var table = document.createElement("table");
+	var hdr = document.createElement("tr");
+	table.appendChild(hdr);
+	var fields = ["key","value","id", "document"];
+	fields.forEach(appendField.bind(this,hdr,"th"));
+	
+	data.forEach(function(itm) {
+				
+		var key = JSON.stringify(itm[0],null," ");
+		var value = JSON.stringify(itm[2],null," ");
+		var id = itm[1];
+		var doc = JSON.stringify(itm[3],null," ");
+		var row = document.createElement("tr");
+		var td = "td";
+		appendField(row, td, key);
+		appendField(row, td,value);
+		appendField(row, td,id);
+		appendField(row, td,doc);
+		table.appendChild(row);
+		
+	})
+	respage.appendChild(table);
+	
+}
+	
+function initPanel(data) {
+	document.getElementById("panel").hidden=false;
+	document.dbdata = data[0];
+	document.dbhdr = data[1];
+	showResults(data[0]);
+}
+
+function readCols(section, ncols, singleVal) {
+	var data = [];
+	for (var i = 0; i < ncols; i++) {
+		var el = section.querySelector(".input"+(i+1));
+		var v = el.value;
+		try {
+			v = JSON.parse(v);
+		} catch (e) {			
+		}
+		data.push(v);		
+	}
+	if (singleVal) return data[0];
+	else return data;
+}
+	
+function doSearch() {
+	var ssrchtype = document.getElementById("searchType");	
+	var ssrchcols = document.getElementById("searchCols");
+	
+	var rw1, rw2;	
+	var singleval = ssrchcols.value == "json";
+	var cols = ssrchcols.value.substr(0,3) == "col"?parseInt(ssrchcols.value.substr(3)):1;
+	rw1 = readCols(document.getElementById("inputs_row1"),cols,singleval);
+	if (ssrchtype.value == "range")  {
+		rw2 = readCols(document.getElementById("inputs_row2"),cols,singleval);
+	}
+	
+	
+	var res;
+	
+	switch (ssrchtype.value) {
+		case "equal":if (singleval) {
+							res = document.dbdata.search(rw1);
+		             } else {
+		            	 rw2 = rw1.slice(0);		            	 
+		            	 rw2.push(new RangeMax());
+		            	 res = document.dbdata.range(rw1,rw2);
+		             }
+					break;
+		case "lq": res = document.dbdata.range_to(rw1);break;
+		case "gq": res = document.dbdata.range_from(rw1);break;
+		case "range": res = document.dbdata.range(rw1,rw2);break;	
+	}
+
+	showResults(res);
+
+}
+
+</script>
+</body>
+</html>
