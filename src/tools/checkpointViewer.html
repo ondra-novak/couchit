@@ -33,6 +33,7 @@ font-size: 10px;
 	height: 100vh;
 }
 
+
 #panel > div{
 	flex-grow: 1;
 	margin: 5px;
@@ -106,6 +107,7 @@ padding: 5px;
 <body onload="start()">
 <div id="drop_zone">Drop file here (or click to browse)</div>
 <input type="file" id="browse_file">
+<div id="hidepart" hidden="hidden">
 <div class="panel" id="panel">
 <div class="control">
 <div>
@@ -165,6 +167,7 @@ padding: 5px;
 </div>
 </div>
 <div class="results" id="results">
+</div>
 </div>
 </div>
 
@@ -570,31 +573,50 @@ function showResults(data) {
 	table.appendChild(hdr);
 	var fields = ["key","value","id", "document"];
 	fields.forEach(appendField.bind(this,hdr,"th"));
-	
-	data.forEach(function(itm) {
-				
-		var key = JSON.stringify(itm[0],null," ");
-		var value = JSON.stringify(itm[2],null," ");
-		var id = itm[1];
-		var doc = JSON.stringify(itm[3],null," ");
-		var row = document.createElement("tr");
-		var td = "td";
-		appendField(row, td, key);
-		appendField(row, td,value);
-		appendField(row, td,id);
-		appendField(row, td,doc);
-		table.appendChild(row);
-		
-	})
+
 	respage.appendChild(table);
+
+	function perPart(data1, data2) {
+		data1.forEach(function(itm) {
+			
+			var key = JSON.stringify(itm[0],null," ");
+			var value = JSON.stringify(itm[2],null," ");
+			var id = itm[1];
+			var doc = JSON.stringify(itm[3],null," ");
+			var row = document.createElement("tr");
+			var td = "td";
+			appendField(row, td, key);
+			appendField(row, td,value);
+			appendField(row, td,id);
+			appendField(row, td,doc);
+			table.appendChild(row);
+			
+		});
+		
+		data1 = data2.splice(0,500);
+		if (data1.length) {
+			var fn = function(evt) {
+				if (respage.scrollTop >= respage.scrollHeight - respage.clientHeight -5) {
+					respage.removeEventListener("scroll", fn);
+					perPart(data1, data2);
+				}
+			}			
+			respage.addEventListener("scroll", fn);
+		}
+					
+	}
+	
+	var data2 = data.splice(0,500);
+	perPart(data2,data);
+	
 	
 }
 	
 function initPanel(data) {
-	document.getElementById("panel").hidden=false;
+	document.getElementById("hidepart").hidden=false;
 	document.dbdata = data[0];
 	document.dbhdr = data[1];
-	showResults(data[0]);
+	showResults(data[0].slice(0));
 }
 
 function readCols(section, ncols, singleVal) {
