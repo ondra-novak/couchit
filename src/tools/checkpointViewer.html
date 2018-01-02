@@ -35,18 +35,22 @@ font-size: 10px;
 
 
 #panel > div{
-	flex-grow: 1;
-	margin: 5px;
-}
+}   flex-grow: 0;
 
-#panel > .control {
-	flex-grow: 0;
+
+#panel > .results {
+	flex-grow: 1;
 	
 }
-.control {
+.innercntr {
 	display: flex;
 	flex-direction:row;
+	align-items: center;
+	margin-left: 5px;
+	margin-right: 5px;
 }
+
+
 #inputs {
 	flex-grow: 1;
 }
@@ -71,6 +75,7 @@ max-width: 20px;
 
 .results {
 overflow-y: scroll;
+margin: 0 5px 5px 5px;
 }
 
 .control input {
@@ -101,15 +106,84 @@ padding: 5px;
 .results table tr:nth-child(odd) {background: #FFF;}
 .results table tr:hover {background: #FE8;}
 
+.panel .info {
+    display:flex;
+    flex-direction:row;
+    align-items: center;
+    text-align: center;
+    background-color: #f1e4d9;
+}
 
+.panel .info > div {
+    flex-grow: 1;
+    padding: 5px;
+    
+}
+
+.info .value {
+    font-weight: bold;
+
+}
+.results .status {
+    margin: 10px;
+}
+h1 {
+text-align: center;
+}
+
+.contextMenu {
+position: absolute;
+font-size: 15px;
+font-family: sans-serif;
+left: 0;
+top: 0;
+border: 1px solid;
+background-color: Menu;
+color: MenuText;
+cursor: default;
+ box-shadow: 5px 5px 40px grey;
+}
+.contextMenu > div {
+padding: 3px 20px;
+
+}
+
+.contextMenu div:hover {
+background-color: Highlight;
+color: HighlightText;
+}
+
+.contextMenu .subject {
+font-weight: bold;
+}
 
 </style>
 <body onload="start()">
+<div id="basicLayer">
+<div id="intro">
+<h1>Couchit checkpoint viewer</h1>
 <div id="drop_zone">Drop file here (or click to browse)</div>
 <input type="file" id="browse_file">
+</div>
 <div id="hidepart" hidden="hidden">
 <div class="panel" id="panel">
+<div>
+<div class="info">
+<div class="label" >File name</div>
+<div class="value" id="fname">/fname/</div>
+<div class="label" >Records</div>
+<div class="value" id="totalcnt">12345</div>
+<div class="label" >Serial nr.</div>
+<div class="value" id="serialnr">abc123</div>
+<div class="label" >SeqNum</div>
+<div class="value" id="seqnum">54321</div>
+<div class="label" >Options</div>
+<div class="value"><button id="dburl">Document Source</button></div>
+<div class="value"><button id="openfile">Open File</button><button id="newwindow">New window</button></div>
+</div>
+</div>
 <div class="control">
+<div class="innercntr">
 <div>
 	<select id="searchType">
 		<option value="equal">=</option>
@@ -133,15 +207,6 @@ padding: 5px;
 </div>
 <div id="inputs">
 <table>
-<colgroup>
-	<col id="inputs_col1">
-	<col id="inputs_col2">
-	<col id="inputs_col3">
-	<col id="inputs_col4">
-	<col id="inputs_col5">
-	<col id="inputs_col6">
-	<col id="inputs_col7">
-</colgroup>
 <tr id="inputs_row1">
 	<td class="inputs_col1"><input type="text" class="input1"></td>
 	<td class="inputs_col2"><input type="text" class="input2"></td>
@@ -165,22 +230,69 @@ padding: 5px;
 <div>
 	<button id="search_butt">Find</button>
 </div>
+<div>
+    <button id="search_cancel">X</button>
+</div>
+</div>
 </div>
 <div class="results" id="results">
 </div>
 </div>
 </div>
+</div>
+<div class="contextMenu" id="context_menu" hidden="hidden">
+<div id="search_in_index">Search <span class="subject"></span> in the index</div>
+<div id="search_keys">Search keys emited by <span class="subject"></span></div>
+<div id="browse_doc">Browse the document <span class="subject"></span></div>
+</div>
 
-
+<script type="text/javascript" src="config.js"></script>
 <script type="text/javascript">
 "use strict";
 
+var documentUrlPrefix = "";
+var hashFields = {};
+
+function parseHash() {
+	var h = location.hash.substr(1);
+	var fields = h.split("&");
+	hashFields = {};
+	fields.forEach(function(itm){
+		if (!itm) return;
+		var x = itm.indexOf("=");
+		if (x == -1) {
+			hashFields[decodeURIComponent(itm)] = true;
+		} else {
+			hashFields[decodeURIComponent(itm.substr(0,x))] = decodeURIComponent(itm.substr(x+1));
+		}		
+	});	
+}
+
+function updateHash() {
+	var s = [];
+	for (var k in hashFields) {
+		s.push(encodeURIComponent(k)+"="+encodeURIComponent(hashFields[k]));
+	}
+	location.hash = s.join("&");	
+}
+
+function getSelectionText() {
+    var text = "";
+    if (window.getSelection) {
+        text = window.getSelection().toString();
+    } else if (document.selection && document.selection.type != "Control") {
+        text = document.selection.createRange().text;
+    }
+    return text;
+}
+
 function start() {
+	parseHash();
 	var finput = document.getElementById("browse_file");
 	finput.addEventListener("change",  function(evt) {
 		var files = evt.target.files; // FileList object
     	if (files.length) {
-    		document.getElementById("drop_zone").hidden=true;
+    		document.getElementById("intro").hidden=true;
     		readFile(files[0]).then(initPanel);
     	}
 	});
@@ -196,7 +308,7 @@ function start() {
 	    evt.preventDefault();
 	    	var files = evt.dataTransfer.files; 
 	    	if (files.length) {
-	    		document.getElementById("drop_zone").hidden=true;
+	    		document.getElementById("intro").hidden=true;
 	    		readFile(files[0]).then(initPanel);
 	    	}
 	});
@@ -235,10 +347,86 @@ function start() {
 			evt.stopPropagation();
 			doSearch();
 		}
+        if (x ==27) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            doSearchCancel();
+        }
 	});
-	
-	
+	if (hashFields["dburl"]) documentUrlPrefix = hashFields["dburl"];
+    var dburl = document.getElementById("dburl");
+    dburl.addEventListener("click", function() {
+    	var def = documentUrlPrefix;
+    	if (!def) def = appConfig.couchUrl;
+    	var x = prompt("Paste URL prefix for document lookup:", def);
+    	if (x) {
+    		if (x.charAt(x.length-1)!="/") x = x+"/"; 
+    		documentUrlPrefix = hashFields["dburl"] = x;
+    		updateHash();
+    	    doSearchCancel();
+    	}    	
+    });
+    document.getElementById("openfile").addEventListener("click", function(){location.reload();});
+    document.getElementById("newwindow").addEventListener("click", function(){
+    	window.open(location.href);
+    });
+    (function() {
+    	var curSel;
+    	var ctx;
+    	
+	    document.getElementById("basicLayer").addEventListener("contextmenu", function(x) {    	
+	    	ctx = document.getElementById("context_menu");
+            var sel = getSelectionText();
+	    	if (ctx.hidden && document.dbdata && sel) {
+		    	ctx.hidden = false;    	
+		    	x.preventDefault();    
+		    	ctx.style.left = x.clientX+"px";
+		    	ctx.style.top = x.clientY+"px";
+		    	var isString;		    	
+		    	try {
+		    		curSel = JSON.parse(sel);
+		    		isString = typeof curSel == "string";
+		    	} catch (e) {
+		    		curSel = sel
+		    		isString = true;
+		    	}
+		    	document.getElementById("search_keys").hidden = !isString;
+		    	document.getElementById("browse_doc").hidden = !isString;		    			    
+		    	ctx.querySelectorAll(".subject").forEach(function(itm){
+		    		setText(itm,curSel);
+		    	});	    
+	    	}
+	    	
+	    });
+	    document.getElementById("search_in_index").addEventListener("click", function() {
+	    	doSearchValue(curSel);
+	    	ctx.hidden = true;
+	    });
+        document.getElementById("search_keys").addEventListener("click", function() {
+            doSearchKeys(curSel);
+            ctx.hidden = true;
+        });
+        document.getElementById("browse_doc").addEventListener("click", function() {
+            browseForDoc(curSel);
+            ctx.hidden = true;
+        });
+    })();
+    document.getElementById("basicLayer").addEventListener("mouseup", function(x) {
+    	var ctx = document.getElementById("context_menu");
+        ctx.hidden = true;
+    });
+    document.addEventListener("keydown", function(evt) {
+    	var x = evt.which || evt.keyCode;
+    	if (x == 27) {
+	        var ctx = document.getElementById("context_menu");
+	        ctx.hidden = true;
+    	}
+    });
+    
+    
+    	
 }
+
 
 function readFile(f) {
 	return new Promise(function(ok,fail) {
@@ -248,7 +436,7 @@ function readFile(f) {
 			var data = json.data;
 			var hdr = json;
 			delete json.data;
-			ok([defineSearchFunctions(data, function(x) {return x[0];}),hdr]); 			
+			ok([defineSearchFunctions(data, function(x) {return x[0];}),hdr,f]); 			
 		}
 		fr.readAsArrayBuffer(f);
 	});
@@ -561,23 +749,38 @@ function showResults(data) {
 	var respage = document.getElementById("results");
 	while (respage.firstChild) respage.removeChild(respage.firstChild);
 	
-	function appendField(row, el, x) {
-		var y = document.createElement(el);
+	function appendField(row, el, x, link) {
+		var a = document.createElement(el);
+		var b;
+		var y;
+		if (link) {
+			b = document.createElement("a");
+			b.setAttribute("href",link);
+			b.setAttribute("target","_blank");
+			y = b;			
+			a.appendChild(b);
+		} else {
+			y = a;
+		}
 		y.appendChild(document.createTextNode(x));
-		row.appendChild(y);		
+		row.appendChild(a);		
 	}
+		
 	
 	
 	var table = document.createElement("table");
 	var hdr = document.createElement("tr");
 	table.appendChild(hdr);
 	var fields = ["key","value","id", "document"];
-	fields.forEach(appendField.bind(this,hdr,"th"));
+	fields.forEach(function(x) {appendField(hdr,"th",x);});
 
 	respage.appendChild(table);
 
-	function perPart(data1, data2) {
-		data1.forEach(function(itm) {
+	function perPart(data, from) {
+	    var cnt = 500;
+	    if (cnt+from > data.length) cnt = data.length-from;
+	    for (var i = 0; i < cnt; i++) {
+	        var itm = data[i+from];
 			
 			var key = JSON.stringify(itm[0],null," ");
 			var value = JSON.stringify(itm[2],null," ");
@@ -585,20 +788,22 @@ function showResults(data) {
 			var doc = JSON.stringify(itm[3],null," ");
 			var row = document.createElement("tr");
 			var td = "td";
+			var link = documentUrlPrefix?documentUrlPrefix+encodeURIComponent(id):null;
 			appendField(row, td, key);
 			appendField(row, td,value);
-			appendField(row, td,id);
+			appendField(row, td,id, link);
 			appendField(row, td,doc);
 			table.appendChild(row);
 			
-		});
+		};
 		
-		data1 = data2.splice(0,500);
-		if (data1.length) {
+		var nx = from+cnt;
+		if (nx < data.length) {
+		      
 			var fn = function(evt) {
 				if (respage.scrollTop >= respage.scrollHeight - respage.clientHeight -5) {
 					respage.removeEventListener("scroll", fn);
-					perPart(data1, data2);
+					setTimeout(function(x) {perPart(data, nx);},1000);
 				}
 			}			
 			respage.addEventListener("scroll", fn);
@@ -606,17 +811,43 @@ function showResults(data) {
 					
 	}
 	
-	var data2 = data.splice(0,500);
-	perPart(data2,data);
+	var total = data.length;
+	perPart(data,0);
+	var status = document.createElement("div");
+	status.classList.add("status");
+	status.innerHTML="<strong>Total:</strong> "+total;
+	respage.appendChild(status);
 	
 	
 }
 	
+function setText(el,text) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    el.appendChild(document.createTextNode(text));
+}
+	
+
+function doSearchCancel() {
+	
+	for (var i = 0; i < 7; i++) {
+		var name = ".input"+(i+1);
+		document.querySelectorAll(name).forEach(function(x){x.value="";});
+	}
+	showResults(document.dbdata);	
+}
+
 function initPanel(data) {
 	document.getElementById("hidepart").hidden=false;
 	document.dbdata = data[0];
 	document.dbhdr = data[1];
 	showResults(data[0].slice(0));
+	setText(document.getElementById("fname"),data[2].name);
+	setText(document.getElementById("totalcnt"),data[0].length);
+    setText(document.getElementById("serialnr"),data[1].serial);
+    setText(document.getElementById("seqnum"),data[1].updateSeq);
+    document.getElementById("search_cancel").addEventListener("click", doSearchCancel);
+    
+    
 }
 
 function readCols(section, ncols, singleVal) {
@@ -634,6 +865,23 @@ function readCols(section, ncols, singleVal) {
 	else return data;
 }
 	
+function doSearchValue(val) {
+	var res = document.dbdata.search(val);
+	showResults(res);
+}
+
+function doSearchKeys(val) {
+	var res = [];
+	document.dbdata.forEach(function(itm) {
+		if (itm[1] == val) res.push(itm); 
+	});
+	showResults(res);
+}
+
+function browseForDoc(val) {
+	window.open(documentUrlPrefix+encodeURIComponent(val));
+}
+
 function doSearch() {
 	var ssrchtype = document.getElementById("searchType");	
 	var ssrchcols = document.getElementById("searchCols");
