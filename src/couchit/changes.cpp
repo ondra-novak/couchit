@@ -5,6 +5,7 @@
  *      Author: ondra
  */
 
+#include <thread>
 #include "changes.h"
 
 #include "couchDB.h"
@@ -200,5 +201,67 @@ void ChangesDistributor::run() {
 		return true;
 	});
 }
+
+bool ChangesDistributor::sync(Value seqNum, unsigned int timeoutms) {
+
+	class LocalObserver: public IChangeObserver {
+	public:
+		SeqNumber seqNum;
+		std::condition_variable &condvar;
+		LocalObserver(const SeqNumber &seqNum, std::condition_variable &condvar)
+			:seqNum(seqNum),condvar(condvar) {}
+
+		virtual void onChange(const ChangedDoc &doc) {
+			seqNum = doc.seqId;
+			condvar.notify_all();
+		}
+	};
+	SeqNumber curSeq, reqSeqNum(seqNum);
+	{
+		std::unique_lock<std::mutex> _(initLock);
+		curSeq = this->seqNumber;
+	}
+	std::condition_variable condvar;
+	LocalObserver obs(curSeq, condvar);
+	add(&obs,false);
+	{
+		std::unique_lock<std::mutex> lock(initLock);
+		auto predicate = [&]{
+			return reqSeqNum<=obs.seqNum;
+		};
+		if (timeoutms == -1) {
+			condvar.wait(lock,  predicate);
+		} else {
+			if (!condvar.wait_for(lock, std::chrono::milliseconds(timeoutms),predicate)) return false;
+		}
+	}
+	remove(&obs);
+	return true;
+}
+
+
+void ChangesDistributor::runService() {
+	stopService();
+	thr = std::unique_ptr<std::thread> ( new std::thread([&]{
+		setTimeout(-1);
+		run();
+	}));
+}
+
+ChangesDistributor::~ChangesDistributor() {
+	stopService();
+}
+
+ChangesDistributor::ChangesDistributor(ChangesFeed &&feed):ChangesFeed(std::move(feed)) {}
+
+
+void ChangesDistributor::stopService() {
+	if (thr != nullptr) {
+		cancelWait();
+		thr->join();
+		thr = nullptr;
+	}
+}
+
 
 }

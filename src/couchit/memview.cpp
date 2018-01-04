@@ -199,7 +199,7 @@ void MemView::onChange(const ChangedDoc& doc) {
 
 	}
 	updateSeq = doc.seqId;
-	onUpdate(updateSeq);
+	onUpdate();
 }
 
 void MemView::addDoc(const Value& doc) {
@@ -275,26 +275,13 @@ void MemView::setCheckpointFile(const PCheckpoint& checkpointFile,  Value serial
 		} else {
 			Value index = res["data"];
 			Value prevKey;
-			std::unordered_map<Value,Value> usedIds;
 
 			for (Value kv : index) {
 				Value k = kv[0];
 				Value i = kv[1];
 				Value v = kv[2];
 				Value d = kv[3];
-				auto ii = usedIds.find(i);
-				if (ii == usedIds.end())
-					usedIds.insert(std::make_pair(i, kv));
-				else {
-					i = ii->first;
-					if (v == ii->second[2])
-						v = ii->second[2];
-					d = ii->second[3];
-				}
-
 				String id(i);
-				if (k == prevKey) k = prevKey;
-				prevKey = k;
 				addDocLk(id,d,k,v);
 			}
 		}
@@ -312,23 +299,33 @@ Value MemView::getUpdateSeq() const {
 
 }
 
-void MemView::onUpdate(const Value &seqNum) {
-	if (chkpStore == nullptr) return;
-	std::size_t curUpdate = SeqNumber(seqNum).getRevId();
-	if (curUpdate > chkpNextUpdate) {
-		Array out;
-		{
-			SharedSync _(lock);
-			out.reserve(keyToValueMap.size());
+void MemView::makeCheckpoint() {
+	makeCheckpoint(chkpStore);
+}
+
+void MemView::makeCheckpoint(PCheckpoint chkpStore) {
+	Array out;
+	{
+		SharedSync _(lock);
+		out.reserve(keyToValueMap.size());
 
 
-			for (auto &&itm : keyToValueMap) {
-				out.push_back({itm.first.key, itm.first.docId, itm.second.value, itm.second.doc});
-			}
+		for (auto &&itm : keyToValueMap) {
+			out.push_back({itm.first.key, itm.first.docId, itm.second.value, itm.second.doc});
 		}
+	}
 
-		Value d  = Object("updateSeq",seqNum)("data",out)("serial",chkSrNr);
-		chkpStore->store(d);
+	Value d  = Object("updateSeq",updateSeq)("data",out)("serial",chkSrNr);
+	chkpStore->store(d);
+
+}
+
+
+void MemView::onUpdate() {
+	if (chkpStore == nullptr) return;
+	std::size_t curUpdate = SeqNumber(updateSeq).getRevId();
+	if (curUpdate > chkpNextUpdate) {
+		makeCheckpoint();
 		chkpNextUpdate = curUpdate+chkpInterval;
 	}
 }
@@ -345,7 +342,7 @@ void MemView::updateLk(CouchDB& db) {
 		}
 	}
 	updateSeq = feed.getLastSeq();
-	onUpdate(updateSeq);
+	onUpdate();
 }
 
 bool MemView::updateIfNeeded(CouchDB &db, bool wait) {

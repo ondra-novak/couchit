@@ -98,9 +98,35 @@ Value SyncCheckpointFile::load() const {
 		return in.get();
 	}, base64);
 
+	Value version = data["version"];
+	if (version.defined()) {
+		if (version.getUInt() == 2) {
+			Value compdata = data["compdata"];
+			Value objtable = data["objects"];
+			Array decompdata;
+			decompdata.reserve(compdata.size());
+			Array tmp;
+			tmp.reserve(10);
+			unsigned int columns = data["columns"].getUInt();
 
 
-	return data;
+			for (Value rw : compdata) {
+				if (rw.isNull()) tmp.push_back(rw);
+				std::size_t dataid = rw.getUInt();
+				tmp.push_back(objtable[dataid]);
+				if (tmp.size() == columns) {
+					decompdata.push_back(tmp);
+					tmp.clear();
+				}
+			}
+			return data.replace("data",decompdata);
+		} else {
+			return Value();
+		}
+	} else {
+		return data;
+	}
+
 }
 
 void SyncCheckpointFile::store(const Value & data) {
@@ -113,7 +139,37 @@ void SyncCheckpointFile::store(const Value & data) {
 			throw CheckpointIOException(String({"Failed to open checkpoint file for writting: ",newfname}), err);
 		}
 
-		data.serializeBinary([&](char c){
+		Array compdata;
+		Value rows = data["data"];
+		std::unordered_map<Value, Value> objmap;
+		Array objtable;
+		unsigned int columns = 4;
+
+		for (Value rw: rows) {
+			for (unsigned int i = 0; i < columns; i++) {
+				Value c = rw[i];
+				Value idx;
+				auto x = objmap.find(c);
+				if (x == objmap.end()) {
+					idx = objtable.size();
+					objmap.insert(std::make_pair(c, idx));
+					objtable.push_back(c);
+				} else {
+					idx = x->second;
+				}
+				compdata.push_back(idx);
+			}
+		}
+
+		Object newdata(data);
+		newdata.unset("data");
+		newdata.set("compdata", compdata);
+		newdata.set("objects", objtable);
+		newdata.set("version",2);
+		newdata.set("columns",columns);
+		Value ndata = newdata;
+
+		ndata.serializeBinary([&](char c){
 			out.put(c);
 		},json::compressKeys);
 

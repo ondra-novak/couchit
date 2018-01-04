@@ -184,6 +184,11 @@ public:
 
 	Value getUpdateSeq() const;
 
+	///manually creates a checkpoint
+	void makeCheckpoint();
+	///manually creates a checkpoint to specified store
+	void makeCheckpoint(PCheckpoint chkpStore);
+
 protected:
 
 	Flags flags;
@@ -261,7 +266,7 @@ protected:
 	std::size_t chkpInterval = 0;
 	Value chkSrNr;
 
-	void onUpdate(const Value &seqNum);
+	void onUpdate();
 
 public:
 	class DirectAccess {

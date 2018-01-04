@@ -449,11 +449,34 @@ function start() {
 }
 
 
+function translateVersion(data) {
+	var newdata = [];
+	var compdata = data.compdata;
+	var objtable = data.objects;
+	var columns = data.columns;
+	var tmp = [];
+	compdata.forEach(function(x) {
+		tmp.push(objtable[x]);
+		if (tmp.length == columns) {
+			newdata.push(tmp);
+			tmp = [];
+		}
+	});
+	data.data = newdata;
+	return data;
+	
+	
+}
+
 function readFile(f) {
 	return new Promise(function(ok,fail) {
 		var fr = new FileReader();
 		fr.onload = function() {
 			var json = parseBinaryJSON(fr.result);
+			if (json.version) {
+				if (json.version==2) json = translateVersion(json);
+				else alert("unsupported version");
+			}
 			var data = json.data;
 			var hdr = json;
 			delete json.data;

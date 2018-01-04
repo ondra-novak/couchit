@@ -19,6 +19,10 @@
 #include "couchDB.h"
 #include "changeObserver.h"
 
+namespace std {
+	class thread;
+}
+
 
 
 namespace couchit {
@@ -317,7 +321,7 @@ public:
 	typedef std::unique_ptr<IChangeObserver, Deleter>Observer;
 
 
-	ChangesDistributor(ChangesFeed &&feed):ChangesFeed(std::move(feed)) {}
+	ChangesDistributor(ChangesFeed &&feed);
 
 	void add(IChangeObserver *observer, bool ownership = true);
 	void add(IChangeObserver &observer);
@@ -329,9 +333,26 @@ public:
 
 	void run();
 
+	///synchronizes thread to specified update
+	/**
+	 * @param seqNum required update id
+	 * @param timeoutms timeout in miliseconds
+	 * @retval true synced
+	 * @retval false timeout
+	 */
+	bool sync(Value seqNum, unsigned int timeoutms = -1);
+
+
+
+	void runService();
+	void stopService();
+
+	~ChangesDistributor();
+
 protected:
 
 	std::vector<Observer> observers;
+	std::unique_ptr<std::thread> thr;
 
 };
 }
