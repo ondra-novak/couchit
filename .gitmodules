@@ -1,0 +1,3 @@
+[submodule "src/couchit/shared"]
+	path = src/couchit/shared
+	url = https://github.com/ondra-novak/ondra_shared.git

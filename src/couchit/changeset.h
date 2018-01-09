@@ -7,7 +7,7 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
-#include "couchDB.h"
+#include "documentdb.h"
 
 
 namespace couchit {
@@ -17,7 +17,7 @@ class LocalView;
 ///Collects changes and commits them as one request
 class Changeset {
 public:
-	Changeset(CouchDB &db);
+	Changeset(DocumentDB &db);
 	Changeset(const Changeset& other);
 
 	///Updates document in database
@@ -60,7 +60,7 @@ public:
 	 *
 	 * @return reference to the Changeset to create chains
 	 */
-	Changeset &commit(CouchDB &db);
+	Changeset &commit(DocumentDB &db);
 
 
 	///Commits all changes in the database
@@ -124,8 +124,8 @@ public:
 	Changeset &preview(LocalView &view);
 
 
-	CouchDB &getDatabase() {return db;}
-	const CouchDB &getDatabase() const {return db;}
+	DocumentDB &getDatabase() {return db;}
+	const DocumentDB &getDatabase() const {return db;}
 
 
 
@@ -166,7 +166,7 @@ protected:
 	CommitedDocs commitedDocs;
 
 
-	CouchDB &db;
+	DocumentDB &db;
 
 	template<typename X>
 	static bool docOrder(const X &a, const X &b);

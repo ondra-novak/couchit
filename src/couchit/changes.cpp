@@ -48,7 +48,7 @@ void Changes::rewind() {
 	pos = 0;
 }
 
-ChangesFeed::ChangesFeed(CouchDB& couchdb)
+ChangesFeed::ChangesFeed(DocumentDB& couchdb)
 	:couchdb(couchdb), outlimit(((std::size_t)-1)),timeout(0),canceled(false)
 {
 }
@@ -96,8 +96,8 @@ ChangesFeed& ChangesFeed::setFilterFlags(std::size_t flags) {
 void ChangesFeed::cancelWait() {
 	std::lock_guard<std::mutex> _(initLock);
 	canceled = true;
-	if (curConn != nullptr) {
-		curConn->http.abort();
+	if (abortFn != nullptr) {
+		abortFn();
 	}
 }
 
@@ -118,23 +118,23 @@ ChangesFeed::ChangesFeed(ChangesFeed&& other)
 
 void ChangesFeed::cancelEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
-	curConn = nullptr;
+	abortFn = nullptr;
 	canceled = false;
 	wasCanceledState = true;
 }
 
 void ChangesFeed::finishEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
-	curConn = nullptr;
+	abortFn = nullptr;
 	wasCanceledState = false;
 }
 
 
 void ChangesFeed::errorEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
-	if (curConn != nullptr) {
-		curConn->http.abort();
-		curConn = nullptr;
+	if (abortFn != nullptr) {
+		abortFn();
+		abortFn = nullptr;
 	}
 	if (canceled) {
 		canceled = false;

@@ -34,8 +34,6 @@ namespace couchit {
 
 
 
-StrViewA CouchDB::fldTimestamp("~timestamp");
-StrViewA CouchDB::fldPrevRevision("~prevRev");
 std::size_t CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
@@ -43,9 +41,9 @@ std::size_t CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
 CouchDB::CouchDB(const Config& cfg)
-	:cfg(cfg)
+	:DocumentDB(cfg.uidgen == nullptr?DefaultUIDGen::getInstance():*cfg.uidgen)
+	,cfg(cfg)
 	,curConnections(0)
-	,uidGen(cfg.uidgen == nullptr?DefaultUIDGen::getInstance():*cfg.uidgen)
 	,queryable(*this)
 
 {
@@ -56,10 +54,11 @@ CouchDB::CouchDB(const Config& cfg)
 }
 
 
+
 CouchDB::CouchDB(const CouchDB& other)
-	:cfg(other.cfg)
+	:DocumentDB(other)
+	,cfg(other.cfg)
 	,curConnections(0)
-	,uidGen(other.uidGen)
 	,queryable(*this)
 	,authObj(other.authObj)
 {
@@ -141,13 +140,6 @@ Value CouchDB::getLocal(const StrViewA &localId, std::size_t flags) {
 	}
 }
 
-StrViewA CouchDB::lkGenUID() const {
-	return uidGen(uidBuffer,StrViewA());
-}
-
-StrViewA CouchDB::lkGenUID(StrViewA prefix) const {
-	return uidGen(uidBuffer,prefix);
-}
 
 Value CouchDB::get(const StrViewA &docId, const StrViewA & revId, std::size_t flags) {
 	PConnection conn = getConnection();
@@ -300,32 +292,7 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 
 }
 
-String CouchDB::putAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData) {
 
-	Upload upld = putAttachment(document,attachmentName,attachmentData.contentType);
-	upld.write(BinaryView(attachmentData));
-	return upld.finish();
-}
-
-
-Value CouchDB::genUIDValue() const {
-	LockGuard _(lock);
-	return StrViewA(lkGenUID());
-}
-
-Value CouchDB::genUIDValue(StrViewA prefix)  const {
-	LockGuard _(lock);
-	return lkGenUID(prefix);
-}
-
-
-Document CouchDB::newDocument() {
-	return Document(lkGenUID(),StrViewA());
-}
-
-Document CouchDB::newDocument(const StrViewA &prefix) {
-	return Document(lkGenUID(StrViewA(prefix)),StrViewA());
-}
 
 template<typename Fn>
 class DesignDocumentParse: public json::Parser<Fn> {
@@ -502,11 +469,32 @@ bool  CouchDB::putDesignDocument(const char* content,
 
 }
 
-int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
+
+class ChangesFeedAccess: public ChangesFeed {
+public:
+	using ChangesFeed::initLock;
+	using ChangesFeed::abortFn;
+	using ChangesFeed::canceled;
+	using ChangesFeed::seqNumber;
+	using ChangesFeed::outlimit;
+	using ChangesFeed::filter;
+	using ChangesFeed::filterArgs;
+	using ChangesFeed::forceIncludeDocs;
+	using ChangesFeed::forceReversed;
+	using ChangesFeed::docFilter;
+	using ChangesFeed::timeout;
+	using ChangesFeed::cancelEpilog;
+	using ChangesFeed::finishEpilog;
+	using ChangesFeed::errorEpilog;
+};
+
+
+int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& osink) {
+	ChangesFeedAccess &sink = static_cast<ChangesFeedAccess &>(osink);
 	std::unique_lock<std::mutex> _(sink.initLock);
 	Value jsonBody;
 	StrViewA method = "GET";
-	if (sink.curConn != nullptr) {
+	if (sink.abortFn != nullptr) {
 		throw std::runtime_error("Changes feed is already in progress");
 	}
 	if (sink.canceled) return 0;
@@ -595,7 +583,8 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 	}
 	conn->http.open(conn->getUrl(), method, true);
 	conn->http.connect();
-	sink.curConn = conn.get();
+	auto gconn = conn.get();
+	sink.abortFn = [gconn]{gconn->http.abort();};
 	_.unlock();
 
 	conn->http.setTimeout(120000);
@@ -612,8 +601,9 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 }
 
 
-Changes CouchDB::receiveChanges(ChangesFeed& sink) {
+Changes CouchDB::receiveChanges(ChangesFeed& osink) {
 
+	ChangesFeedAccess &sink = static_cast<ChangesFeedAccess &>(osink);
 	PConnection conn = getConnection("_changes");
 
 	if (sink.timeout > 0) {
@@ -664,8 +654,9 @@ void CouchDB::updateSeqNum(const Value& seq) {
 		lksqid = l;
 }
 
-void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn) {
+void CouchDB::receiveChangesContinuous(ChangesFeed& osink, ChangesFeedHandler &fn) {
 
+	ChangesFeedAccess &sink = static_cast<ChangesFeedAccess &>(osink);
 	PConnection conn = getConnection("_changes",true);
 
 	conn->add("feed","continuous");

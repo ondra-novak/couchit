@@ -16,7 +16,7 @@
 
 
 #include "view.h"
-#include "couchDB.h"
+#include "documentdb.h"
 #include "changeObserver.h"
 
 namespace std {
@@ -29,7 +29,7 @@ namespace couchit {
 
 
 
-class CouchDB;
+class DocumentDB;
 class Filter;
 
 ///Contains information about changed document
@@ -126,7 +126,7 @@ public:
 	 * the sink is waiting for events, the referenced object is blocked and it is unable to process
 	 * other requests.
 	 */
-	ChangesFeed(CouchDB &couchdb);
+	ChangesFeed(DocumentDB &couchdb);
 
 	ChangesFeed(ChangesFeed &&other);
 
@@ -279,8 +279,9 @@ public:
 
 protected:
 
-	CouchDB &couchdb;
-	CouchDB::Connection *curConn = nullptr;
+	DocumentDB &couchdb;
+//	DocumentDB::Connection *curConn = nullptr;
+	std::function<void()> abortFn;
 	Value seqNumber;
 	std::size_t outlimit;
 	std::size_t timeout;
@@ -294,7 +295,6 @@ protected:
 	bool canceled;
 	bool wasCanceledState = false;
 
-	friend class CouchDB;
 
 	void cancelEpilog();
 	void errorEpilog();

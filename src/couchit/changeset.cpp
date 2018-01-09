@@ -17,7 +17,7 @@
 //#include "validator.h"
 namespace couchit {
 
-Changeset::Changeset(CouchDB &db):db(db) {
+Changeset::Changeset(DocumentDB &db):db(db) {
 
 
 }
@@ -61,7 +61,7 @@ bool Changeset::docOrder(const X &a, const X &b) {
 	return a.id < b.id;
 }
 
-Changeset& Changeset::commit(CouchDB& db) {
+Changeset& Changeset::commit(DocumentDB& db) {
 	if (scheduledDocs.empty()) return *this;
 
 
@@ -84,15 +84,15 @@ Changeset& Changeset::commit(CouchDB& db) {
 
 		Object adj(doc);
 
-		bool hasTm = doc[CouchDB::fldTimestamp].defined();
-		bool hasPrevRev =  doc[CouchDB::fldPrevRevision].defined();
+		bool hasTm = doc[DocumentDB::fldTimestamp].defined();
+		bool hasPrevRev =  doc[DocumentDB::fldPrevRevision].defined();
 		if (hasTm && !now.defined()) {
 			 std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
 			  std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-			adj.set(CouchDB::fldTimestamp,Value(now_c));
+			adj.set(DocumentDB::fldTimestamp,Value(now_c));
 		}
 		if (hasPrevRev) {
-			adj.set(CouchDB::fldPrevRevision, doc["_rev"]);
+			adj.set(DocumentDB::fldPrevRevision, doc["_rev"]);
 		}
 
 		docsToCommit.add(adj);

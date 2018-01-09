@@ -8,23 +8,17 @@
 #ifndef ASSETEX_SRC_COUCHDB_H_BREDY_5205456032
 #define ASSETEX_SRC_COUCHDB_H_BREDY_5205456032
 
-#include <functional>
-#include <stack>
-#include <mutex>
 #include <condition_variable>
+#include <stack>
 
-#include "json.h"
-
+#include "documentdb.h"
 
 #include "view.h"
 #include "config.h"
 
 
 #include "minihttp/httpclient.h"
-#include "attachment.h"
-#include "iqueryable.h"
 #include "urlBuilder.h"
-#include "revision.h"
 
 namespace couchit {
 
@@ -56,23 +50,11 @@ class ShowResult;
  * of CouchDB class.
  *
  */
-class CouchDB {
+class CouchDB: public DocumentDB {
 public:
 
-	///Contains name of key which holds time of document's last update
-	/** Note that timestamping is optional feature supported only by couchit. If document
-	 * is updated by other way, the timestamp don't need to be updated. Timestamping
-	 * is supported by Changeset class
-	 */
-	static StrViewA fldTimestamp;
-	///Contains ID of previous revision
-	/** Note this feature is optional and supported only by couchit. The class Changeset
-	 * will put there id of previous revision.
-	 */
-	static StrViewA fldPrevRevision;
 
 
-	typedef std::size_t Flags;
 
 	/**Maximal length of serialized form of keys to use GET request. Longer
 	 * keys are send through POST. Queries sent by POST cannot be cached. However if you
@@ -80,50 +62,6 @@ public:
 	 * requests are cached, not separate keys. Default value is 1024
 	 */
 	static Flags maxSerializedKeysSizeForGETRequest;
-
-	///Download flag - disable cache while retrieving resule
-	/** Downloader will not include etag into header, so database will return complete response
-	 * Result will not stored into cache. This flag is useful if you need
-	 * to retrieve content which will be used only once. For example when
-	 * url contains a random number.
-	 */
-	static const Flags flgDisableCache = 1;
-	///Download flag - refresh cache with new value
-	/** Cache can quess, whether there is chance that content of URL has been updated. If
-	 * cache doesn't detect such condition, no request is generated and result is
-	 * returned from the cache. This flag disables that feature. With this flag, request
-	 * is always generated but eTags will be used. So cache can still be used when
-	 * server returns state 304. If there is changed content, cache is also updated.
-	 */
-	static const Flags flgRefreshCache = 2;
-	///Download flag - store headers to the argument
-	/** You have to supply empty object as header field (if you don't need to send
-	 * headers with the request) Function will store response headers to the object.
-	 */
-	static const Flags flgStoreHeaders = 4;
-
-	///Retrieve all revision IDs
-	static const Flags flgRevisions = 8;
-	///Retrieve revision info
-	static const Flags flgRevisionsInfo = 0x10;
-	///Retrieve update seq
-	static const Flags flgSeqNumber = 0x40;
-	///Retrieve attachments
-	static const Flags flgAttachments = 0x80;
-	///Retrieve attachment encoding info
-	static const Flags flgAttEncodingInfo = 0x100;
-	///Retrieve all conflicts
-	static const Flags flgConflicts = 0x200;
-	///Retrieve all deleted conflicts
-	static const Flags flgDeletedConflicts = 0x400;
-	///create new document when requesting document doesn't exists
-	static const Flags flgCreateNew = 0x1000;
-	///do not use authentification (token is not used)
-	static const Flags flgNoAuth = 0x2000;
-	///use syncQueryTimeout instead normal timeout
-	static const Flags flgLongOperation = 0x4000;
-	///disable exception if document is missing (for function get()), instead null is returned
-	static const Flags flgNullIfMissing = 0x8000;
 
 
 	CouchDB(const Config &cfg);
@@ -139,35 +77,6 @@ public:
 	CouchDB(const CouchDB &source);
 
 
-
-	///Generates new UID and returns it as Value. It can be directly used to create new document.
-	/**
-	 * @return UID stored as Value object
-	 *
-	 * @note In contrast to the function getUID(), this function can be called
-	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
-	 * in MT environment or use additional synchronization
-	 */
-	Value genUIDValue() const;
-	///Generates new UID and returns it as Value. It can be directly used to create new document.
-	/**
-	 * @param prefix user defined prefix which is put at the beginning of the ID
-	 * @return UID stored as Value object
-	 *
-	 * @note In contrast to the function getUID(), this function can be called
-	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
-	 * in MT environment or use additional synchronization
-	 */
-	Value genUIDValue(StrViewA prefix) const;
-
-
-	///Generates new UID
-	/** Function is alias to genUIDValue() - for compatibility reasons */
-	Value genUID() const {return genUIDValue();}
-
-	///Generates new UID
-	/** Function is alias to genUIDValue() - for compatibility reasons */
-	Value genUID(StrViewA prefix) const {return genUIDValue(prefix);}
 
 
 	///Changes current database
@@ -197,7 +106,7 @@ public:
 
 
 	///Bulk upload
-	Value bulkUpload(const Value docs);
+	Value bulkUpload(const Value docs) override;
 
 
 	///Determines last sequence number
@@ -207,7 +116,7 @@ public:
 	 * changes made during synchronization
 	 * @return last sequence number
 	 */
-	SeqNumber getLastSeqNumber();
+	SeqNumber getLastSeqNumber() override;
 
 	///Retrieves last known sequence number (LKSQID)
 	/** Function returns last known sequence number without asking the
@@ -230,32 +139,32 @@ public:
 	 * version of CouchDB is used.
 	 *
 	 */
-	SeqNumber getLastKnownSeqNumber() const;
+	SeqNumber getLastKnownSeqNumber() const override;
 
 	///Creates query for specified view
 	/**
 	 * @param view a view definition
 	 * @return
 	 */
-	Query createQuery(const View &view);
+	Query createQuery(const View &view) override;
 
 	///Creates query object for retrieve documents
 	/**
 	 * @param viewFlags flags defined in View.
 	 * @return
 	 */
-	Query createQuery(Flags viewFlags);
+	Query createQuery(Flags viewFlags) override;
 
 	///Creates changeset
 	/** Changeset will use this database connection to update document
 	 *
 	 * @return
 	 */
-	Changeset createChangeset();
+	Changeset createChangeset() override;
 
 
 	///Creates object which is used to receive database changes
-	ChangesFeed createChangesFeed();
+	ChangesFeed createChangesFeed() override;
 
 
 
@@ -272,7 +181,7 @@ public:
 	 * @note if sequence numbers are tracked, function disables caching, because
 	 * sequence numbers are not updated when local document is stored
 	 */
-	Value getLocal(const StrViewA &localId, Flags flags = 0);
+	Value getLocal(const StrViewA &localId, Flags flags = 0) override;
 
 	///Retrieves document (by its id)
 	/**
@@ -296,27 +205,13 @@ public:
 	 */
 	Value get(const StrViewA &docId, const StrViewA &revId, Flags flags = flgDisableCache);
 
-	///Creates new document
-	/**
-	 * Function creates new object and puts _id in it. Generates new id
-	 * @return Value which can be converted to Document object
-	 */
-	Document newDocument();
-
-	///Creates new document
-	/**
-	 * Function creates new object and puts _id in it. Generates new id
-	 * @param prefix prefix append to UID - can be used to specify type of the document
-	 * @return Value which can be converted to Document object
-	 */
-	Document newDocument(const StrViewA &prefix);
 
 	///Retrieves pointer to validator
 	/**
 	 * @return function returns null, when validator is not defined. Otherwise function
 	 * returns pointer to current validator
 	 */
-	Validator *getValidator() const {return cfg.validator;}
+	Validator *getValidator() const override {return cfg.validator;}
 
 
 	///Calls update handler to update document using server-side function
@@ -368,18 +263,7 @@ public:
 	 * @note The returned object should not be stored for long way, because it blocks whole Couchdb instance
 	 * until the upload is finished
 	 */
-	Upload putAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType);
-
-	///Uploads attachment with specified document
-	/**
-	 * Function allows to upload attachment stored complete in the memory.
-	 *
-	 * @param document document object. The document don't need to be complete, only _id and _rev must be there.
-	 * @param attachmentName name of attachment
-	 * @param attachmentData content of attachment
-	 * @return Funtcion returns new revision of the document, if successful.
-	 */
-	String putAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData);
+	Upload putAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType)  override;
 
 	///Downloads attachment
 	/**
@@ -387,7 +271,7 @@ public:
 	 * @param attachmentName name of attachment to retrieve
 	 * @param etag if not empty, function puts string as "if-none-match" header.
 	 */
-	Download getAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
+	Download getAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA()) override;
 
 	///Downloads latest attachments
 	/** Allows to easily download the latest attachment by given docId an dattachmentName
@@ -397,7 +281,7 @@ public:
 	 * @param etag (optional) etag, if not empty, then it is put to the header and result can be notModified
 	 * @return download object
 	 */
-	Download getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
+	Download getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA()) override;
 
 
 	///For function updateDesignDocument
@@ -469,7 +353,7 @@ public:
 	 * @exception UpdateException Update is not possible (exception contains one item)
 	 * @exception RequestException Other error
 	 */
-	void put(Document &doc);
+	void put(Document &doc) override;
 
 
 	///Commands the database to update specified view
@@ -495,9 +379,7 @@ public:
 	Value getSerialNr() ;
 protected:
 
-	mutable std::mutex lock;
 	std::condition_variable connRelease;
-	typedef std::lock_guard<std::mutex> LockGuard;
 
 
 
@@ -507,8 +389,7 @@ protected:
 
 	std::size_t lastStatus = 0;
 	std::size_t curConnections;
-	mutable std::vector<char> uidBuffer;
-	IIDGen& uidGen;
+
 	SeqNumber lksqid;
 
 	///stores current token (as cookie)
@@ -530,8 +411,8 @@ protected:
 
 	friend class ChangesFeed;
 
-	Changes receiveChanges(ChangesFeed &sink);
-	void receiveChangesContinuous(ChangesFeed &sink, ChangesFeedHandler &fn);
+	virtual Changes receiveChanges(ChangesFeed &sink) override;
+	virtual void receiveChangesContinuous(ChangesFeed &sink, ChangesFeedHandler &fn) override;
 
 	class Queryable: public IQueryableObject {
 	public:
@@ -693,25 +574,6 @@ private:
 	void updateSeqNum(const Value& seq);
 	void operator=(const CouchDB &other) = delete;
 
-	///Generates new UID using preconfigured generator
-	/** See Config how to setup custom generator
-	 *
-	 * @return string reference to UID. Note that reference is valid until method is called again. You
-	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
-	 * lost in time of return
-	 *
-	 */
-	StrViewA lkGenUID() const;
-
-	///Generates new UID using preconfigured generator
-	/**See Config how to setup custom generator
-	 *
-	 * @param prefix user defined prefix which is put at the beginning of the ID
-	 * @return string reference to UID. Note that reference is valid until method is called again. You
-	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
-	 * lost in time of return
-	 */
-	StrViewA lkGenUID(StrViewA prefix) const;
 
 };
 

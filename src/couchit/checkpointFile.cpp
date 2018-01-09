@@ -14,7 +14,7 @@
 
 #include "query.h"
 #include <imtjson/binjson.tcc>
-#include <shared/dispatcher.h>
+#include "shared/dispatcher.h"
 
 namespace couchit {
 
