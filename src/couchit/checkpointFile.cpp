@@ -10,11 +10,12 @@
 #include <fstream>
 #include <atomic>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 #include "checkpointFile.h"
 
 #include "query.h"
 #include <imtjson/binjson.tcc>
-#include "shared/dispatcher.h"
 
 namespace couchit {
 
