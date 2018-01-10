@@ -36,30 +36,64 @@ protected:
 };
 
 
-class AsyncCheckpointQueue: public ondra_shared::Dispatcher {
+class AsyncCheckpointQueue {
 public:
 
-	void operator<<(const Msg &msg) {
-		ondra_shared::Dispatcher::operator <<(msg);
-		bool b = false;
-		if (running.compare_exchange_strong(b, true)) {
-			if (thr.joinable()) thr.join();
-			thr = std::thread([this] {
+	typedef std::function<void()> Msg;
+
+
+	void runTask(const std::string &taskName, const Msg &task) {
+		std::unique_lock<std::mutex> _(mx);
+		strMap[taskName] = task;
+		if (!thr.joinable()) {
+			thr = std::thread([this]{
 				this->run();
-				running = false;
 			});
 		}
+		condvar.notify_all();
+	}
+
+	void run() {
+		std::unique_lock<std::mutex> _(mx);
+		for(;;) {
+			condvar.wait(_, [&]{
+				return finish || !strMap.empty();
+			});
+			if (finish) return;
+			auto itr = strMap.begin();
+			Msg msg = itr->second;
+			strMap.erase(itr);
+			_.unlock();
+			try {
+				msg();
+			} catch (...) {
+
+			};
+			_.lock();
+		}
+
 	}
 
 	~AsyncCheckpointQueue() {
-		if (running) this->quit();
-		if (thr.joinable()) thr.join();
+		std::unique_lock<std::mutex> _(mx);
+		if (thr.joinable()) {
+			finish = true;
+			condvar.notify_all();
+			_.unlock();
+			thr.join();
+		}
 	}
 
+
 	static AsyncCheckpointQueue &getInstance();
+
 protected:
-	std::atomic<bool> running;
+	std::map<std::string, Msg> strMap;
+	std::mutex mx;
+	std::condition_variable condvar;
 	std::thread thr;
+	bool finish = false;
+
 
 };
 
@@ -74,9 +108,9 @@ public:
 
 	virtual void store(const Value &res) override{
 		AsyncCheckpointQueue &q = AsyncCheckpointQueue::getInstance();
-		q << [me =RefCntPtr<AsyncCheckpointFile>(this), val = Value(res) ] {
+		q.runTask(fname, [me =RefCntPtr<AsyncCheckpointFile>(this), val = Value(res) ] {
 			me->SyncCheckpointFile::store(val);
-		};
+		});
 	}
 };
 
