@@ -55,13 +55,16 @@ public:
 
 	void run() {
 		std::unique_lock<std::mutex> _(mx);
+		std::string prevName;
 		for(;;) {
 			condvar.wait(_, [&]{
 				return finish || !strMap.empty();
 			});
 			if (finish) return;
-			auto itr = strMap.begin();
+			auto itr = strMap.upper_bound(prevName);
+			if (itr == strMap.end()) itr = strMap.begin();
 			Msg msg = itr->second;
+			prevName = itr->first;
 			strMap.erase(itr);
 			_.unlock();
 			try {
