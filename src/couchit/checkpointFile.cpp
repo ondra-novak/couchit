@@ -28,6 +28,8 @@ public:
 
 	virtual Value load() const override;
 	virtual void store (const Value &res) override;
+	virtual bool load(const std::function<void(std::istream &stream)> &fn) const override;
+	virtual void store(const std::function<void(std::ostream &stream)> &fn) override;
 
 
 protected:
@@ -111,6 +113,12 @@ public:
 		AsyncCheckpointQueue &q = AsyncCheckpointQueue::getInstance();
 		q.runTask(fname, [me =RefCntPtr<AsyncCheckpointFile>(this), val = Value(res) ] {
 			me->SyncCheckpointFile::store(val);
+		});
+	}
+	virtual void store (const std::function<void(std::ostream &stream)> &fn) override {
+		AsyncCheckpointQueue &q = AsyncCheckpointQueue::getInstance();
+		q.runTask(fname, [me =RefCntPtr<AsyncCheckpointFile>(this), fn = std::function<void(std::ostream &stream)>(fn) ] {
+			me->SyncCheckpointFile::store(fn);
 		});
 	}
 };
@@ -212,6 +220,29 @@ void SyncCheckpointFile::store(const Value & data) {
 			int err = errno;
 			throw CheckpointIOException(String({"Failed to write to the checkpoint file: ",newfname}),err);
 		}
+	}
+	std::rename(newfname.c_str(), fname.c_str());
+}
+
+bool SyncCheckpointFile::load(const std::function<void(std::istream &stream)> &fn) const {
+	std::ifstream in(fname, std::ios::in|std::ios::binary);
+	if (!in) return false;
+	fn(in);
+	if (!in) return false;
+	return true;
+
+}
+void SyncCheckpointFile::store (const std::function<void(std::ostream &stream)> &fn) {
+	std::string newfname = fname+".part";
+	std::ofstream out(newfname, std::ios::binary|std::ios::out|std::ios::trunc);
+	if (!out) {
+		int err = errno;
+		throw CheckpointIOException(String({"Failed to open checkpoint file for writting: ",newfname}), err);
+	}
+	fn(out);
+	if (!out){
+		int err = errno;
+		throw CheckpointIOException(String({"Failed to write to the checkpoint file: ",newfname}),err);
 	}
 	std::rename(newfname.c_str(), fname.c_str());
 }

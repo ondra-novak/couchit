@@ -568,12 +568,14 @@ protected:
 	Value postRequest(PConnection &conn, const StrViewA &cacheKey, Value *headers, Flags flags);
 	Value getToken();
 	void setupHttpConn(HttpClient &http, Flags flags);
+	virtual IIDGen &getIDGenerator() const;
 
 private:
 	int initChangesFeed(const PConnection& conn, ChangesFeed& sink);
 	void updateSeqNum(const Value& seq);
 	void operator=(const CouchDB &other) = delete;
 
+	void postInit();
 
 };
 

@@ -206,12 +206,13 @@ public:
 	 * returns pointer to current validator
 	 */
 	virtual Validator *getValidator() const = 0;
+
+	virtual IIDGen &getIDGenerator() const = 0;
 protected:
-	DocumentDB (IIDGen& uidGen);
+	DocumentDB ();
 	DocumentDB (const DocumentDB &other);
 	virtual ~DocumentDB() {}
 
-	IIDGen& uidGen;
 	mutable std::mutex lock;
 	typedef std::lock_guard<std::mutex> LockGuard;
 	mutable std::vector<char> uidBuffer;

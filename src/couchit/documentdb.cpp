@@ -15,9 +15,9 @@ namespace couchit {
 StrViewA DocumentDB::fldTimestamp("~timestamp");
 StrViewA DocumentDB::fldPrevRevision("~prevRev");
 
-DocumentDB::DocumentDB (IIDGen& uidGen):uidGen(uidGen) {}
+DocumentDB::DocumentDB () {}
 
-DocumentDB::DocumentDB (const DocumentDB &other):uidGen(other.uidGen) {}
+DocumentDB::DocumentDB (const DocumentDB &) {}
 
 Value DocumentDB::genUIDValue() const {
 	LockGuard _(lock);
@@ -39,11 +39,11 @@ Document DocumentDB::newDocument(const StrViewA &prefix) {
 }
 
 StrViewA DocumentDB::lkGenUID() const {
-	return uidGen(uidBuffer,StrViewA());
+	return getIDGenerator()(uidBuffer,StrViewA());
 }
 
 StrViewA DocumentDB::lkGenUID(StrViewA prefix) const {
-	return uidGen(uidBuffer,prefix);
+	return getIDGenerator()(uidBuffer,prefix);
 }
 
 String DocumentDB::putAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData) {

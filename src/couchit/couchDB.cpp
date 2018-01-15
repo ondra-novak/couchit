@@ -41,8 +41,7 @@ std::size_t CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
 CouchDB::CouchDB(const Config& cfg)
-	:DocumentDB(cfg.uidgen == nullptr?DefaultUIDGen::getInstance():*cfg.uidgen)
-	,cfg(cfg)
+	:cfg(cfg)
 	,curConnections(0)
 	,queryable(*this)
 
@@ -64,6 +63,13 @@ CouchDB::CouchDB(const CouchDB& other)
 {
 }
 
+void CouchDB::postInit() {
+	if (!cfg.authInfo.username.empty()) {
+		authObj = Object("name",cfg.authInfo.username)
+						("password",cfg.authInfo.password);
+	}
+	if (cfg.uidgen == nullptr) cfg.uidgen = &DefaultUIDGen::getInstance();
+}
 
 void CouchDB::setCurrentDB(String database) {
 	cfg.databaseName = database;
@@ -1295,6 +1301,10 @@ void CouchDB::setupHttpConn(HttpClient &http, Flags flags) {
 
 CouchDB::Connection::Connection():firstUse(SysClock::now()) {
 
+}
+
+IIDGen &CouchDB::getIDGenerator() const {
+	return *cfg.uidgen;
 }
 
 Value CouchDB::getSerialNr()  {

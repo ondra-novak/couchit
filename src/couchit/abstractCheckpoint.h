@@ -18,6 +18,8 @@ public:
 
 	virtual Value load() const = 0;
 	virtual void store(const Value &res) = 0;
+	virtual bool load(const std::function<void(std::istream &stream)> &fn) const = 0;
+	virtual void store(const std::function<void(std::ostream &stream)> &fn) = 0;
 
 };
 
