@@ -569,17 +569,19 @@ function parseBinaryJSON(buffer) {
 	};
 	
 	function parseNumberDouble() {
-		var b = new ArrayBuffer(8);
+		var a = new ArrayBuffer(8);
+		var b = new Uint8Array(a);
 		for (var i = 0 ; i < 8; i++) b[i] = iter.next();
-		var f = Float64Array(b);
-		return f[0];
+		var f = new DataView(a);
+		return f.getFloat64(0,true);
 	}
 	
 	function parseNumberFloat() {
-		var b = new ArrayBuffer(8);
+        var a = new ArrayBuffer(4);
+		var b = new Uint8Array(a);
 		for (var i = 0 ; i < 4; i++) b[i] = iter.next();
-		var f = Float32Array(b);
-		return f[0];
+        var f = new DataView(a);
+        return f.getFloat32(0,true);
 	}
 	function parseDiff() {
 		return parseItem();
