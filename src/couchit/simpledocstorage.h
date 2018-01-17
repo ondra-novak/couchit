@@ -42,7 +42,48 @@ public:
 		///pointer to validator. If null, none is used
 		const Validator *validator;
 
-		Config ():updates(1000), idgen(nullptr), validator(nullptr) {}
+		typedef unsigned int Flags;
+
+		///Deleted documents are kept in database file and also in index
+		/** This flag is default and emulates behaviour of the CouchDB. However
+		 * deleted documents still occupy the space and affects performance
+		 * negatively.
+		 */
+		static const Flags keepDeleted = 0;
+
+		///Deleted documents are tombstoned into minimal
+		/** This option automatically removes all keys, only _id, _rev and _deleted
+		 * remains
+		 */
+		static const Flags deletedMakeTombstone = 1;
+
+		///Once the document is deleted, it is also removed from the index
+		/** This options causes, that the deleted document is no longer
+		 * found by its ID (they are still appear in the changes stream).
+		 * Option can help to better performance on database, where
+		 * many documents are deleted. Also note, that deleted documents
+		 * are removed during compaction.
+		 *
+		 *
+		 */
+		static const Flags deleteFromIndex = 2;
+
+
+		///Deleted documents are removed during compaction.
+		/** Until compaction, deleted documents are still available,
+		 * (how - it depends on other flags) but these documents are removed
+		 * during compaction
+		 */
+		static const Flags deletePurgeOnCompact = 4;
+
+		///Deleted document is immediatelly purged
+		/** This makes database fastest, but it cannot be used for replication*/
+		static const Flags deletePurge = deleteFromIndex|deletedMakeTombstone;
+
+
+		Flags flags;
+
+		Config ():updates(1000), idgen(nullptr), validator(nullptr),flags(0){}
 	};
 
 	SimpleDocStorage(const Config &cfg = Config());
@@ -71,6 +112,8 @@ public:
 	void create(String dbfile, PCheckpoint chkpointFile);
 	///flushes checkpoint to disk
 	void makeCheckpoint();
+
+	void compact();
 
 	virtual Changes receiveChanges(ChangesFeed &sink) ;
 	virtual void receiveChangesContinuous(ChangesFeed &sink, ChangesFeedHandler &fn);
@@ -104,6 +147,9 @@ private:
 	struct DocInfo {
 		SeqNum seqNum;
 		Offset offset;
+		DocInfo() {}
+		DocInfo(SeqNum seqNum,Offset offset)
+			:seqNum(seqNum), offset(offset) {}
 	};
 
 
@@ -113,13 +159,16 @@ private:
 	/** this is restured from DocMap */
 	typedef std::map<SeqNum, Offset> SeqNumMap;
 
+
+
+
 	DocMap docMap;
 	SeqNumMap seqNumMap;
 	std::fstream dbfile;
 
 	String dbpname;
 	PCheckpoint chkpoint;
-	std::size_t seqnum;
+	std::size_t lastSeqNum;
 	Offset syncFileSize;
 
 
@@ -129,6 +178,14 @@ private:
 	typedef std::shared_lock<std::shared_timed_mutex> SharedSync;
 	typedef std::unique_lock<std::shared_timed_mutex> Sync;
 	void loadCheckpointAndSync();
+
+	Value loadDocument(Offset &offset);
+	Offset saveDocument(Value rawDoc);
+
+	static SeqNum generateSeqNumMap(const DocMap &docMap, SeqNumMap &seqNumMap);
+	static SeqNum putDocToIndex(DocMap &docMap, const Value &document, Offset offset);
+	bool canIndexDocument(const Value &document);
+
 
 
 

@@ -30,6 +30,7 @@ public:
 	virtual void store (const Value &res) override;
 	virtual bool load(const std::function<void(std::istream &stream)> &fn) const override;
 	virtual void store(const std::function<void(std::ostream &stream)> &fn) override;
+	virtual void erase() override;
 
 
 protected:
@@ -120,6 +121,14 @@ public:
 		q.runTask(fname, [me =RefCntPtr<AsyncCheckpointFile>(this), fn = std::function<void(std::ostream &stream)>(fn) ] {
 			me->SyncCheckpointFile::store(fn);
 		});
+	}
+	virtual void erase () override {
+		AsyncCheckpointQueue &q = AsyncCheckpointQueue::getInstance();
+		std::string f = fname;
+		q.runTask(fname, [f] {
+			std::remove(f.c_str());
+		});
+
 	}
 };
 
@@ -247,6 +256,9 @@ void SyncCheckpointFile::store (const std::function<void(std::ostream &stream)> 
 	std::rename(newfname.c_str(), fname.c_str());
 }
 
+inline void SyncCheckpointFile::erase() {
+	std::remove(fname.c_str());
+}
 
 } /* namespace couchit */
 
