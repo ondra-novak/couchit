@@ -470,8 +470,8 @@ LocalView::Queryable::Queryable(const LocalView& lview):lview(lview) {
 Value LocalView::Queryable::executeQuery(const QueryRequest& r) {
 
 	bool descend = ((r.view.flags & View::reverseOrder) != 0) != r.reversedOrder;
-	std::size_t groupLevel;
-	bool reduce;
+	std::size_t groupLevel =  0;
+	bool reduce = false;
 	Value result;
 
 

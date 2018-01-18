@@ -217,13 +217,16 @@ protected:
 		bool operator()(const KeyAndDocId &l, const KeyAndDocId &r) const { return l.compare(r) < 0;}
 	};
 
+	typedef Value RRow;
 
+
+	static RRow makeRow(String id, Value key, Value value, Value doc);
 	///Contains for each document set of keys
 	/** It is used to easy find keys to erase during update */
 	typedef std::multimap<String, Value> DocToKey;
 	///Contains keys mapped to documents
 	/** Key contains the key itself and documentId to easyly handle duplicated keys */
-	typedef std::map<KeyAndDocId, ValueAndDoc, CmpKeyAndDocId> KeyToValue;
+	typedef std::map<KeyAndDocId, Row, CmpKeyAndDocId> KeyToValue;
 
 	///Contains map where documendID is key and view's key is value
 	/** This helps to search all keys for selected document. The documentID string can
@@ -241,6 +244,7 @@ protected:
 	Value runQuery(const QueryRequest& r) const;
 
 	void addDocLk(const String &id, const Value &doc, const Value &key, const Value &value);
+	void addDocLk(const RRow &rw);
 
 
 	typedef std::shared_timed_mutex Lock;

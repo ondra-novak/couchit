@@ -229,7 +229,7 @@ bool ChangesDistributor::sync(Value seqNum, unsigned int timeoutms) {
 		auto predicate = [&]{
 			return reqSeqNum<=obs.seqNum;
 		};
-		if (timeoutms == -1) {
+		if (timeoutms == (unsigned int)-1) {
 			condvar.wait(lock,  predicate);
 		} else {
 			if (!condvar.wait_for(lock, std::chrono::milliseconds(timeoutms),predicate)) return false;

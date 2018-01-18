@@ -18,6 +18,7 @@ public:
 
 	virtual Value load() const = 0;
 	virtual void store(const Value &res) = 0;
+	virtual ~AbstractCheckpoint() {}
 
 };
 

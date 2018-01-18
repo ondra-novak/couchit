@@ -6,6 +6,17 @@
 
 namespace couchit {
 
+
+MemView::RRow MemView::makeRow(String id, Value key, Value value, Value doc) {
+	Object out;
+	out.set("id",id)
+			("key",key)
+			("value",value)
+			("doc",doc);
+	return out;
+
+}
+
 SeqNumber MemView::load(const Query& q) {
 
 	USync _(updateLock);
@@ -63,7 +74,7 @@ Query MemView::createQuery(std::size_t viewFlags) const {
 	return Query(v, queryable);
 }
 
-Query MemView::createQuery(std::size_t viewFlags, View::Postprocessing fn, CouchDB* db) const {
+Query MemView::createQuery(std::size_t viewFlags, View::Postprocessing fn, CouchDB* ) const {
 	View v(String(),viewFlags,fn);
 	return Query(v, queryable);
 }
@@ -149,10 +160,7 @@ Value MemView::runQuery(const QueryRequest& r) const {
 
 template<typename Iter>
 static Value resultToValue(const Iter &itm) {
-	return Object("id",itm.first.docId)
-					("key",itm.first.key)
-					("value",itm.second.value)
-					("doc",itm.second.doc);
+	return itm.second;
 }
 
 Value MemView::getAllItems() const {
@@ -212,7 +220,7 @@ void MemView::addDoc(const Value& doc) {
 		class Emit: public EmitFn {
 		public:
 			Emit(MemView &owner, const String &id, const Value &doc, bool &mapped)
-				:sync(owner.lock, std::defer_lock), mapped(mapped), owner(owner),doc(doc),id(id) {}
+				:sync(owner.lock, std::defer_lock), owner(owner),doc(doc),mapped(mapped), id(id) {}
 			virtual void operator()(const Value &key, const Value &value) const {
 				if (!mapped) {
 					mapped = true;
@@ -240,15 +248,22 @@ void MemView::addDoc(const Value& doc) {
 }
 
 void MemView::addDocLk(const String &id, const Value& doc, const Value& key, const Value& value) {
-	Value idocs = flags & flgIncludeDocs? doc.stripKey() : Value(nullptr);
+	Value idocs = flags & flgIncludeDocs? doc.stripKey() : Value();
 
 	Value skey = key.stripKey();
 	Value svalue = value.stripKey();
 
 	if (id == skey.getString()) skey = id;
 
-	keyToValueMap.insert(std::make_pair(KeyAndDocId(skey,id),ValueAndDoc(svalue,idocs)));
+	keyToValueMap.insert(std::make_pair(KeyAndDocId(skey,id),makeRow(id,skey,svalue,idocs)));
 	docToKeyMap.insert(std::make_pair(id,skey));
+}
+
+void MemView::addDocLk(const RRow &rw) {
+	Value key(rw["key"]);
+	String id(rw["id"]);
+	keyToValueMap.insert(std::make_pair(KeyAndDocId(key,id),rw));
+	docToKeyMap.insert(std::make_pair(id,key));
 }
 
 void MemView::update(CouchDB& db) {
@@ -273,16 +288,11 @@ void MemView::setCheckpointFile(const PCheckpoint& checkpointFile,  Value serial
 		if (sr != serialNr) {
 			updateSeq = "0";
 		} else {
-			Value index = res["data"];
+			Value index = res["rows"];
 			Value prevKey;
 
-			for (Value kv : index) {
-				Value k = kv[0];
-				Value i = kv[1];
-				Value v = kv[2];
-				Value d = kv[3];
-				String id(i);
-				addDocLk(id,d,k,v);
+			for (RRow kv : index) {
+				addDocLk(kv);
 			}
 		}
 	}
@@ -311,11 +321,11 @@ void MemView::makeCheckpoint(PCheckpoint chkpStore) {
 
 
 		for (auto &&itm : keyToValueMap) {
-			out.push_back({itm.first.key, itm.first.docId, itm.second.value, itm.second.doc});
+			out.push_back(itm.second);
 		}
 	}
 
-	Value d  = Object("updateSeq",updateSeq)("data",out)("serial",chkSrNr);
+	Value d  = Object("updateSeq",updateSeq)("rows",out)("serial",chkSrNr);
 	chkpStore->store(d);
 
 }

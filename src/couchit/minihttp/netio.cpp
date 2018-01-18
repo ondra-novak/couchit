@@ -226,7 +226,7 @@ json::BinaryView NetworkConnection::doWrite(const json::BinaryView &data, bool n
 	}
 //	std::cout << "Write: " << StrViewA(BinaryView(data.data,sent)) << std::endl;
 
-	if (nonblock || sent == data.length) {
+	if (nonblock || (std::size_t)sent == data.length) {
 		return data.substr(sent);
 	}
 	else {

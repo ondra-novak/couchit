@@ -36,6 +36,7 @@ protected:
 				toCommit = x.length;
 				return x;
 			}
+			return json::BinaryView();
 		}
 	}
 
@@ -51,7 +52,7 @@ protected:
 			}
 
 			std::size_t  pos = 0;
-			while (chunkHdrSz < sizeof(chunkHdr) && pos < buff.length) {
+			while ((unsigned int)chunkHdrSz < sizeof(chunkHdr) && pos < buff.length) {
 				unsigned char c = buff[pos++];
 				if (isspace(c) && chunkHdrSz == 0)
 					continue;
@@ -144,14 +145,14 @@ protected:
 	}
 
 
-	virtual json::BinaryView doWrite(const json::BinaryView &data, bool nonblock) {
+	virtual json::BinaryView doWrite(const json::BinaryView &data, bool ) {
 		if (data.empty()) return data;
 		sendChunk(data);
 		return json::BinaryView(0,0);
 
 	}
 	virtual bool doWaitWrite(int milisecs) {
-		stream->waitWrite(milisecs);
+		return stream->waitWrite(milisecs);
 	}
 
 

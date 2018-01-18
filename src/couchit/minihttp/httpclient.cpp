@@ -164,7 +164,7 @@ bool HttpClient::waitForData(int timeout) {
 
 void HttpClient::discardResponse() {
 	if (responseData != nullptr) {
-		std::size_t p = 0;
+//		std::size_t p = 0;
 		BinaryView b = responseData->read();
 		while (!b.empty()) {
 			responseData->commit(b.length);

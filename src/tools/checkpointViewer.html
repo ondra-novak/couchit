@@ -306,7 +306,7 @@ function startRead(file) {
 	spinner.hidden=false;
 	setTimeout(function() {readFile(file).then(initPanel).then(function(){
 		spinner.hidden = true;
-	});},400);
+	}).catch(function(e){alert("Error: " + JSON.stringify(e));});},400);
 }
 
 function start() {
@@ -473,14 +473,14 @@ function readFile(f) {
 		var fr = new FileReader();
 		fr.onload = function() {
 			var json = parseBinaryJSON(fr.result);
-			if (json.version) {
-				if (json.version==2) json = translateVersion(json);
-				else alert("unsupported version");
+			if (json.version != 3) {
+				 fail("unsupported version");
+				 return;
 			}
-			var data = json.data;
+			var data = json.rows;
 			var hdr = json;
 			delete json.data;
-			ok([defineSearchFunctions(data, function(x) {return x[0];}),hdr,f]); 			
+			ok([defineSearchFunctions(data, function(x) {return x.key;}),hdr,f]); 			
 		}
 		fr.readAsArrayBuffer(f);
 	});
@@ -828,10 +828,10 @@ function showResults(data) {
 	    for (var i = 0; i < cnt; i++) {
 	        var itm = data[i+from];
 			
-			var key = JSON.stringify(itm[0],null," ");
-			var value = JSON.stringify(itm[2],null," ");
-			var id = itm[1];
-			var doc = JSON.stringify(itm[3],null," ");
+			var key = JSON.stringify(itm.key,null," ");
+			var value = JSON.stringify(itm.value,null," ");
+			var id = itm.id;
+			var doc = JSON.stringify(itm.doc,null," ");
 			var row = document.createElement("tr");
 			var td = "td";
 			var link = documentUrlPrefix?documentUrlPrefix+encodeURIComponent(id):null;
@@ -919,7 +919,7 @@ function doSearchValue(val) {
 function doSearchKeys(val) {
 	var res = [];
 	document.dbdata.forEach(function(itm) {
-		if (itm[1] == val) res.push(itm); 
+		if (itm.id == val) res.push(itm); 
 	});
 	showResults(res);
 }

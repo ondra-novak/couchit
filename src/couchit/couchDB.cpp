@@ -60,8 +60,8 @@ CouchDB::CouchDB(const CouchDB& other)
 	:cfg(other.cfg)
 	,curConnections(0)
 	,uidGen(other.uidGen)
-	,queryable(*this)
 	,authObj(other.authObj)
+	,queryable(*this)
 {
 }
 
@@ -814,7 +814,7 @@ CouchDB::Queryable::Queryable(CouchDB& owner):owner(owner) {
 Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 	SeqNumber lastSeq = owner.getLastKnownSeqNumber();
-	if (lastSeq.getRevId() == 0 || lastSeq.isOld() && r.needUpdateSeq)
+	if (lastSeq.getRevId() == 0 || (lastSeq.isOld() && r.needUpdateSeq))
 		lastSeq = owner.getLastSeqNumber();
 
 
@@ -824,7 +824,6 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 	StrViewA endKey = "endkey";
 	StrViewA startKeyDocId = "startkey_docid";
 	StrViewA endKeyDocId = "endkey_docid";
-	bool useCache;
 
 
 	bool desc = (r.view.flags & View::reverseOrder) != 0;
@@ -836,7 +835,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		std::swap(startKeyDocId,endKeyDocId);
 	}
 
-	useCache = (r.view.flags & View::noCache) == 0 && !r.nocache;
+//	bool useCache = (r.view.flags & View::noCache) == 0 && !r.nocache;
 
 	switch (r.mode) {
 		case qmAllItems: break;
@@ -1153,8 +1152,9 @@ Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) 
     do {
     	redirectRetry = false;
     	Object hdr(headers?*headers:Value());
-    	if (!hdr["Accept"].defined())
+    	if (!hdr["Accept"].defined()) {
     		hdr("Accept","application/binjson, application/json");
+    	}
 		if (cachedItem.isDefined()) {
 			hdr("If-None-Match", cachedItem.etag);
 		}

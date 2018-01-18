@@ -15,6 +15,7 @@
 #include "query.h"
 #include <imtjson/binjson.tcc>
 #include <shared/dispatcher.h>
+#include <unordered_set>
 
 namespace couchit {
 
@@ -135,35 +136,26 @@ Value SyncCheckpointFile::load() const {
 		return in.get();
 	}, base64);
 
-	Value version = data["version"];
-	if (version.defined()) {
-		if (version.getUInt() == 2) {
-			Value compdata = data["compdata"];
-			Value objtable = data["objects"];
-			Array decompdata;
-			decompdata.reserve(compdata.size());
-			Array tmp;
-			tmp.reserve(10);
-			unsigned int columns = data["columns"].getUInt();
+	if (data["version"]!=3)
+		return json::undefined;
 
-
-			for (Value rw : compdata) {
-				if (rw.isNull()) tmp.push_back(rw);
-				std::size_t dataid = rw.getUInt();
-				tmp.push_back(objtable[dataid]);
-				if (tmp.size() == columns) {
-					decompdata.push_back(tmp);
-					tmp.clear();
-				}
+	std::unordered_set<Value> objects;
+	Value rows = data["rows"];
+	Array newrows;
+	newrows.reserve(rows.size());
+	for (Value rw : rows) {
+		Object o(rw);
+		for (Value x: rw) {
+			auto itr = objects.find(x);
+			if (itr != objects.end()) {
+				o.set(x.getKey(), *itr);
+			} else {
+				objects.insert(x.stripKey());
 			}
-			return data.replace("data",decompdata);
-		} else {
-			return Value();
 		}
-	} else {
-		return data;
+		newrows.push_back(o);
 	}
-
+	return data.replace("rows",newrows);
 }
 
 void SyncCheckpointFile::store(const Value & data) {
@@ -176,37 +168,7 @@ void SyncCheckpointFile::store(const Value & data) {
 			throw CheckpointIOException(String({"Failed to open checkpoint file for writting: ",newfname}), err);
 		}
 
-		Array compdata;
-		Value rows = data["data"];
-		std::unordered_map<Value, Value> objmap;
-		Array objtable;
-		unsigned int columns = 4;
-
-		for (Value rw: rows) {
-			for (unsigned int i = 0; i < columns; i++) {
-				Value c = rw[i];
-				Value idx;
-				auto x = objmap.find(c);
-				if (x == objmap.end()) {
-					idx = objtable.size();
-					objmap.insert(std::make_pair(c, idx));
-					objtable.push_back(c);
-				} else {
-					idx = x->second;
-				}
-				compdata.push_back(idx);
-			}
-		}
-
-		Object newdata(data);
-		newdata.unset("data");
-		newdata.set("compdata", compdata);
-		newdata.set("objects", objtable);
-		newdata.set("version",2);
-		newdata.set("columns",columns);
-		Value ndata = newdata;
-
-		ndata.serializeBinary([&](char c){
+		data.replace("version",3).serializeBinary([&](char c){
 			out.put(c);
 		},json::compressKeys);
 
