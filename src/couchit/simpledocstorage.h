@@ -147,9 +147,10 @@ private:
 	struct DocInfo {
 		SeqNum seqNum;
 		Offset offset;
+		bool deleted;
 		DocInfo() {}
-		DocInfo(SeqNum seqNum,Offset offset)
-			:seqNum(seqNum), offset(offset) {}
+		DocInfo(SeqNum seqNum,Offset offset, bool deleted)
+			:seqNum(seqNum), offset(offset), deleted(deleted) {}
 	};
 
 
@@ -158,7 +159,6 @@ private:
 	///Simple index, maps sequence numbers to offsets
 	/** this is restured from DocMap */
 	typedef std::map<SeqNum, Offset> SeqNumMap;
-
 
 
 
@@ -187,6 +187,7 @@ private:
 	bool canIndexDocument(const Value &document);
 
 
+	Value uploadDocument(Value doc);
 
 
 };

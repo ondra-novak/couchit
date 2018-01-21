@@ -2,11 +2,16 @@
 
 #include <imtjson/binjson.tcc>
 
+#include "changes.h"
+
+#include "changeset.h"
+
 #include "checkpointFile.h"
 
 
 #include "defaultUIDGen.h"
 #include "exception.h"
+#include "query.h"
 
 namespace couchit {
 
@@ -83,8 +88,80 @@ SimpleDocStorage::SeqNum SimpleDocStorage::generateSeqNumMap(const DocMap &docMa
 SimpleDocStorage::SeqNum SimpleDocStorage::putDocToIndex(DocMap &docMap, const Value &document, Offset offset) {
 	String id(document["_id"]);
 	SeqNum seqNum = document["_local_seq"].getUInt();
-	docMap[id] = DocInfo(seqNum, offset);
+	docMap[id] = DocInfo(seqNum, offset, document["_deleted"].getBool());
 	return seqNum;
+}
+
+Changes SimpleDocStorage::receiveChanges(ChangesFeed& sink) {
+}
+
+void SimpleDocStorage::receiveChangesContinuous(ChangesFeed& sink,
+		ChangesFeedHandler& fn) {
+}
+
+
+
+Value SimpleDocStorage::bulkUpload(const Value docs) {
+
+	Sync _(lock);
+	Array results;
+	results.reserve(docs.size());
+	for (Value doc: docs) {
+		results.push_back(uploadDocument(doc));
+	}
+	return results;
+
+}
+
+SeqNumber SimpleDocStorage::getLastSeqNumber() {
+}
+
+SeqNumber SimpleDocStorage::getLastKnownSeqNumber() const {
+}
+
+Query SimpleDocStorage::createQuery(const View& view) {
+}
+
+Query SimpleDocStorage::createQuery(Flags viewFlags) {
+}
+
+Changeset SimpleDocStorage::createChangeset() {
+}
+
+ChangesFeed SimpleDocStorage::createChangesFeed() {
+}
+
+Value SimpleDocStorage::getLocal(const StrViewA& localId, Flags flags) {
+}
+
+Value SimpleDocStorage::get(const StrViewA& docId, Flags flags) {
+}
+
+Value SimpleDocStorage::get(const StrViewA& docId, const StrViewA& revId,
+		Flags flags) {
+}
+
+Upload SimpleDocStorage::putAttachment(const Value& document,
+		const StrViewA& attachmentName, const StrViewA& contentType) {
+}
+
+String SimpleDocStorage::putAttachment(const Value& document,
+		const StrViewA& attachmentName,
+		const AttachmentDataRef& attachmentData) {
+}
+
+Download SimpleDocStorage::getAttachment(const Document& document,
+		const StrViewA& attachmentName, const StrViewA& etag) {
+}
+
+Download SimpleDocStorage::getAttachment(const StrViewA& docId,
+		const StrViewA& attachmentName, const StrViewA& etag) {
+}
+
+void SimpleDocStorage::put(Document& doc) {
+}
+
+Validator* SimpleDocStorage::getValidator() const {
 }
 
 bool SimpleDocStorage::canIndexDocument(const Value &document) {
@@ -299,5 +376,78 @@ SimpleDocStorage::Offset SimpleDocStorage::saveDocument(Value rawDoc) {
 	return ret;
 }
 
+Value SimpleDocStorage::uploadDocument(Value doc) {
+
+	Value idv=doc["_id"];
+	if (!idv.defined()) return updateError(nullptr, "document", "Document has no id");
+	if (idv.type() != json::string)
+		return updateError(idv, "document", "Document's _id must be a string");
+	String id(idv);
+	Value seqid = doc["_local_seq"];
+	if (seqid.defined()) {
+		auto iter = docMap.find(id);
+		if (iter == docMap.end()) {
+			if (seqid.getUInt() != 0) return updateError(idv, "conflict", "Document doesn't exist");
+		} else {
+			if (iter->second.deleted) {
+				if (seqid.getUInt() != 0 && seqid.getUInt() != iter->second.seqNum)
+					return updateError(idv, "conflict", "Document is deleted");
+			} else {
+				if (seqid.getUInt() != iter->second.seqNum) {
+					return updateError(idv, "conflict", "Document has been changed");
+				}
+			}
+		}
+	}
+
+
+	Object ndoc(doc);
+	bool deleted = doc["_deleted"].getBool();
+	if (deleted && cfg.flags & Config::deletedMakeTombstone) {
+		ndoc.setBaseObject(json::object);
+		ndoc.set("_id", idv);
+		ndoc.set("_deleted",true);
+		ndoc.set("_rev", doc["_rev"]);
+	} else {
+		Value att = doc["_attachments"];
+		if (att.type() == json::object) {
+			auto attobj = ndoc.object(att.getKey());
+			uploadAttachments(attobj);
+		}
+	}
+	SeqNum sqn = lastSeqNum+1;
+	ndoc.set("_local_seq", sqn);
+	lastSeqNum = sqn;
+	Value sdoc (ndoc);
+	Offset pos = saveDocument(sdoc);
+	if (deleted && cfg.flags & Config::deleteFromIndex) {
+		auto iter = docMap.find(id);
+		if (iter != docMap.end()) {
+			seqNumMap.erase(iter->second.seqNum);
+			docMap.erase(iter);
+		}
+	} else {
+		DocInfo &dnf = docMap[id];
+		seqNumMap.erase(dnf.seqNum);
+		dnf.deleted = deleted;
+		dnf.offset = pos;
+		dnf.seqNum = sqn;
+	}
+	lock.unlock();
+	try {
+		notifyObservers(sdoc);
+		if (sqn % cfg.updates == 0) {
+			makeCheckpoint();
+		}
+	}
+	catch (...) {
+
+	}
+	lock.lock();
+	return sdoc;
 
 }
+
+
+}
+
