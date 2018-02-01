@@ -303,6 +303,13 @@ public:
 		const_iterator upper_bound(const Value &key, const String &docId) const {
 			return kmap.lower_bound(KeyAndDocId(key,docId));
 		}
+		///Find a key. It expects, that there is only one value per key
+		const_iterator find(const Value &key) const {
+			auto x = kmap.lower_bound(KeyAndDocId(key,String()));
+			auto e = end();
+			if (x != e && x->first.key != key) return e;
+			return x;
+		}
 
 
 	protected:
