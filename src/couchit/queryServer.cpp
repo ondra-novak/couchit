@@ -373,7 +373,8 @@ Value QueryServer::commandDDoc(const Value& req, std::istream &input, std::ostre
 			}
 			return resp;
 		} catch (std::bad_cast) {
-			throw QueryServerError("compile error",{"Error to execute compiled function: ", typeid(*fn.getHandle()->unproxy()).name()});
+			const IValue *p = fn.getHandle()->unproxy();
+			throw QueryServerError("compile error",{"Error to execute compiled function: ", typeid(*p).name()});
 		}
 	}
 }

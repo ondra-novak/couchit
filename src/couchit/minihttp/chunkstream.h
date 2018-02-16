@@ -93,7 +93,7 @@ public:
 
 	ChunkedOutputStream(OutputStream stream):stream(stream) {}
 
-	virtual void closeOutput() {
+	virtual void closeOutput() override {
 		commit(0,true);
 		sendChunk(json::BinaryView(0,0));
 		flush();
@@ -106,7 +106,7 @@ public:
 
 
 protected:
-	virtual Buffer createBuffer() {
+	virtual Buffer createBuffer() override {
 		return Buffer(chunkBuffer, chunkSize);
 	}
 
@@ -145,13 +145,13 @@ protected:
 	}
 
 
-	virtual json::BinaryView doWrite(const json::BinaryView &data, bool ) {
+	virtual json::BinaryView doWrite(const json::BinaryView &data, bool ) override {
 		if (data.empty()) return data;
 		sendChunk(data);
 		return json::BinaryView(0,0);
 
 	}
-	virtual bool doWaitWrite(int milisecs) {
+	virtual bool doWaitWrite(int milisecs) override {
 		return stream->waitWrite(milisecs);
 	}
 

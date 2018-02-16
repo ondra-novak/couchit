@@ -118,8 +118,9 @@ inline Validator::IValidationFn* Validator::add(const Fn &fn,const String &name)
 		String name;
 	};
 	PValidationFn f = new FnInst(fn,name);
+	IValidationFn *ret = f.get();
 	fnList.push_back(f);
-	return f;
+	return ret;
 }
 
 

@@ -79,13 +79,13 @@ OutputStream HttpClient::beginBody() {
 
 	class ErrorStream: public AbstractOutputStream {
 	public:
-		virtual json::BinaryView doWrite(const json::BinaryView &, bool ) {
+		virtual json::BinaryView doWrite(const json::BinaryView &, bool ) override {
 			return json::BinaryView(0,0);
 		}
-		virtual void closeOutput() {}
-		virtual bool doWaitWrite(int) {return true;}
+		virtual void closeOutput() override {}
+		virtual bool doWaitWrite(int) override {return true;}
 
-		virtual Buffer createBuffer() {
+		virtual Buffer createBuffer() override {
 			static unsigned char buff[256];
 			return Buffer(buff,sizeof(buff));
 		}
