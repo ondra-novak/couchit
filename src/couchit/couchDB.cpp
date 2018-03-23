@@ -7,6 +7,7 @@
 
 #include <fstream>
 #include <assert.h>
+#include <couchit/validator.h>
 #include <mutex>
 
 
@@ -112,7 +113,7 @@ Changeset CouchDB::createChangeset() {
 
 SeqNumber CouchDB::getLastSeqNumber() {
 	ChangesFeed chsink = createChangesFeed();
-	Changes chgs = chsink.setFilterFlags(Filter::reverseOrder).limit(1).exec();
+	Changes chgs = chsink.setFilterFlags(Filter::reverseOrder).limit(1).setTimeout(0).exec();
 	if (chgs.hasItems()) return ChangedDoc(chgs.getNext()).seqId;
 	else return SeqNumber();
 }
@@ -598,7 +599,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 	sink.curConn = conn.get();
 	_.unlock();
 
-	conn->http.setTimeout(120000);
+	conn->http.setTimeout(sink.iotimeout);
 	conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
 	OutputStream out(nullptr);
 	if (jsonBody.defined()) {
@@ -1324,6 +1325,85 @@ Value CouchDB::getSerialNr()  {
 	return serialNr;
 
 
+}
+
+Value CouchDB::getRevisions(const StrViewA docId, Value revisions, Flags flags) {
+	PConnection conn = getConnection();
+	conn->add(docId);
+	if (revisions.empty()) conn->add("open_revs","all");
+	else conn->addJson("open_revs",revisions);
+
+	if (flags & flgAttachments) conn->add("attachments","true");
+	if (flags & flgRevisions) conn->add("revs","true");
+
+	Value res = requestGET(conn, nullptr,flags & (flgDisableCache|flgRefreshCache));
+	Array output;
+	output.reserve(res.size());
+	for (Value x: res) {
+		output.push_back(x[0]); //<pick fist and only value;
+	}
+	return output;
+}
+
+void CouchDB::pruneConflicts(Document& doc, const Array& conflicts) {
+	PConnection conn = getConnection();
+	conn->add("_bulk_docs");
+	{
+		Revision curRev(doc.getRevValue());
+		Revision newRev(curRev.getRevId()+1, String({curRev.getTag(),"M"}));
+
+		auto revs = doc.object("_revisions");
+		auto ids = revs.array("ids");
+		if (ids.empty()) ids.insert(0, curRev.getRevId());
+		ids.insert(0, newRev.getTag());
+		revs("start", newRev.getRevId());
+		doc.setRev(newRev.toString());
+	}
+
+	Value id = doc.getIDValue();
+	Value docv(doc);
+	if (cfg.validator) {
+		auto r = cfg.validator->validateDoc(docv);
+		if (!r.valid) throw ValidationFailedException(r);
+	}
+
+	Array docs;
+	docs.push_back(docv);
+	for (Value c : conflicts) {
+		Revision curRev(c);
+		Revision newRev(curRev.getRevId()+1, String({curRev.getTag(),"R"}));
+		docs.push_back(Value(json::object,{
+				Value("_id",id),
+				Value("_rev",newRev.toString()),
+				Value("_revisions",Value(json::object,{
+					Value("start",newRev.getRevId()),
+					Value("ids",{newRev.getTag(),curRev.getTag()})
+				})),
+				Value("_deleted",true)
+		}));
+	}
+
+	Value req(json::object,{
+		Value("new_edits",false),
+		Value("docs",docs)
+	});
+
+	std::cout << req.toString();
+	Value r = requestPOST(conn,req,nullptr,0);
+	lksqid.markOld();
+	std::vector<UpdateException::ErrorItem> errors;
+	for (Value x: r) {
+		if (x["error"].defined()) {
+			UpdateException::ErrorItem err;
+			err.document = x["id"];
+			err.errorType = x["error"].toString();
+			err.reason = x["reason"].toString();
+			err.errorDetails = x;
+		}
+	}
+	if (!errors.empty()) {
+		throw UpdateException(std::move(errors));
+	}
 }
 
 

@@ -114,6 +114,11 @@ public:
 	 *
 	 *  */
 	void resolveConflicts();
+	///Stats that document resolved all conflicts. You must specify conflicts by argument
+	/**
+	 * @param conflicts array of conflicts revision to delete
+	 */
+	void resolveConflicts(Value conflicts);
 
 	void setID(const Value &id);
 	void setRev(const Value &rev);

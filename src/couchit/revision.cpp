@@ -42,7 +42,8 @@ String Revision::toString() const {
 	if (revTagOffs != 0) return revTag;
 	else {
 		char buff[50];
-		auto size = unsignedToString(outputToBuffer(buff),revId,50,10);
+		BufferOutput out(buff);
+		auto size = unsignedToString<BufferOutput &>(out,revId,50,10);
 		return String( {StrViewA(buff,size),"-",getTag()} );
 	}
 }

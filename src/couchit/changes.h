@@ -277,6 +277,22 @@ public:
 		return *this;
 	}
 
+
+	///Sets IO-Timeout
+	/**defines timeout waiting for any data from the database. Default value is 2 minutes. However it can
+	 * be useful to specify longer timeout especially when filtering is used and it is expected that processing
+	 * the filter takes a long time to response
+	 *
+	 * @param iotm
+	 * @return
+	 */
+	ChangesFeed &setIOTimeout(std::size_t iotm) {
+		iotimeout = iotm;
+		return *this;
+	}
+
+
+	CouchDB &getDB() const {return couchdb;}
 protected:
 
 	CouchDB &couchdb;
@@ -284,6 +300,7 @@ protected:
 	Value seqNumber;
 	std::size_t outlimit;
 	std::size_t timeout;
+	std::size_t iotimeout;
 	std::unique_ptr<Filter> filter;
 	Value docFilter;
 	Object filterArgs;

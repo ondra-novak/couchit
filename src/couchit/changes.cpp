@@ -49,7 +49,7 @@ void Changes::rewind() {
 }
 
 ChangesFeed::ChangesFeed(CouchDB& couchdb)
-	:couchdb(couchdb), outlimit(((std::size_t)-1)),timeout(0),canceled(false)
+	:couchdb(couchdb), outlimit(((std::size_t)-1)),timeout((std::size_t)-1),iotimeout(120000),canceled(false)
 {
 }
 
@@ -107,6 +107,7 @@ ChangesFeed::ChangesFeed(ChangesFeed&& other)
 	,seqNumber(std::move(other.seqNumber))
 	,outlimit(std::move(other.outlimit))
 	,timeout(std::move(other.timeout))
+	,iotimeout(std::move(other.iotimeout))
 	,filter(std::move(other.filter))
 	,filterArgs(std::move(other.filterArgs))
 	,canceled(false)
