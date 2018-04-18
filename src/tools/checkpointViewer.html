@@ -190,7 +190,7 @@ margin-right: auto;
 <div class="label" >Serial nr.</div>
 <div class="value" id="serialnr">abc123</div>
 <div class="label" >SeqNum</div>
-<div class="value" id="seqnum">54321</div>
+<div class="value" id="seqnum" style="max-width: 15em;overflow: hidden;white-space: nowrap;text-overflow: ellipsis;">54321</div>
 <div class="label" >Options</div>
 <div class="value"><button id="dburl">Document Source</button></div>
 <div class="value"><button id="openfile">Open File</button><button id="newwindow">New window</button></div>
@@ -472,7 +472,7 @@ function readFile(f) {
 	return new Promise(function(ok,fail) {
 		var fr = new FileReader();
 		fr.onload = function() {
-			var json = parseBinaryJSON(fr.result);
+			var json = parseBinaryJSON(fr.result)
 			if (json.version != 3) {
 				 fail("unsupported version");
 				 return;
@@ -480,7 +480,7 @@ function readFile(f) {
 			var data = json.rows;
 			var hdr = json;
 			delete json.data;
-			ok([defineSearchFunctions(data, function(x) {return x.key;}),hdr,f]); 			
+			ok([defineSearchFunctions(data, function(x) {return x.key;}),hdr,f]);
 		}
 		fr.readAsArrayBuffer(f);
 	});

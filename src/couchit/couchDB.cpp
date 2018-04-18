@@ -1368,7 +1368,6 @@ void CouchDB::pruneConflicts(Document& doc, const Array& conflicts) {
 	}
 
 	Array docs;
-	docs.push_back(docv);
 	for (Value c : conflicts) {
 		Revision curRev(c);
 		Revision newRev(curRev.getRevId()+1, String({curRev.getTag(),"R"}));
@@ -1387,6 +1386,7 @@ void CouchDB::pruneConflicts(Document& doc, const Array& conflicts) {
 		Value("new_edits",false),
 		Value("docs",docs)
 	});
+	docs.push_back(docv);
 
 	std::cout << req.toString();
 	Value r = requestPOST(conn,req,nullptr,0);
