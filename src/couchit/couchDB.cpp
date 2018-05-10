@@ -890,11 +890,11 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 	switch (r.reduceMode) {
 	case rmDefault:
-		if ((r.view.flags & View::reduce) == 0) conn->add("reduce","false");
+		if ((r.view.flags & (View::reduce|View::groupLevelMask))  == 0 ) conn->add("reduce","false");
 		else {
 			std::size_t level = (r.view.flags & View::groupLevelMask) / View::groupLevel;
 			if (r.mode == qmKeyList) {
-				conn->add("group",level?"true":"false");
+				conn->add("group","true");
 			} else {
 				conn->add("groupLevel",level);
 			}
