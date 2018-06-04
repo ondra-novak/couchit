@@ -246,6 +246,7 @@ public:
 	 */
 	Query createQuery(Flags viewFlags);
 
+
 	///Creates changeset
 	/** Changeset will use this database connection to update document
 	 *

@@ -216,8 +216,8 @@ void JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::addFk(const KeyType &v, std::size_
 
 
 template<typename BindFn, typename AgrFn, typename MergeFn>
-Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &r) {
-	Result res = owner.lq.exec(r);
+Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &) {
+	Result res = owner.lq.exec();
 	keyAtIndexMap.clear();
 	resultMap.clear();
 
