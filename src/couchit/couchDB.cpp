@@ -966,14 +966,51 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 
 Value CouchDB::bulkUpload(const Value docs) {
-	PConnection b = getConnection("_bulk_docs");
 
-	Object wholeRequest;
-	wholeRequest.set("docs", docs);
+	if (docs.size() > cfg.maxBulkSizeDocs) {
 
-	Value r = requestPOST(b,wholeRequest,0,0);
-	lksqid.markOld();
-	return r;
+		auto splt = docs.splitAt(cfg.maxBulkSizeDocs);
+		Value res1 = bulkUpload(splt.first);
+		Value res2 = bulkUpload(splt.second);
+		Array res(res1);
+		res.addSet(res2);
+		return res;
+
+	} else if (docs.size() < cfg.minBulkSizeDocs) {
+
+		Array results;
+
+		for (Value v : docs) {
+
+			Value id = v["_id"];
+			Value r;
+			try {
+				PConnection b = getConnection("");;
+				if (id.defined()) {
+					b->add(id.getString());
+					r= requestPUT(b,v,nullptr,0);
+				} else {
+					r = requestPOST(b,v,nullptr,0);
+				}
+				results.push_back(r);
+			} catch (RequestError &e) {
+				results.push_back(Object(e.getExtraInfo())("id",id));
+			}
+
+		}
+		return results;
+
+	} else {
+
+		PConnection b = getConnection("_bulk_docs");
+
+		Object wholeRequest;
+		wholeRequest.set("docs", docs);
+
+		Value r = requestPOST(b,wholeRequest,0,0);
+		lksqid.markOld();
+		return r;
+	}
 }
 
 void CouchDB::put(Document& doc) {

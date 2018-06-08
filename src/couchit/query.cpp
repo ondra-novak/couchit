@@ -1,5 +1,6 @@
 #include "query.h"
 #include "query.tcc"
+#include "couchDB.h"
 
 #include <imtjson/abstractValue.h>
 namespace couchit {
@@ -209,6 +210,12 @@ Query& couchit::Query::needUpdateSeq() {
 }
 
 
-
+Value _details::bulkUpload(CouchDB& db, Value data) {
+	return db.bulkUpload(data);
 }
 
+Query _details::allDocs(CouchDB& db) {
+	return db.createQuery(View::includeDocs);
+}
+
+}

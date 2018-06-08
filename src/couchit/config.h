@@ -95,6 +95,19 @@ struct Config {
 	/** Default settings is 600 seconds (10 minutes). The client will ask
 	 * for the token sooner to prevent race condition when tokens becomes invalid*/
 	std::size_t tokenTimeout = (std::size_t)600;
+
+	///Maximum count of documents send by single _bulk_doc request
+	/** If there are more documents in single request, the request is split. This operation is invisible, but
+	 * it results to multiple requests and reduced performance
+	 */
+	std::size_t maxBulkSizeDocs = 5000;
+
+	///Minimum count of documents sned by the _bulkd_doc request
+	/** There is no reason to set this value other than zero, unless you need to debug updates through
+	 * the couchdb's log. Bulk updates of size less then this value are send as standalone PUT requests, so they
+	 * appear in the couchdb's log file. However for high numbers this drastically reduces update speed.
+	 */
+	std::size_t minBulkSizeDocs = 0;
 };
 
 

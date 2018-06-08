@@ -185,6 +185,34 @@ public:
 	///Returns update_seq if available
 	Value getUpdateSeq() const {return updateSeq;}
 
+	///Updates all rows in the view
+	/**
+	 * The function processes the whole result and calls updateFn for each document in it. Then, documents are updated.
+	 *
+	 * @param db database where the documents are put
+	 * @param updateFn function, which accepts Value. It have to return updated value of the document.
+	 *
+	 *
+	 */
+	template<typename UpdateFn>
+	void update(CouchDB &db, UpdateFn &&updateFn);
+
+	///Updates all rows in the view
+	/**
+	 * The function processes the whole result and calls updateFn for each document in it. Then, documents are updated.
+	 *
+	 * @param db database where the documents are put
+	 * @param updateFn the function, which accepts Value. It have to return updated value of the document.
+	 * @param commitFn the function, which is called after the document is stored to the database. There can be multiple
+	 * types of values. It is always object, however, if the object has no "_id", it probably has the field "error",
+	 * which contains description about why the
+	 *
+	 *
+	 *
+	 */
+	template<typename UpdateFn, typename CommitFn>
+	void update(CouchDB &db, UpdateFn &&updateFn, CommitFn &commitFn);
+
 
 protected:
 
@@ -251,6 +279,9 @@ namespace _details {
 		typedef NStore<Value,n> Type;
 		static Type conv(const Type &v) {return v;}
 	};
+
+	Value bulkUpload(CouchDB &db, Value data);
+	Query allDocs(CouchDB &db);
 }
 
 ///If you need to return multiple foreign keys from the BindFn of the JoinedQuery
@@ -342,6 +373,56 @@ inline JoinedQuery<BindFn, AgregFn, MergeFn> couchit::Query::join(
 		const Query& rightSide, const BindFn& bindFn, const AgregFn& agregFn,
 		const MergeFn& mergeFn) {
 	return JoinedQuery<BindFn, AgregFn, MergeFn>(*this,rightSide,bindFn,agregFn,mergeFn);
+}
+
+
+template<typename UpdateFn>
+inline void Result::update(CouchDB& db, UpdateFn&& fn) {
+	update(db, std::forward<UpdateFn>(fn), [](const Value &){});
+}
+
+
+template<typename UpdateFn, typename CommitFn>
+inline void couchit::Result::update(CouchDB& db, UpdateFn&& updateFn, CommitFn& commitFn) {
+
+	Array chs;
+
+	for (Value rw: *this) {
+		Value doc = rw["doc"];
+		if (doc.type() == json::object) {
+			Value newDoc = updateFn(doc);
+			if (!newDoc.isCopyOf(doc)) {
+				chs.push_back(newDoc);
+			}
+		}
+
+	}
+
+	if (!chs.empty()) {
+		Value upload(chs);
+		Value res = _details::bulkUpload(db, upload);
+		chs.clear();
+		for (std::size_t i = 0, sz = res.size(); i < sz; ++i) {
+
+			Value r = res[i];
+			if (r["ok"].getBool()) {
+				Value nd = upload[i].replace("_rev", r["rev"]);
+				commitFn(nd);
+			} else if (r["error"].getString() == "conflict") {
+				chs.push_back(r["id"]);
+			} else {
+				commitFn(r);
+			}
+
+		}
+
+		if (!chs.empty()) {
+			Query q = _details::allDocs(db);
+			q.keys(chs);
+			Result res = q.exec();
+			res.update(db,updateFn, commitFn);
+		}
+	}
 }
 
 }
