@@ -469,8 +469,11 @@ public:
 	 * @param doc document to update. It must have the fields "_id" and "_rev" set. The function updates the field "_rev" with new revisionId.
 	 * @exception UpdateException Update is not possible (exception contains one item)
 	 * @exception RequestException Other error
+	 *
+	 * @note function "collapses" document and its changes
 	 */
 	void put(Document &doc);
+
 
 
 	///Commands the database to update specified view

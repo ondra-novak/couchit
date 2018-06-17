@@ -390,4 +390,11 @@ Value MemView::getItemsByRange(const json::Value& from, const json::Value& to, b
 	return out;
 }
 
+Value MemView::getLastKnownSeqID() const {
+	USync _(updateLock);
+	return updateSeq;
 }
+
+
+}
+

@@ -195,7 +195,31 @@ void ChangesDistributor::remove(IChangeObserver& observer) {
 	remove(&observer);
 }
 
+Value ChangesDistributor::getInitialUpdateSeq() const {
+	Value z;
+
+	std::unique_lock<std::mutex> _(initLock);
+	for (auto &&x: observers) {
+		Value a = x->getLastKnownSeqID();
+		if (a.defined()) {
+			if (a.isNull()) return "0";
+			if (a.defined()) {
+				SeqNumber seq_cur(z);
+				SeqNumber seq_now(a);
+				if (seq_cur < seq_now) {
+					z = a;
+				}
+			}
+		}
+	}
+	if (z.defined()) return z; else return "now";
+}
+
 void ChangesDistributor::run() {
+
+	Value u = getInitialUpdateSeq();
+	if (u.defined()) this->since(u);
+
 	this->operator >>([&](const ChangedDoc &doc) {
 		std::unique_lock<std::mutex> _(initLock);
 		for (auto &&x : observers) x->onChange(doc);
@@ -215,6 +239,9 @@ bool ChangesDistributor::sync(Value seqNum, unsigned int timeoutms) {
 		virtual void onChange(const ChangedDoc &doc) {
 			seqNum = doc.seqId;
 			condvar.notify_all();
+		}
+		virtual Value getLastKnownSeqID() const {
+			return Value();
 		}
 	};
 	SeqNumber curSeq, reqSeqNum(seqNum);
@@ -243,10 +270,29 @@ bool ChangesDistributor::sync(Value seqNum, unsigned int timeoutms) {
 
 void ChangesDistributor::runService() {
 	stopService();
-	thr = std::unique_ptr<std::thread> ( new std::thread([&]{
-		setTimeout(-1);
-		run();
+	thr = std::unique_ptr<std::thread> (
+		new std::thread([=]{
+			setTimeout(-1);
+			run();
 	}));
+}
+
+void ChangesDistributor::runService(std::function<bool()> onError) {
+	stopService();
+	thr = std::unique_ptr<std::thread> (
+			new std::thread([=]{
+				setTimeout(-1);
+				bool goon = true;
+				while (goon) {
+					try {
+						run();
+						goon = false;
+					} catch (...) {
+						goon = onError();
+					}
+				}
+	}));
+
 }
 
 ChangesDistributor::~ChangesDistributor() {

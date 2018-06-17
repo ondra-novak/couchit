@@ -224,5 +224,15 @@ Changeset::CommitedDoc::operator Document() const {
 	return d;
 }
 
-} /* namespace assetex */
 
+Value Changeset::getUpdatedDoc(const StrViewA& docId) const {
+	auto f = std::lower_bound(commitedDocs.begin(), commitedDocs.end(), CommitedDoc(docId,String(),Value()),docOrder<CommitedDoc>);
+	if (f != commitedDocs.end() && f->id == docId) {
+		return f->doc.replace("_rev",f->newRev);
+	} else {
+		return Value();
+	}
+}
+
+
+} /* namespace assetex */

@@ -1017,7 +1017,7 @@ void CouchDB::put(Document& doc) {
 	Changeset chset = createChangeset();
 	chset.update(doc);
 	chset.commit();
-	doc.set("_rev", chset.getCommitRev(doc));
+	doc = chset.getUpdatedDoc(doc.getID());
 }
 
 

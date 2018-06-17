@@ -307,7 +307,7 @@ protected:
 	bool forceIncludeDocs = false;
 	bool forceReversed = false;
 
-	std::mutex initLock;
+	mutable std::mutex initLock;
 	bool canceled;
 	bool wasCanceledState = false;
 
@@ -348,6 +348,8 @@ public:
 	void remove(IChangeObserver *observer);
 	void remove(IChangeObserver &observer);
 
+	Value getInitialUpdateSeq() const;
+
 	void run();
 
 	///synchronizes thread to specified update
@@ -360,8 +362,14 @@ public:
 	bool sync(Value seqNum, unsigned int timeoutms = -1);
 
 
-
+	///Runs as service thread (deprecated)
 	void runService();
+	///Runs as service thread
+	/**
+	 * @param onError function called when exception happen.
+	 * Function must return true to retry, or false to exit thread
+	 */
+	void runService(std::function<bool()> onError);
 	void stopService();
 
 	~ChangesDistributor();

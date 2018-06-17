@@ -90,8 +90,11 @@ public:
 	 * @param docId id of document
 	 * @return updated document. Document has updated "_rev", so it can be modified and updated again without re-downloading it.
 	 *
+	 * @note if document is not in changeset, returns undefined
+	 *
+	 *
 	 */
-	Document getUpdatedDoc(const StrViewA &docId) const;
+	Value getUpdatedDoc(const StrViewA &docId) const;
 
 	///Revets changes made in document docId
 	/** Removes document from the changeset */

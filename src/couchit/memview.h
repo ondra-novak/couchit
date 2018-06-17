@@ -157,6 +157,8 @@ public:
 	virtual void onChange(const ChangedDoc &doc);
 
 
+	virtual Value getLastKnownSeqID() const;
+
 	void addDoc(const Value &doc);
 
 	///Updates the view from the changes feed
