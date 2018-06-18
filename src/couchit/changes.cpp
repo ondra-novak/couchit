@@ -188,12 +188,14 @@ Value ChangesDistributor::getInitialUpdateSeq() const {
 		Value a = x->getLastKnownSeqID();
 		if (a.defined()) {
 			if (a.isNull()) return "0";
-			if (a.defined()) {
+			if (z.defined()) {
 				SeqNumber seq_cur(z);
 				SeqNumber seq_now(a);
 				if (seq_cur < seq_now) {
 					z = a;
 				}
+			} else {
+				z = a;
 			}
 		}
 	}

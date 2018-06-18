@@ -683,13 +683,14 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 		return;
 	}
 
-	Value v;
-	if (status/100 != 2) {
-		handleUnexpectedStatus(conn);
-	} else {
+	try {
 
-		InputStream stream = conn->http.getResponse();
-		try {
+		Value v;
+		if (status/100 != 2) {
+			handleUnexpectedStatus(conn);
+		} else {
+
+			InputStream stream = conn->http.getResponse();
 
 			do {
 				v = Value::parse(stream);
@@ -710,9 +711,9 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 			} while (true);
 			sink.finishEpilog();
 
-		} catch (...) {
-			sink.errorEpilog();
 		}
+	} catch (...) {
+		sink.errorEpilog();
 	}
 	updateSeqNum(sink.seqNumber);
 }
