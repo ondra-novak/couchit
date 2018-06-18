@@ -153,37 +153,25 @@ static void stdLeaveObserver(IChangeObserver *) {
 
 }
 
-
-void ChangesDistributor::add(IChangeObserver* observer, bool ownership) {
-	if (ownership) {
-		static std::function<void(IChangeObserver *)> obsDel (&stdDeleteObserver);
-		add(Observer(observer, obsDel));
-	} else {
-		static std::function<void(IChangeObserver *)> obsLeave (&stdLeaveObserver);
-		add(Observer(observer, obsLeave));
-	}
+ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeObserver &observer) {
+	return add(PObserver(&observer, &stdLeaveObserver));
 }
-
-void ChangesDistributor::add(IChangeObserver& observer) {
-	add(&observer, false);
-}
-
-void ChangesDistributor::add(IChangeObserver* observer, const Deleter & deleter) {
-	add(Observer(observer,deleter));
-}
-
-IChangeObserver* ChangesDistributor::add(Observer&& observer) {
+ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer) {
 	std::unique_lock<std::mutex> _(initLock);
-	IChangeObserver* ret = observer.get();
+	RegistrationID id = observer.get();
 	observers.push_back(std::move(observer));
-	return ret;
+	return id;
+}
+ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChangeObserver> &&observer) {
+	return add(PObserver(observer.release(), &stdDeleteObserver));
 }
 
-void ChangesDistributor::remove(IChangeObserver* observer) {
+
+void ChangesDistributor::remove(RegistrationID regid) {
 	std::unique_lock<std::mutex> _(initLock);
 	auto e = observers.end();
 	for (auto b = observers.begin(); b != e; ++b) {
-		if (b->get() == observer) {
+		if (b->get() == regid) {
 			observers.erase(b);
 			break;
 		}
@@ -191,9 +179,6 @@ void ChangesDistributor::remove(IChangeObserver* observer) {
 
 }
 
-void ChangesDistributor::remove(IChangeObserver& observer) {
-	remove(&observer);
-}
 
 Value ChangesDistributor::getInitialUpdateSeq() const {
 	Value z;
@@ -251,7 +236,7 @@ bool ChangesDistributor::sync(Value seqNum, unsigned int timeoutms) {
 	}
 	std::condition_variable condvar;
 	LocalObserver obs(curSeq, condvar);
-	add(&obs,false);
+	auto regid = add(obs);
 	{
 		std::unique_lock<std::mutex> lock(initLock);
 		auto predicate = [&]{
@@ -263,7 +248,7 @@ bool ChangesDistributor::sync(Value seqNum, unsigned int timeoutms) {
 			if (!condvar.wait_for(lock, std::chrono::milliseconds(timeoutms),predicate)) return false;
 		}
 	}
-	remove(&obs);
+	remove(regid);
 	return true;
 }
 

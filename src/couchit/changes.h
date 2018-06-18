@@ -335,21 +335,52 @@ class ChangesDistributor: public ChangesFeed {
 public:
 
 	typedef std::function<void(IChangeObserver *)>  Deleter;
-	typedef std::unique_ptr<IChangeObserver, Deleter>Observer;
+	typedef std::unique_ptr<IChangeObserver, Deleter>PObserver;
 
+	typedef const IChangeObserver *RegistrationID;
 
 	ChangesDistributor(ChangesFeed &&feed);
 
-	void add(IChangeObserver *observer, bool ownership = true);
-	void add(IChangeObserver &observer);
-	void add(IChangeObserver *observer, const Deleter & deleter);
-	IChangeObserver *add(Observer &&observer);
 
-	void remove(IChangeObserver *observer);
-	void remove(IChangeObserver &observer);
+	///Add observer as reference
+	/** Using refernece means, that caller keeps ownership. Once the distributor is destroyed, the observer
+	 * is removed but not destroyed
+	 * @param observer reference to observer
+	 * @return registration identification for the function remove()
+	 */
+	RegistrationID add(IChangeObserver &observer);
+	///Add observer using unique pointer with custom deleter
+	/**
+	 * @param observer unique pointer to observer. The function moves the observer with the custom deleter
+	 * and eventually calls deleter once the distributor is destroyed
+	 * @return registration identification for the function remove()
+	 */
+	RegistrationID add(PObserver &&observer);
+	///Add observer using uniqoe pointer with standard deletion
+	/**
+	* @param observer unique pointer to observer. The function moves the observer to the distributor
+	* and eventually destroyes observer with the distributor
+	* @return registration identification for the function remove()
+	*/
+	RegistrationID add(std::unique_ptr<IChangeObserver> &&observer);
 
+	///Removes the observer identified by its registration id
+	/**
+	 * @param reg_id observer's registration id
+	 * @note The observer is destroyed unless it is regstered as reference
+	 */
+	void remove(RegistrationID reg_id);
+
+	///Retrieves the initial updateSeq calculated using all observers.
+	/**
+	 * @return updateSeq.
+	 *
+	 * @note return value is primarily usefull for the function since() because it can eventually return
+	 * "0" which means to start over, or "now" which means start from here.
+	 */
 	Value getInitialUpdateSeq() const;
 
+	///Runs the distributor in current  thread
 	void run();
 
 	///synchronizes thread to specified update
@@ -370,13 +401,15 @@ public:
 	 * Function must return true to retry, or false to exit thread
 	 */
 	void runService(std::function<bool()> onError);
+
+	///stops the service thread
 	void stopService();
 
 	~ChangesDistributor();
 
 protected:
 
-	std::vector<Observer> observers;
+	std::vector<PObserver> observers;
 	std::unique_ptr<std::thread> thr;
 
 };
