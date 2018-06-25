@@ -130,6 +130,8 @@ public:
 
 	ChangesFeed(ChangesFeed &&other);
 
+	ChangesFeed(const ChangesFeed &other);
+
 
 	///specifies sequence of last seen change.
 	/**
@@ -380,17 +382,16 @@ public:
 	 */
 	Value getInitialUpdateSeq() const;
 
-	///Runs the distributor in current  thread
-	void run();
-
-	///synchronizes thread to specified update
-	/**
-	 * @param seqNum required update id
-	 * @param timeoutms timeout in miliseconds
-	 * @retval true synced
-	 * @retval false timeout
+	///Synchronizes distributor with current database state
+	/** Function must be called before the service is installed. The function
+	 * blocks execution until the distribution is synchronized.
+	 *
 	 */
-	bool sync(Value seqNum, unsigned int timeoutms = -1);
+	void sync();
+
+	///Runs the distributor in the current thread
+	/** To leave this function, one must call cancelWait() */
+	void run();
 
 
 	///Runs as service thread (deprecated)

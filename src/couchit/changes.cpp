@@ -117,6 +117,21 @@ ChangesFeed::ChangesFeed(ChangesFeed&& other)
 
 }
 
+ChangesFeed::ChangesFeed(const ChangesFeed& other)
+	:couchdb(other.couchdb)
+	,seqNumber(other.seqNumber)
+	,outlimit(other.outlimit)
+	,timeout(other.timeout)
+	,iotimeout(other.iotimeout)
+	,filter(other.filter==nullptr?nullptr:new Filter(*other.filter))
+	,filterArgs(other.filterArgs)
+	,canceled(false)
+
+
+{
+
+}
+
 void ChangesFeed::cancelEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
 	curConn = nullptr;
@@ -214,44 +229,19 @@ void ChangesDistributor::run() {
 	});
 }
 
-bool ChangesDistributor::sync(Value seqNum, unsigned int timeoutms) {
+void ChangesDistributor::sync() {
 
-	class LocalObserver: public IChangeObserver {
-	public:
-		SeqNumber seqNum;
-		std::condition_variable &condvar;
-		LocalObserver(const SeqNumber &seqNum, std::condition_variable &condvar)
-			:seqNum(seqNum),condvar(condvar) {}
 
-		virtual void onChange(const ChangedDoc &doc) {
-			seqNum = doc.seqId;
-			condvar.notify_all();
-		}
-		virtual Value getLastKnownSeqID() const {
-			return Value();
-		}
-	};
-	SeqNumber curSeq, reqSeqNum(seqNum);
-	{
+	Value s = getInitialUpdateSeq();
+	ChangesFeed chf(*this);
+	chf.since(s);
+	chf.setTimeout(0);
+	chf >> [&](const ChangedDoc &doc) {
 		std::unique_lock<std::mutex> _(initLock);
-		curSeq = this->seqNumber;
-	}
-	std::condition_variable condvar;
-	LocalObserver obs(curSeq, condvar);
-	auto regid = add(obs);
-	{
-		std::unique_lock<std::mutex> lock(initLock);
-		auto predicate = [&]{
-			return reqSeqNum<=obs.seqNum;
-		};
-		if (timeoutms == (unsigned int)-1) {
-			condvar.wait(lock,  predicate);
-		} else {
-			if (!condvar.wait_for(lock, std::chrono::milliseconds(timeoutms),predicate)) return false;
-		}
-	}
-	remove(regid);
-	return true;
+		for (auto &&x : observers) x->onChange(doc);
+		return true;
+	};
+	since(chf.getLastSeq());
 }
 
 
