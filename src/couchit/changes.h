@@ -128,10 +128,6 @@ public:
 	 */
 	ChangesFeed(CouchDB &couchdb);
 
-	ChangesFeed(ChangesFeed &&other);
-
-	ChangesFeed(const ChangesFeed &other);
-
 
 	///specifies sequence of last seen change.
 	/**
@@ -262,7 +258,7 @@ public:
 	}
 
 	bool wasCanceled() const {
-		return wasCanceledState;
+		return state.wasCanceledState;
 	}
 
 	///specifies list of docs to monitor for changes
@@ -297,27 +293,42 @@ public:
 	CouchDB &getDB() const {return couchdb;}
 protected:
 
+	struct State {
+		CouchDB::Connection *curConn = nullptr;
+		bool canceled = false;
+		bool wasCanceledState = false;
+		mutable std::mutex initLock;
+
+		State() {}
+		State(const State &) {}
+		State(State &&) {}
+
+		void cancelEpilog();
+		void errorEpilog();
+		void finishEpilog();
+		void cancelWait();
+
+	};
+
+
+
 	CouchDB &couchdb;
-	CouchDB::Connection *curConn = nullptr;
 	Value seqNumber;
-	std::size_t outlimit;
-	std::size_t timeout;
-	std::size_t iotimeout;
-	std::unique_ptr<Filter> filter;
+	std::size_t outlimit = (std::size_t)-1;
+	std::size_t timeout = (std::size_t)-1;
+	std::size_t iotimeout = 120000;
+	Filter filter = Filter("");
 	Value docFilter;
 	Object filterArgs;
 	bool forceIncludeDocs = false;
 	bool forceReversed = false;
+	bool filterInUse = false;
 
-	mutable std::mutex initLock;
-	bool canceled;
-	bool wasCanceledState = false;
+	State state;
+
 
 	friend class CouchDB;
 
-	void cancelEpilog();
-	void errorEpilog();
-	void finishEpilog();
 
 };
 

@@ -49,7 +49,7 @@ void Changes::rewind() {
 }
 
 ChangesFeed::ChangesFeed(CouchDB& couchdb)
-	:couchdb(couchdb), outlimit(((std::size_t)-1)),timeout((std::size_t)-1),iotimeout(120000),canceled(false)
+	:couchdb(couchdb)
 {
 }
 
@@ -64,13 +64,14 @@ ChangesFeed& ChangesFeed::setTimeout(std::size_t timeout) {
 }
 
 ChangesFeed& ChangesFeed::setFilter(const Filter& filter) {
-	this->filter = std::unique_ptr<Filter>(new Filter(filter));
+	this->filter = filter;
+	filterInUse = true;
 	filterArgs.revert();
 	return *this;
 }
 
 ChangesFeed& ChangesFeed::unsetFilter() {
-	this->filter = nullptr;
+	filterInUse = false;
 	filterArgs.revert();
 	return *this;
 }
@@ -93,7 +94,7 @@ ChangesFeed& ChangesFeed::setFilterFlags(std::size_t flags) {
 	return setFilter(Filter(String(),flags));
 }
 
-void ChangesFeed::cancelWait() {
+void ChangesFeed::State::cancelWait() {
 	std::lock_guard<std::mutex> _(initLock);
 	canceled = true;
 	if (curConn != nullptr) {
@@ -102,51 +103,25 @@ void ChangesFeed::cancelWait() {
 }
 
 
-ChangesFeed::ChangesFeed(ChangesFeed&& other)
-	:couchdb(other.couchdb)
-	,seqNumber(std::move(other.seqNumber))
-	,outlimit(std::move(other.outlimit))
-	,timeout(std::move(other.timeout))
-	,iotimeout(std::move(other.iotimeout))
-	,filter(std::move(other.filter))
-	,filterArgs(std::move(other.filterArgs))
-	,canceled(false)
-
-
-{
-
+void ChangesFeed::cancelWait() {
+	state.cancelWait();
 }
 
-ChangesFeed::ChangesFeed(const ChangesFeed& other)
-	:couchdb(other.couchdb)
-	,seqNumber(other.seqNumber)
-	,outlimit(other.outlimit)
-	,timeout(other.timeout)
-	,iotimeout(other.iotimeout)
-	,filter(other.filter==nullptr?nullptr:new Filter(*other.filter))
-	,filterArgs(other.filterArgs)
-	,canceled(false)
-
-
-{
-
-}
-
-void ChangesFeed::cancelEpilog() {
+void ChangesFeed::State::cancelEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
 	curConn = nullptr;
 	canceled = false;
 	wasCanceledState = true;
 }
 
-void ChangesFeed::finishEpilog() {
+void ChangesFeed::State::finishEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
 	curConn = nullptr;
 	wasCanceledState = false;
 }
 
 
-void ChangesFeed::errorEpilog() {
+void ChangesFeed::State::errorEpilog() {
 	std::lock_guard<std::mutex> _(initLock);
 	if (curConn != nullptr) {
 		curConn->http.abort();
@@ -172,7 +147,7 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeObserver &obse
 	return add(PObserver(&observer, &stdLeaveObserver));
 }
 ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer) {
-	std::unique_lock<std::mutex> _(initLock);
+	std::unique_lock<std::mutex> _(state.initLock);
 	RegistrationID id = observer.get();
 	observers.push_back(std::move(observer));
 	return id;
@@ -183,7 +158,7 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChan
 
 
 void ChangesDistributor::remove(RegistrationID regid) {
-	std::unique_lock<std::mutex> _(initLock);
+	std::unique_lock<std::mutex> _(state.initLock);
 	auto e = observers.end();
 	for (auto b = observers.begin(); b != e; ++b) {
 		if (b->get() == regid) {
@@ -198,7 +173,7 @@ void ChangesDistributor::remove(RegistrationID regid) {
 Value ChangesDistributor::getInitialUpdateSeq() const {
 	Value z;
 
-	std::unique_lock<std::mutex> _(initLock);
+	std::unique_lock<std::mutex> _(state.initLock);
 	for (auto &&x: observers) {
 		Value a = x->getLastKnownSeqID();
 		if (a.defined()) {
@@ -223,7 +198,7 @@ void ChangesDistributor::run() {
 	if (u.defined()) this->since(u);
 
 	this->operator >>([&](const ChangedDoc &doc) {
-		std::unique_lock<std::mutex> _(initLock);
+		std::unique_lock<std::mutex> _(state.initLock);
 		for (auto &&x : observers) x->onChange(doc);
 		return true;
 	});
@@ -237,7 +212,7 @@ void ChangesDistributor::sync() {
 	chf.since(s);
 	chf.setTimeout(0);
 	chf >> [&](const ChangedDoc &doc) {
-		std::unique_lock<std::mutex> _(initLock);
+		std::unique_lock<std::mutex> _(state.initLock);
 		for (auto &&x : observers) x->onChange(doc);
 		return true;
 	};
