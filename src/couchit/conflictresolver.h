@@ -6,6 +6,7 @@
 #include <imtjson/value.h>
 #include <imtjson/path.h>
 #include <functional>
+#include "shared/countdown.h"
 
 #pragma once
 
@@ -96,6 +97,7 @@ public:
 protected:
 	typedef std::function<void()> Action;
 	Action stopResolverFn;
+	ondra_shared::Countdown finishWait;
 
 };
 
