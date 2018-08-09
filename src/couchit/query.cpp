@@ -218,4 +218,10 @@ Query _details::allDocs(CouchDB& db) {
 	return db.createQuery(View::includeDocs);
 }
 
+Value Result::getCommitError(Value commitRes) {
+	if (commitRes["_id"].defined()) return null;
+	else return commitRes;
+
+}
+
 }

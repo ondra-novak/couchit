@@ -192,10 +192,11 @@ public:
 	 * @param db database where the documents are put
 	 * @param updateFn function, which accepts Value. It have to return updated value of the document.
 	 *
+	 * @return count of affected documents
 	 *
 	 */
 	template<typename UpdateFn>
-	void update(CouchDB &db, UpdateFn &&updateFn);
+	unsigned int update(CouchDB &db, UpdateFn &&updateFn);
 
 	///Updates all rows in the view
 	/**
@@ -203,16 +204,23 @@ public:
 	 *
 	 * @param db database where the documents are put
 	 * @param updateFn the function, which accepts Value. It have to return updated value of the document.
-	 * @param commitFn the function, which is called after the document is stored to the database. There can be multiple
-	 * types of values. It is always object, however, if the object has no "_id", it probably has the field "error",
-	 * which contains description about why the
-	 *
-	 *
+	 * @param commitFn the function, which is called after the document is stored to the database. The argument
+	 * can contain either updated document or an error, which happened during commit. To distinguish between
+	 * success and error, you can use getCommitError(). If the result is null, the document has been stored
+	 * @return count if affected documents
 	 *
 	 */
 	template<typename UpdateFn, typename CommitFn>
-	void update(CouchDB &db, UpdateFn &&updateFn, CommitFn &commitFn);
+	unsigned int update(CouchDB &db, UpdateFn &&updateFn, CommitFn &&commitFn);
 
+
+	///Retrieves error status in commit function
+	/**
+	 * @param commitRes commit result.
+	 * @retval null no error happened, commitRes contains updated document
+	 * @retval object error happened, returns error object (commitRes is useless)
+	 */
+	static Value getCommitError(Value commitRes);
 
 protected:
 
@@ -377,13 +385,13 @@ inline JoinedQuery<BindFn, AgregFn, MergeFn> couchit::Query::join(
 
 
 template<typename UpdateFn>
-inline void Result::update(CouchDB& db, UpdateFn&& fn) {
-	update(db, std::forward<UpdateFn>(fn), [](const Value &){});
+inline unsigned int Result::update(CouchDB& db, UpdateFn&& fn) {
+	return update(db, std::forward<UpdateFn>(fn), [](const Value &){});
 }
 
 
 template<typename UpdateFn, typename CommitFn>
-inline void couchit::Result::update(CouchDB& db, UpdateFn&& updateFn, CommitFn& commitFn) {
+inline unsigned int couchit::Result::update(CouchDB& db, UpdateFn&& updateFn, CommitFn&& commitFn) {
 
 	Array chs;
 
@@ -398,6 +406,8 @@ inline void couchit::Result::update(CouchDB& db, UpdateFn&& updateFn, CommitFn& 
 
 	}
 
+	unsigned int cnt = 0;
+
 	if (!chs.empty()) {
 		Value upload(chs);
 		Value res = _details::bulkUpload(db, upload);
@@ -408,6 +418,7 @@ inline void couchit::Result::update(CouchDB& db, UpdateFn&& updateFn, CommitFn& 
 			if (r["ok"].getBool()) {
 				Value nd = upload[i].replace("_rev", r["rev"]);
 				commitFn(nd);
+				cnt++;
 			} else if (r["error"].getString() == "conflict") {
 				chs.push_back(r["id"]);
 			} else {
@@ -420,9 +431,11 @@ inline void couchit::Result::update(CouchDB& db, UpdateFn&& updateFn, CommitFn& 
 			Query q = _details::allDocs(db);
 			q.keys(chs);
 			Result res = q.exec();
-			res.update(db,updateFn, commitFn);
+			cnt += res.update(db,updateFn, commitFn);
 		}
 	}
+
+	return cnt;
 }
 
 }

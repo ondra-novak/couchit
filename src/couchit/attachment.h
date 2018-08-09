@@ -150,6 +150,8 @@ public:
 			const std::size_t length,
 			const bool notModified);
 
+	json::Binary download();
+
 
 
 private:

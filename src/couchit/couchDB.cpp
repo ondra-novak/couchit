@@ -898,7 +898,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 			if (r.mode == qmKeyList) {
 				conn->add("group","true");
 			} else {
-				conn->add("groupLevel",level);
+				conn->add("group_level",level);
 			}
 		}
 			break;
