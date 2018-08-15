@@ -6,6 +6,8 @@
  */
 
 #include <thread>
+#include "shared/defer.h"
+#include "shared/defer.tcc"
 #include "changes.h"
 
 #include "couchDB.h"
@@ -135,15 +137,15 @@ void ChangesFeed::State::errorEpilog() {
 	throw;
 }
 
-static void stdDeleteObserver(IChangeObserver *obs) {
+static void stdDeleteObserver(IChangeEventObserver *obs) {
 	delete obs;
 }
 
-static void stdLeaveObserver(IChangeObserver *) {
+static void stdLeaveObserver(IChangeEventObserver *) {
 
 }
 
-ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeObserver &observer) {
+ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeEventObserver &observer) {
 	return add(PObserver(&observer, &stdLeaveObserver));
 }
 ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer) {
@@ -152,7 +154,7 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer)
 	observers.push_back(std::move(observer));
 	return id;
 }
-ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChangeObserver> &&observer) {
+ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChangeEventObserver> &&observer) {
 	return add(PObserver(observer.release(), &stdDeleteObserver));
 }
 
@@ -192,16 +194,42 @@ Value ChangesDistributor::getInitialUpdateSeq() const {
 	if (z.defined()) return z; else return "now";
 }
 
+class ChangesDistributor::Distributor {
+public:
+
+	Distributor(ChangesDistributor *_this):_this(_this) {}
+	bool operator()(const ChangedDoc &doc) const {
+
+		using ondra_shared::DeferContext;
+		using ondra_shared::defer_root;
+
+		DeferContext defer(defer_root);
+		std::unique_lock<std::mutex> _(_this->state.initLock);
+		for (auto &&x : _this->observers) {
+			bool r =x->onEvent(doc);
+			if (!r) {
+				RegistrationID reg = x.get();
+				defer >> [=] {
+					_this->remove(reg);
+				};
+			}
+		}
+		return true;
+
+	}
+protected:
+	ChangesDistributor *_this;
+};
+
 void ChangesDistributor::run() {
+
+
 
 	Value u = getInitialUpdateSeq();
 	if (u.defined()) this->since(u);
 
-	this->operator >>([&](const ChangedDoc &doc) {
-		std::unique_lock<std::mutex> _(state.initLock);
-		for (auto &&x : observers) x->onChange(doc);
-		return true;
-	});
+	Distributor dist(this);
+	this->operator >> (dist);
 }
 
 void ChangesDistributor::sync() {
@@ -209,13 +237,10 @@ void ChangesDistributor::sync() {
 
 	Value s = getInitialUpdateSeq();
 	ChangesFeed chf(*this);
+	Distributor dist(this);
 	chf.since(s);
 	chf.setTimeout(0);
-	chf >> [&](const ChangedDoc &doc) {
-		std::unique_lock<std::mutex> _(state.initLock);
-		for (auto &&x : observers) x->onChange(doc);
-		return true;
-	};
+	chf >> dist;
 	since(chf.getLastSeq());
 }
 

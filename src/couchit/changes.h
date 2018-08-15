@@ -15,9 +15,10 @@
 #include "minihttp/cancelFunction.h"
 
 
+#include "changedDoc.h"
+#include "changeObserver.h"
 #include "view.h"
 #include "couchDB.h"
-#include "changeObserver.h"
 
 namespace std {
 	class thread;
@@ -31,28 +32,6 @@ namespace couchit {
 
 class CouchDB;
 class Filter;
-
-///Contains information about changed document
-class ChangedDoc: public Value {
-
-public:
-	///sequence number
-	const Value seqId;
-	///document id
-	const StrViewA id;
-	///list of revisions changed
-	const Value revisions;
-	///true, if document has been deleted
-	const bool deleted;
-	///document, if requested, or null if not available
-	const Value doc;
-	///Constructor.
-	/**
-	 * @param allData json record containing information about changed document. You can use
-	 * result of Changes::getNext() or Changes::peek()
-	 */
-	ChangedDoc(const Value &allData);
-};
 
 
 
@@ -343,14 +322,17 @@ inline ChangesFeed& couchit::ChangesFeed::arg(StrViewA key, T value) {
 
 }
 
+class IChangeEventObserver;
+
 
 class ChangesDistributor: public ChangesFeed {
 public:
 
-	typedef std::function<void(IChangeObserver *)>  Deleter;
-	typedef std::unique_ptr<IChangeObserver, Deleter>PObserver;
+	typedef std::function<void(IChangeEventObserver *)>  Deleter;
+	typedef std::unique_ptr<IChangeEventObserver, Deleter>PObserver;
 
-	typedef const IChangeObserver *RegistrationID;
+	typedef const IChangeEventObserver *RegistrationID;
+	constexpr static RegistrationID noreg = nullptr;
 
 	ChangesDistributor(ChangesFeed &&feed);
 
@@ -361,7 +343,7 @@ public:
 	 * @param observer reference to observer
 	 * @return registration identification for the function remove()
 	 */
-	RegistrationID add(IChangeObserver &observer);
+	RegistrationID add(IChangeEventObserver &observer);
 	///Add observer using unique pointer with custom deleter
 	/**
 	 * @param observer unique pointer to observer. The function moves the observer with the custom deleter
@@ -375,7 +357,7 @@ public:
 	* and eventually destroyes observer with the distributor
 	* @return registration identification for the function remove()
 	*/
-	RegistrationID add(std::unique_ptr<IChangeObserver> &&observer);
+	RegistrationID add(std::unique_ptr<IChangeEventObserver> &&observer);
 
 	///Removes the observer identified by its registration id
 	/**
@@ -419,11 +401,17 @@ public:
 
 	~ChangesDistributor();
 
+	template<typename Fn>
+	RegistrationID addFn(Fn &&fn) {
+		return add(std::unique_ptr<IChangeEventObserver>(new ChangeObserverFromFn<Fn>(std::forward<Fn>(fn))));
+	}
+
 protected:
 
 	std::vector<PObserver> observers;
 	std::unique_ptr<std::thread> thr;
 
+	class Distributor;
 };
 }
 
