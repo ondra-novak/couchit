@@ -252,7 +252,7 @@ namespace _details {
 	template<typename T, std::size_t n> class NStore {
 	public:
 		T data[n];
-		const std::size_t count = n;
+		static const std::size_t count = n;
 		typedef T Type;
 
 		NStore(const std::initializer_list<T> &list) {
@@ -266,6 +266,8 @@ namespace _details {
 
 		operator const T &() const {return data[0];}
 		operator T &() {return data[0];}
+		const T &operator [](std::size_t idx) const {return data[idx];}
+		T &operator [](std::size_t idx) {return data[idx];}
 	};
 
 	template<typename> class DetectFkType {
