@@ -503,23 +503,24 @@ bool  CouchDB::putDesignDocument(const char* content,
 
 }
 
-int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
-	std::unique_lock<std::mutex> _(sink.initLock);
+int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
+	ChangesFeed::State &state = feed.state;
+	std::unique_lock<std::mutex> _(state.initLock);
 	Value jsonBody;
 	StrViewA method = "GET";
-	if (sink.curConn != nullptr) {
+	if (state.curConn != nullptr) {
 		throw std::runtime_error("Changes feed is already in progress");
 	}
-	if (sink.canceled) return 0;
+	if (state.canceled) return 0;
 
-	if (sink.seqNumber.defined()) {
-		conn->add("since", sink.seqNumber.toString());
+	if (feed.seqNumber.defined()) {
+		conn->add("since", feed.seqNumber.toString());
 	}
-	if (sink.outlimit != ((std::size_t) (-1))) {
-		conn->add("limit", sink.outlimit);
+	if (feed.outlimit != ((std::size_t) (-1))) {
+		conn->add("limit", feed.outlimit);
 	}
-	if (sink.filter != nullptr) {
-		const Filter& flt = *sink.filter;
+	if (feed.filterInUse) {
+		const Filter& flt = feed.filter;
 		if (!flt.viewPath.empty()) {
 			StrViewA fltpath = flt.viewPath;
 			StrViewA ddocName;
@@ -548,7 +549,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 		if (flt.flags & Filter::allRevs)
 			conn->add("style", "all_docs");
 
-		if (flt.flags & Filter::includeDocs || sink.forceIncludeDocs) {
+		if (flt.flags & Filter::includeDocs || feed.forceIncludeDocs) {
 			conn->add("include_docs", "true");
 			if (flt.flags & Filter::attachments) {
 				conn->add("attachments", "true");
@@ -560,28 +561,28 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 				conn->add("att_encoding_info", "true");
 			}
 		}
-		if (((flt.flags & Filter::reverseOrder) != 0) != sink.forceReversed) {
+		if (((flt.flags & Filter::reverseOrder) != 0) != feed.forceReversed) {
 			conn->add("descending", "true");
 		}
 		for (auto&& itm : flt.args) {
-			if (!sink.filterArgs[itm.getKey()].defined()) {
+			if (!feed.filterArgs[itm.getKey()].defined()) {
 				conn->add(StrViewA(itm.getKey()), StrViewA(itm.toString()));
 			}
 		}
 	} else {
-		if (sink.forceIncludeDocs) {
+		if (feed.forceIncludeDocs) {
 			conn->add("include_docs", "true");
 		}
-		if (sink.forceReversed) {
+		if (feed.forceReversed) {
 			conn->add("descending", "true");
 		}
-		if (sink.docFilter.defined()) {
+		if (feed.docFilter.defined()) {
 			conn->add("filter","_doc_ids");
 			Value docIds;
-			if (sink.docFilter.type() == json::string) {
-				docIds = Value(json::array, {sink.docFilter});
+			if (feed.docFilter.type() == json::string) {
+				docIds = Value(json::array, {feed.docFilter});
 			} else {
-				docIds = sink.docFilter;
+				docIds = feed.docFilter;
 			}
 			jsonBody = Object("doc_ids", docIds);
 			method="POST";
@@ -589,17 +590,17 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 	}
 
 
-	for (auto&& v : sink.filterArgs) {
+	for (auto&& v : feed.filterArgs) {
 		String val = v.toString();
 		StrViewA key = v.getKey();
 		conn->add(key, val);
 	}
 	conn->http.open(conn->getUrl(), method, true);
 	conn->http.connect();
-	sink.curConn = conn.get();
+	state.curConn = conn.get();
 	_.unlock();
 
-	conn->http.setTimeout(sink.iotimeout);
+	conn->http.setTimeout(feed.iotimeout);
 	conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
 	OutputStream out(nullptr);
 	if (jsonBody.defined()) {
@@ -613,22 +614,22 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& sink) {
 }
 
 
-Changes CouchDB::receiveChanges(ChangesFeed& sink) {
+Changes CouchDB::receiveChanges(ChangesFeed& feed) {
 
 	PConnection conn = getConnection("_changes");
 
-	if (sink.timeout > 0) {
+	if (feed.timeout > 0) {
 		conn->add("feed","longpoll");
-		if (sink.timeout == ((std::size_t)-1)) {
+		if (feed.timeout == ((std::size_t)-1)) {
 			conn->add("heartbeat","true");
 		} else {
-			conn->add("timeout",sink.timeout);
+			conn->add("timeout",feed.timeout);
 		}
 	}
 
-	int status = initChangesFeed(conn, sink);
-	if (status == 0 || sink.canceled) {
-		sink.cancelEpilog();
+	int status = initChangesFeed(conn, feed);
+	if (status == 0 || feed.state.canceled) {
+		feed.state.cancelEpilog();
 		return Value(json::undefined);
 	}
 
@@ -640,17 +641,17 @@ Changes CouchDB::receiveChanges(ChangesFeed& sink) {
 		try {
 			v = Value::parse(stream);
 		} catch (...) {
-			sink.errorEpilog();
+			feed.state.errorEpilog();
 			return Value(json::undefined);
 		}
 		conn->http.close();
-		sink.finishEpilog();
+		feed.state.finishEpilog();
 	}
 
 	Value results=v["results"];
-	sink.seqNumber = v["last_seq"];
+	feed.seqNumber = v["last_seq"];
 	{
-		SeqNumber l (sink.seqNumber);
+		SeqNumber l (feed.seqNumber);
 		LockGuard _(lock);
 		if (l > lksqid) lksqid = l;
 	}
@@ -665,21 +666,21 @@ void CouchDB::updateSeqNum(const Value& seq) {
 		lksqid = l;
 }
 
-void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn) {
+void CouchDB::receiveChangesContinuous(ChangesFeed& feed, ChangesFeedHandler &fn) {
 
 	PConnection conn = getConnection("_changes",true);
 
 	conn->add("feed","continuous");
-	if (sink.timeout == ((std::size_t)-1)) {
+	if (feed.timeout == ((std::size_t)-1)) {
 		conn->add("heartbeat","true");
 	} else {
-		conn->add("timeout",sink.timeout);
+		conn->add("timeout",feed.timeout);
 	}
 
 
-	int status = initChangesFeed(conn, sink);
+	int status = initChangesFeed(conn, feed);
 	if (status == 0) {
-		sink.cancelEpilog();
+		feed.state.cancelEpilog();
 		return;
 	}
 
@@ -696,26 +697,26 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& sink, ChangesFeedHandler &fn
 				v = Value::parse(stream);
 				Value lastSeq = v["last_seq"];
 				if (lastSeq.defined()) {
-					sink.seqNumber = lastSeq;
-					updateSeqNum(sink.seqNumber);
+					feed.seqNumber = lastSeq;
+					updateSeqNum(feed.seqNumber);
 					conn->http.close();
 					break;
 				} else {
 					ChangedDoc chdoc(v);
-					sink.seqNumber = v["seq"];
+					feed.seqNumber = v["seq"];
 					if (!fn(chdoc)) {
 						conn->http.abort();
 						break;
 					}
 				}
 			} while (true);
-			sink.finishEpilog();
+			feed.state.finishEpilog();
 
 		}
 	} catch (...) {
-		sink.errorEpilog();
+		feed.state.errorEpilog();
 	}
-	updateSeqNum(sink.seqNumber);
+	updateSeqNum(feed.seqNumber);
 }
 
 
@@ -897,7 +898,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 			if (r.mode == qmKeyList) {
 				conn->add("group","true");
 			} else {
-				conn->add("groupLevel",level);
+				conn->add("group_level",level);
 			}
 		}
 			break;

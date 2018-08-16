@@ -359,7 +359,7 @@ void ConflictResolver::runResolver(CouchDB& db) {
 		if (since.defined()) chfeed.since(since);
 
 
-		MTCounter finishwait(1);
+		finishWait.setCounter(1);
 
 		while (true) {
 			try {
@@ -369,7 +369,7 @@ void ConflictResolver::runResolver(CouchDB& db) {
 				stopResolverFn = [&]{
 					stopResolverFn = nullptr;
 					chfeed.cancelWait();
-					finishwait.wait();
+					finishWait.wait();
 				};
 
 
@@ -398,7 +398,7 @@ void ConflictResolver::runResolver(CouchDB& db) {
 
 				chfeed.setTimeout((std::size_t)-1);
 				chfeed >> processFn;
-				finishwait.dec();
+				finishWait.dec();
 				return;
 			} catch (...) {
 				onResolverError();

@@ -15,9 +15,10 @@
 #include "minihttp/cancelFunction.h"
 
 
+#include "changedDoc.h"
+#include "changeObserver.h"
 #include "view.h"
 #include "couchDB.h"
-#include "changeObserver.h"
 
 namespace std {
 	class thread;
@@ -31,28 +32,6 @@ namespace couchit {
 
 class CouchDB;
 class Filter;
-
-///Contains information about changed document
-class ChangedDoc: public Value {
-
-public:
-	///sequence number
-	const Value seqId;
-	///document id
-	const StrViewA id;
-	///list of revisions changed
-	const Value revisions;
-	///true, if document has been deleted
-	const bool deleted;
-	///document, if requested, or null if not available
-	const Value doc;
-	///Constructor.
-	/**
-	 * @param allData json record containing information about changed document. You can use
-	 * result of Changes::getNext() or Changes::peek()
-	 */
-	ChangedDoc(const Value &allData);
-};
 
 
 
@@ -127,10 +106,6 @@ public:
 	 * other requests.
 	 */
 	ChangesFeed(CouchDB &couchdb);
-
-	ChangesFeed(ChangesFeed &&other);
-
-	ChangesFeed(const ChangesFeed &other);
 
 
 	///specifies sequence of last seen change.
@@ -262,7 +237,7 @@ public:
 	}
 
 	bool wasCanceled() const {
-		return wasCanceledState;
+		return state.wasCanceledState;
 	}
 
 	///specifies list of docs to monitor for changes
@@ -297,27 +272,42 @@ public:
 	CouchDB &getDB() const {return couchdb;}
 protected:
 
+	struct State {
+		CouchDB::Connection *curConn = nullptr;
+		bool canceled = false;
+		bool wasCanceledState = false;
+		mutable std::mutex initLock;
+
+		State() {}
+		State(const State &) {}
+		State(State &&) {}
+
+		void cancelEpilog();
+		void errorEpilog();
+		void finishEpilog();
+		void cancelWait();
+
+	};
+
+
+
 	CouchDB &couchdb;
-	CouchDB::Connection *curConn = nullptr;
 	Value seqNumber;
-	std::size_t outlimit;
-	std::size_t timeout;
-	std::size_t iotimeout;
-	std::unique_ptr<Filter> filter;
+	std::size_t outlimit = (std::size_t)-1;
+	std::size_t timeout = (std::size_t)-1;
+	std::size_t iotimeout = 120000;
+	Filter filter = Filter("");
 	Value docFilter;
 	Object filterArgs;
 	bool forceIncludeDocs = false;
 	bool forceReversed = false;
+	bool filterInUse = false;
 
-	mutable std::mutex initLock;
-	bool canceled;
-	bool wasCanceledState = false;
+	State state;
+
 
 	friend class CouchDB;
 
-	void cancelEpilog();
-	void errorEpilog();
-	void finishEpilog();
 
 };
 
@@ -332,14 +322,17 @@ inline ChangesFeed& couchit::ChangesFeed::arg(StrViewA key, T value) {
 
 }
 
+class IChangeEventObserver;
+
 
 class ChangesDistributor: public ChangesFeed {
 public:
 
-	typedef std::function<void(IChangeObserver *)>  Deleter;
-	typedef std::unique_ptr<IChangeObserver, Deleter>PObserver;
+	typedef std::function<void(IChangeEventObserver *)>  Deleter;
+	typedef std::unique_ptr<IChangeEventObserver, Deleter>PObserver;
 
-	typedef const IChangeObserver *RegistrationID;
+	typedef const IChangeEventObserver *RegistrationID;
+	constexpr static RegistrationID noreg = nullptr;
 
 	ChangesDistributor(ChangesFeed &&feed);
 
@@ -350,7 +343,7 @@ public:
 	 * @param observer reference to observer
 	 * @return registration identification for the function remove()
 	 */
-	RegistrationID add(IChangeObserver &observer);
+	RegistrationID add(IChangeEventObserver &observer);
 	///Add observer using unique pointer with custom deleter
 	/**
 	 * @param observer unique pointer to observer. The function moves the observer with the custom deleter
@@ -364,7 +357,7 @@ public:
 	* and eventually destroyes observer with the distributor
 	* @return registration identification for the function remove()
 	*/
-	RegistrationID add(std::unique_ptr<IChangeObserver> &&observer);
+	RegistrationID add(std::unique_ptr<IChangeEventObserver> &&observer);
 
 	///Removes the observer identified by its registration id
 	/**
@@ -408,11 +401,17 @@ public:
 
 	~ChangesDistributor();
 
+	template<typename Fn>
+	RegistrationID addFn(Fn &&fn) {
+		return add(std::unique_ptr<IChangeEventObserver>(new ChangeObserverFromFn<Fn>(std::forward<Fn>(fn))));
+	}
+
 protected:
 
 	std::vector<PObserver> observers;
 	std::unique_ptr<std::thread> thr;
 
+	class Distributor;
 };
 }
 

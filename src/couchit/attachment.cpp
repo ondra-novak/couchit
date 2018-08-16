@@ -87,5 +87,25 @@ Download::Download(Source* s, const String contentType,
 
 }
 
+class CustomBinary: public Binary {
+public:
+	CustomBinary(String src):Binary(Value(src)) {}
+};
+
+json::Binary Download::download() {
+	String data(length, [&](char *d){
+
+		auto remain = length;
+		while (remain) {
+			auto rd = read(d, remain);
+			d+=rd;
+			remain-=rd;
+		}
+		return length-remain;
+	});
+	CustomBinary cb(data);
+	return Binary(cb);
+
+}
 }
 
