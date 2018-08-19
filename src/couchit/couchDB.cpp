@@ -114,7 +114,7 @@ Changeset CouchDB::createChangeset() {
 SeqNumber CouchDB::getLastSeqNumber() {
 	ChangesFeed chsink = createChangesFeed();
 	Changes chgs = chsink.setFilterFlags(Filter::reverseOrder).limit(1).setTimeout(0).exec();
-	if (chgs.hasItems()) return ChangedDoc(chgs.getNext()).seqId;
+	if (chgs.hasItems()) return ChangeEvent(chgs.getNext()).seqId;
 	else return SeqNumber();
 }
 SeqNumber CouchDB::getLastKnownSeqNumber() const {
@@ -702,7 +702,7 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& feed, ChangesFeedHandler &fn
 					conn->http.close();
 					break;
 				} else {
-					ChangedDoc chdoc(v);
+					ChangeEvent chdoc(v);
 					feed.seqNumber = v["seq"];
 					if (!fn(chdoc)) {
 						conn->http.abort();

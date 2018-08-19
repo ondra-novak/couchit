@@ -154,7 +154,7 @@ public:
 
 	static void defaultMapFn(const Value &document, const EmitFn &emitFn);
 
-	virtual void onChange(const ChangedDoc &doc);
+	virtual void onChange(const ChangeEvent &doc);
 
 
 	virtual Value getLastKnownSeqID() const;

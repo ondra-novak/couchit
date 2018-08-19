@@ -304,7 +304,7 @@ static void couchChangeSetOneShot(std::ostream &a) {
 	Changes chngs = chsink.exec();
 	std::size_t count = 0;
 	while (chngs.hasItems()) {
-		ChangedDoc doc(chngs.getNext());
+		ChangeEvent doc(chngs.getNext());
 		count++;
 	}
 
@@ -334,7 +334,7 @@ static void couchChangeSetWaitForData(std::ostream &a) {
 	chsink.setTimeout(10000);
 	chsink.fromSeq(lastId);
 	bool found = false;
-	chsink >> [&](const ChangedDoc &doc) {
+	chsink >> [&](const ChangeEvent &doc) {
 		if (doc.id == uid && !doc.deleted) {
 			found = true;
 			return false;
@@ -394,7 +394,7 @@ static void couchChangeSetWaitForData3(std::ostream &a) {
 	chsink.setTimeout(10000);
 	chsink.fromSeq(lastId);
 	bool ok = false;
-	chsink >> [&](const ChangedDoc &doc) {
+	chsink >> [&](const ChangeEvent &doc) {
 		if (doc.id == uid && !doc.deleted) {
 			counter++;
 			event.notify();
@@ -427,7 +427,7 @@ static void couchChangesStopWait(std::ostream &a) {
 		chsink.cancelWait();
 	});
 
-	chsink >> [](const ChangedDoc &) {return true;};
+	chsink >> [](const ChangeEvent &) {return true;};
 	if (chsink.wasCanceled()) {
 		CouchDB::PConnection conn = db.getConnection("/");
 		Value v = db.requestGET(conn);

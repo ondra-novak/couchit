@@ -194,7 +194,7 @@ void MemView::defaultMapFn(const Value& document, const EmitFn& emitFn) {
 	emitFn(document["_id"],document["_rev"]);
 }
 
-void MemView::onChange(const ChangedDoc& doc) {
+void MemView::onChange(const ChangeEvent& doc) {
 	String docId(doc["id"]);
 	USync _(updateLock);
 	{
@@ -344,7 +344,7 @@ void MemView::updateLk(CouchDB& db) {
 	ChangesFeed feed = db.createChangesFeed();
 	feed.includeDocs(true).since(updateSeq);
 	Changes chs = feed.exec();
-	for (ChangedDoc cdoc : chs) {
+	for (ChangeEvent cdoc : chs) {
 		if (cdoc.deleted) {
 			eraseDoc(String(cdoc["id"]));
 		} else {

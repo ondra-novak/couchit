@@ -1,10 +1,13 @@
 #pragma once
 
+#include "changeevent.h"
+
 
 namespace couchit {
 
 
-class ChangedDoc;
+class ChangeEvent;
+
 
 class IChangeEventObserver {
 public:
@@ -18,7 +21,7 @@ public:
 	 *
 	 * @note When false is returned, observer is removed and destroyed through the deleter
 	 */
-	virtual bool onEvent(const ChangedDoc &doc) = 0;
+	virtual bool onEvent(const ChangeEvent &doc) = 0;
 
 
 	///Requests for last known seqID
@@ -45,9 +48,9 @@ public:
 	virtual ~IChangeObserverOld() {}
 
 	///called on change (deprecated)
-	virtual void onChange(const ChangedDoc &doc) = 0;
+	virtual void onChange(const ChangeEvent &doc) = 0;
 
-	virtual bool onEvent(const ChangedDoc &doc) {
+	virtual bool onEvent(const ChangeEvent &doc) {
 		onChange(doc);
 		return true;
 	}
@@ -62,7 +65,7 @@ public:
 
 	ChangeObserverFromFn(Fn &&fn, json::Value since=json::undefined):fn(std::forward<Fn>(fn)),since(since) {}
 
-	virtual bool onEvent(const ChangedDoc &doc) {
+	virtual bool onEvent(const ChangeEvent &doc) {
 		since = doc.seqId;
 		return fn(doc);
 	}

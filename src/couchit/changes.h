@@ -8,17 +8,17 @@
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGEDDOC_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGEDDOC_H_
 
+#include <couchit/changeevent.h>
 #include  <memory>
 #include  <mutex>
 
 
 #include "minihttp/cancelFunction.h"
 
-
-#include "changedDoc.h"
-#include "changeObserver.h"
 #include "view.h"
 #include "couchDB.h"
+#include "changeObserver.h"
+#include "changeevent.h"
 
 namespace std {
 	class thread;

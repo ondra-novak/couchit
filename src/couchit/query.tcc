@@ -209,7 +209,7 @@ void JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::addFk(const Value &v, std::size_t 
 template<typename BindFn, typename AgrFn, typename MergeFn>
 void JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::addFk(const KeyType &v, std::size_t index) {
 	int pos = 0;
-	for (const Value &e : v.data) {
+	for (const Value &e : v) {
 		keyAtIndexMap.insert(KeyAtIndexMap::value_type(e, IndexType(index,pos++)));
 	}
 }
@@ -258,7 +258,7 @@ Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &
 						Value v = agrFn(group);
 						auto rang = keyAtIndexMap.equal_range(curKey);
 						for (auto iter = rang.first; iter != rang.second;++iter) {
-							resultMap[iter->second.first].data[iter->second.second] = v;
+							resultMap[iter->second.first][iter->second.second] = v;
 						}
 					}
 					curKey = r.key;
@@ -270,7 +270,7 @@ Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &
 				Value v = agrFn(group);
 				auto rang = keyAtIndexMap.equal_range(curKey);
 				for (auto iter = rang.first; iter != rang.second;++iter) {
-					resultMap[iter->second.first].data[iter->second.second] = v;
+					resultMap[iter->second.first][iter->second.second] = v;
 				}
 			}
 		}

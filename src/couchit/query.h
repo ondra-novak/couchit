@@ -237,18 +237,19 @@ protected:
 class Row: public Value {
 public:
 	///contains key
-	const Value key;
+	Value key;
 	///contains value
-	const Value value;
+	Value value;
 	///contains document - will be nil, if documents are not requested in the query
-	const Value doc;
+	Value doc;
 	///contains source document ID
-	const Value id;
+	Value id;
 	///contains error information for this row
-	const Value error;
+	Value error;
 
 	Row(const PValue &jrow);
 	Row(const Value &jrow);
+	Row() {}
 
 	///Returns 'true' if row exists (it is not error)
 	bool exists() const {return error != null;}
@@ -272,10 +273,29 @@ namespace _details {
 		}
 		NStore() {}
 
-		operator const T &() const {return data[0];}
-		operator T &() {return data[0];}
+		const T *begin() const {return data;}
+		const T *end() const {return data+n;}
+
+
 		const T &operator [](std::size_t idx) const {return data[idx];}
 		T &operator [](std::size_t idx) {return data[idx];}
+	};
+
+
+	template<typename T> class NStore<T,1>: public T {
+	public:
+		static const std::size_t count = 1;
+		typedef T Type;
+
+		NStore(const std::initializer_list<T> &list):T(list[0]) {}
+		NStore() {}
+
+		const T *begin() const {return this;}
+		const T *end() const {return this+1;}
+
+
+		const T &operator [](std::size_t) const {return *this;}
+		T &operator [](std::size_t) {return *this;}
 	};
 
 	template<typename> class DetectFkType {
@@ -309,17 +329,15 @@ template<std::size_t n> using MultiFKey = _details::NStore<Value, n>;
  *
  * @tparam BindFn Bind funcion Value(Value), it receives row from the results of the
  *   first query and it should extract a foreign key. Function can return undefined value
- *   to skip the row in the request to the other view.
- *   (Alternatively: Function can return StringView<Value> if there are multiple
- *   foreign keys for given row. Note that because only view is returned,
- *   the function need to store it somewhere else. Furtunately the returned value is immediately
- *   processed and it is no longer needed when the function is called again)
- *
+ *   to skip the row in the request to the other view. Function can also return MultiFKey
+ *   type, which defines multiple keys. However in this case, the type MultiFKey
+ *   is used to carry result for MergeFn (instead Value)
  *
  * @tparam AgrFn Aggregate function Value(Array &). Function receives array of results
  *    matching a single foreign key. Function should agregate the result and return a signle
  *    value which is considered as result for the given foreign key. Each item
- *    of the Array (as argument of the function) is row from the other query.
+ *    of the Array (as argument of the function) is row from the other query. You can cast each
+ *    item to Row to extract attributes of the row.
  *
  * @tparam MergeFn Merge function. The function receives two arguments, first argument
  *   is row from the first query, second argument is matching row from the other query (as it was
@@ -327,6 +345,7 @@ template<std::size_t n> using MultiFKey = _details::NStore<Value, n>;
  *   included to the result. If there is no result for the other query, second argument is undefined.
  *   The function may return undefined to remove whole row from the result.
  *
+ *   Note that if the BindFn returned MultiFKey, the MergeFn also receives MultiFKey as second argument.
  *
  */
 template<typename BindFn, typename AgrFn, typename MergeFn>

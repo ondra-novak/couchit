@@ -17,7 +17,7 @@ namespace couchit {
 
 
 
-ChangedDoc::ChangedDoc(const Value& allData)
+ChangeEvent::ChangeEvent(const Value& allData)
 :Value(allData)
 ,seqId(allData["seq"])
 ,id(allData["id"].getString())
@@ -198,7 +198,7 @@ class ChangesDistributor::Distributor {
 public:
 
 	Distributor(ChangesDistributor *_this):_this(_this) {}
-	bool operator()(const ChangedDoc &doc) const {
+	bool operator()(const ChangeEvent &doc) const {
 
 		using ondra_shared::DeferContext;
 		using ondra_shared::defer_root;

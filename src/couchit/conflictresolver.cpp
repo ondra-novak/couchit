@@ -373,7 +373,7 @@ void ConflictResolver::runResolver(CouchDB& db) {
 				};
 
 
-				auto processFn = [&](const ChangedDoc &d){
+				auto processFn = [&](const ChangeEvent &d){
 					if (!d.deleted) {
 						Document doc;
 						Array conflicts;
@@ -387,7 +387,7 @@ void ConflictResolver::runResolver(CouchDB& db) {
 				};
 
 
-				for (ChangedDoc d: chfeed.exec()) {
+				for (ChangeEvent d: chfeed.exec()) {
 					processFn(d);
 				}
 
