@@ -77,8 +77,7 @@ Upload::Upload(Target* t):write(*t),tptr(t) {
 
 Download::Download(Source* s, const String contentType,
 		const String etag, const std::size_t length, const bool notModified)
-	:read(*s)
-	,contentType(contentType)
+	:contentType(contentType)
 	,etag(etag)
 	,length(length)
 	,notModified(notModified)

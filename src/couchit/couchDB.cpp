@@ -726,8 +726,7 @@ ChangesFeed CouchDB::createChangesFeed() {
 
 class EmptyDownload: public Download::Source {
 public:
-	virtual std::size_t operator()(void *, std::size_t ) {return 0;}
-	virtual BinaryView operator()(std::size_t) {
+	virtual BinaryView impl_read() override {
 		return BinaryView(nullptr, 0);
 	}
 };
@@ -735,15 +734,8 @@ public:
 class StreamDownload: public Download::Source {
 public:
 	StreamDownload(const InputStream &stream,  CouchDB::PConnection &&conn):stream(stream),conn(std::move(conn)) {}
-	virtual std::size_t operator()(void *buffer, std::size_t size) override {
-		BinaryView b = stream(0);
-		if (size > b.length) size = b.length;
-		std::memcpy(buffer,b.data,b.length);
-		stream(size);
-		return size;
-	}
-	virtual BinaryView operator()(std::size_t processed) override {
-		return stream(processed);
+	virtual BinaryView impl_read() override {
+		return stream.read();
 	}
 
 	~StreamDownload() {

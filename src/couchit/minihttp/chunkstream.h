@@ -14,7 +14,30 @@ public:
 
 protected:
 
+	json::BinaryView readChunkPart(bool nonblock) {
+		auto x = input->read(nonblock);
+		auto rest = x.substr(curChunk);
+		x = x.substr(0,curChunk);
+		input->putBack(rest);
+		curChunk-=x.length;
+		return x;
+	}
+
 	virtual json::BinaryView doRead(bool nonblock = false) {
+		if (curChunk) return readChunkPart(nonblock);
+
+		if (eof) {
+			return AbstractInputStream::eofConst;
+		}
+
+		if (openChunk(nonblock) == false) {
+			eof = true;
+			return AbstractInputStream::eofConst;
+		}
+		if (curChunk) return readChunkPart(nonblock);
+		return json::BinaryView();
+#if 0
+
 		if (toCommit)  {
 			input->commit(toCommit);
 			curChunk -= toCommit;
@@ -38,10 +61,36 @@ protected:
 			}
 			return json::BinaryView();
 		}
+#endif
 	}
 
 	virtual bool doWaitRead(int milisecs) {
 		return input->waitRead(milisecs);
+	}
+
+	bool parseChunkLine(std::size_t &put_back_count) {
+		auto pos = chunkLine.find("\r\n");
+		decltype(pos) beg = 0;
+		if (pos == 0) {
+			beg = pos+2;
+			pos = chunkLine.find("\r\n",beg);
+		}
+
+		if (pos == chunkLine.npos) return false;
+		put_back_count = chunkLine.length() - pos - 2;
+
+		std::size_t n = 0;
+		for (auto x = beg; x < pos; x++) {
+			n = n * 16;
+			char c = chunkLine[x];
+			if (isdigit(c)) n = n + (c - '0');
+			else if (c >= 'A' && c <= 'F') n = n + (c-'A'+10);
+			else if (c >= 'a' && c <= 'f') n = n + (c-'a'+10);
+			else throw std::runtime_error("Invalid chunk header");
+		}
+		curChunk = n;
+		return true;
+
 	}
 
 	bool openChunk(bool nonblock) {
@@ -49,6 +98,26 @@ protected:
 			auto buff = input->read(nonblock);
 			if (AbstractInputStream::isEof(buff)) {
 				return false;
+			}
+
+			chunkLine.append(reinterpret_cast<const char *>(buff.data), buff.length);
+			std::size_t put_back_count;
+			if (parseChunkLine(put_back_count)) {
+				input->putBack(buff.substr(buff.length-put_back_count));
+				chunkLine.clear();
+				return curChunk > 0;
+			}
+			if (chunkLine.length() > 50)
+				throw std::runtime_error("Chunk header is too long (50+ bytes)");
+		}
+		while (!nonblock);
+		return true;
+	}
+
+#if 0
+
+			if (unused) {
+
 			}
 
 			std::size_t  pos = 0;
@@ -78,11 +147,10 @@ protected:
 		return true;
 	}
 
+#endif
 	InputStream input;
-	char chunkHdr[50];
-	int chunkHdrSz = 0;
 	unsigned int curChunk = 0;
-	unsigned int toCommit = 0;
+	std::string chunkLine;
 	bool eof = false;
 };
 

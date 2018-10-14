@@ -15,6 +15,7 @@
 
 namespace couchit {
 
+#if 0
 class IInputStream: public virtual json::RefCntObj {
 public:
 
@@ -44,7 +45,7 @@ public:
 	virtual ~IOutputStream() {}
 
 };
-
+#endif
 
 
 
@@ -84,19 +85,16 @@ public:
 	 */
 	json::BinaryView read(bool nonblock = false) {
 		if (lastBuff.empty()) {
-			lastBuff = doRead(nonblock);
+			return doRead(nonblock);
+		} else {
+			json::BinaryView res = lastBuff;
+			lastBuff = json::BinaryView();
+			return res;
 		}
-		return lastBuff;
 	}
 
-	///commits alread read data and allows to read next data
-	/**
-	 * @param sz commited size, the value must be between zero and size of the
-	 * last returned buffer
-	 */
-	json::BinaryView commit(std::size_t sz) {
-		lastBuff = lastBuff.substr(sz);
-		return lastBuff;
+	void putBack(json::BinaryView b) {
+		lastBuff = b;
 	}
 
 
@@ -105,13 +103,10 @@ public:
 	 * @return returns value of the next byte or -1 for eof
 	 */
 	int getNextByte() {
-		if (lastBuff.empty()) {
-			lastBuff = doRead();
-			if (lastBuff.empty()) return -1;
-		}
-		int res = lastBuff[0];
-		lastBuff = lastBuff.substr(1);
-		return res;
+		auto b = read();
+		if (b.empty()) return -1;
+		putBack(b.substr(1));
+		return b[0];
 	}
 
 	///peeks value of the next byte
@@ -122,12 +117,10 @@ public:
 	 * @note function can block
 	 */
 	int peekNextByte() {
-		if (lastBuff.empty()) {
-			lastBuff = doRead();
-			if (lastBuff.empty()) return -1;
-		}
-		int res = lastBuff[0];
-		return res;
+		auto b = read();
+		if (b.empty()) return -1;
+		putBack(b);
+		return b[0];
 	}
 
 	///Wait for data
@@ -293,10 +286,9 @@ protected:
 class InputStream {
 public:
 	InputStream(AbstractInputStream *impl):impl(impl) {}
-	const json::BinaryView operator()(std::size_t processed) {
-		if (processed) return impl->commit(processed);
-		else return impl->read();
-	}
+	json::BinaryView read(bool nonblock = false) {return impl->read(nonblock);}
+	void putBack(const json::BinaryView &b) {impl->putBack(b);}
+
 	AbstractInputStream *operator->() const {return impl;}
 	AbstractInputStream *get() const {return impl;}
 

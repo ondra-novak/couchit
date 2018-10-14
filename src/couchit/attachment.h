@@ -115,24 +115,52 @@ public:
 	class Source: public RefCntObj {
 	public:
 		virtual ~Source() {}
-		virtual std::size_t operator()(void *buffer, std::size_t size) = 0;
-		virtual BinaryView operator()(std::size_t processed) = 0;
-	};
 
-	///Reads data from the stream
-	/**
-	 * @param buffer a prepared buffer by the caller
-	 * @param size size of prepared buffer, must be at least one byte large
-	 * @return count of bytes read. Function always reads at-least one byte. If
-	 *   zero is returned, then end of file has been extracted.
-	 */
-	Source &read;
+		///Reads next buffer
+		/***
+		 * @return read buffer, if empty, eof is reached
+		 */
+		BinaryView read() {
+			if (put_back_content.empty())return impl_read();
+			else {
+				BinaryView ret = put_back_content;
+				put_back_content = BinaryView();
+				return ret;
+			}
+		}
+
+		///Puts back a part of unprocessed data
+		/**
+		 * Data put back are read by next reading operation
+		 *
+		 * @param put_back data to put back
+		 */
+		void putBack(const BinaryView &put_back) {
+			put_back_content = put_back;
+		};
+
+
+	protected:
+		BinaryView put_back_content;
+
+		///Read buffer from the stream
+		/** Returns buffer with at least one byte, however it will
+		 * mostly return more bytes.
+		 *
+		 * @return a view which contains read bytes. If empty view is
+		 * returned, then EOF has been reached
+		 *
+		 * @note this function doesn't process putBack data.
+		 */
+		virtual BinaryView impl_read() = 0;
+};
+
 
 	///Contans content type
 	const String contentType;
 
 	///Contains e-tag
-	const String 	etag;
+	const String etag;
 
 	///Contains length
 	const std::size_t length;
@@ -152,6 +180,50 @@ public:
 
 	json::Binary download();
 
+	void putBack(const BinaryView &b) {
+		sptr->putBack(b);
+	}
+
+	BinaryView read() {
+		return sptr->read();
+	}
+
+	///Read to buffer
+	/**
+	 * @param buffer pointer to buffer
+	 * @param size size of buffer
+	 * @return actually read bytes. Zero returned is EOF
+	 *
+	 */
+	std::size_t read(void *buffer, std::size_t size) {
+		BinaryView x = read();
+		if (size > x.length) size = x.length;
+		std::copy(x.data, x.data+size, reinterpret_cast<unsigned char *>(buffer));
+		return size;
+	}
+	///Read from stream
+	/**
+	 * Deprecated.
+	 *
+	 * Function reads data from the stream.
+	 * @param processed count of bytes processed during previous read
+	 * @return buffer including unprocessed bytes
+	 *
+	 */
+	[[deprecated]]
+	BinaryView read(std::size_t processed) {
+		BinaryView x;
+		if (processed == 0) {
+			x = read();
+			putBack(x);
+			return x;
+		} else {
+			x = read();
+			x = x.substr(processed);
+			putBack(x);
+		}
+		return x;
+	}
 
 
 private:

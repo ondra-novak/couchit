@@ -167,7 +167,6 @@ void HttpClient::discardResponse() {
 //		std::size_t p = 0;
 		BinaryView b = responseData->read();
 		while (!b.empty()) {
-			responseData->commit(b.length);
 			b = responseData->read();
 		}
 		responseData = nullptr;
@@ -237,9 +236,6 @@ int HttpClient::readResponse() {
 			:stream(stream), limit(limit) {}
 
 		~LimitedStream() {
-			if (commitSize) {
-				stream->commit(commitSize);
-			}
 		}
 
 		virtual void closeInput() {
@@ -249,15 +245,14 @@ int HttpClient::readResponse() {
 	protected:
 
 		virtual json::BinaryView doRead(bool nonblock = false) {
-			if (commitSize) {
-				stream->commit(commitSize);
-				limit -= commitSize;
-				commitSize = 0;
-			}
 			if (limit == 0) return eofConst;
 
-			auto x = stream->read(nonblock).substr(0,limit);
-			commitSize = x.length;
+			auto x =  stream->read(nonblock);
+			auto rest = x.substr(limit);
+			x = x.substr(0,limit);
+			limit = limit-x.length;
+			stream->putBack(rest);
+
 			return x;
 		}
 		virtual bool doWaitRead(int milisecs) {
