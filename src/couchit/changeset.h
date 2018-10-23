@@ -15,25 +15,39 @@ namespace couchit {
 class LocalView;
 
 ///Collects changes and commits them as one request
+/** Helps to store multiple documents and resolve conflicts
+ *
+ * You can call the function update() to mark document for update. By calling commit(), all updated
+ * documents are stored to the database
+ *
+ * @note You cannot update one document by multiple times
+ *
+ * @note if the document is set for update with _conflicts field, it automatically set all conflicts
+ * for delete.
+ *
+ */
 class Changeset {
 public:
-	Changeset(CouchDB &db);
-	Changeset(const Changeset& other);
+	Changeset();
+	explicit Changeset(CouchDB &db);
+	Changeset(const Changeset &db) = default;
+	Changeset(Changeset &&db) = default;
 
 	///Updates document in database
 	/** Function schedules document for update. Once document is scheduled, Document instance can
 	 * be destroyed, because document is kept inside of changeset. Changes are applied by function commit()
 	 *
-	 * @param document document to schedule for update
+	 * @param document document to schedule for update. Do not schedule one document by multiple times.
+	 *  It cannot replace previous schedule, and result is conflict during commit().
+	 *  Also note, that function can manipulate with system fields. For instance, the timestamp
+	 *  field is always updated to current timestamp. If the document contains the field _conflicts,
+	 *  these conflicted revisions are scheduled for deletion.
+	 *
 	 * @return reference to this
 	 *
-	 * @note If document has no _id, it is created automatically by this function,so you can
-	 * Immediately read it.
 	 *
 	 */
 	Changeset &update(const Document &document);
-
-	Changeset &update(const Value &document);
 
 	///Erases document defined only by documentId and revisionId. Useful to erase conflicts
 	/**
@@ -79,18 +93,27 @@ public:
 	Changeset &commit();
 
 
-	///Retrieves revision of the committed document
+	///(deprecated) Retrieves revision of the committed document
+	/** This function is deprecated and can be slow. To work with commited documents, use getCommited()
+
+	 */
 	String getCommitRev(const StrViewA &docId) const;
 
-	///Retrieves revision of the commited document
+	///(deprecated) Retrieves revision of the committed document
+	/** This function is deprecated and can be slow. To work with commited documents, use getCommited()
+
+	 */
 	String getCommitRev(const Document &doc) const;
 
-	///Retrieves updated document by id
+	///(deprecated) Retrieves updated document by id
 	/**
 	 * @param docId id of document
 	 * @return updated document. Document has updated "_rev", so it can be modified and updated again without re-downloading it.
 	 *
 	 * @note if document is not in changeset, returns undefined
+	 *
+	 * @note  This function is deprecated and can be slow. To work with commited documents, use getCommited()
+	 *
 	 *
 	 *
 	 */
@@ -127,23 +150,14 @@ public:
 	Changeset &preview(LocalView &view);
 
 
-	CouchDB &getDatabase() {return db;}
-	const CouchDB &getDatabase() const {return db;}
+	CouchDB &getDatabase() {checkDB();return *db;}
+	const CouchDB &getDatabase() const {checkDB();return *db;}
+	bool hasDatabse() const {return db != nullptr;}
 
 
 
 
-	struct ScheduledDoc {
-		StrViewA id;
-		Value data;
-		Value conflicts;
-
-		ScheduledDoc(const StrViewA &id, const Value &data, const Value &conflicts)
-			:id(id),data(data),conflicts(conflicts) {}
-		ScheduledDoc() {}
-	};
-
-	typedef std::vector<ScheduledDoc> ScheduledDocs;
+	typedef std::vector<Value> ScheduledDocs;
 
 
 	struct CommitedDoc {
@@ -161,23 +175,49 @@ public:
 	};
 	typedef std::vector<CommitedDoc> CommitedDocs;
 
+	///Returns collection commited documents
+	/**
+	 * Deprecated feature - the collection is no longer ordered
+	 * @return collection of commited docus
+	 */
 	const CommitedDocs &getCommitedDocs() const {return commitedDocs;}
+
+	///Generates associative collection containing all commited documents
+	/**
+	 *
+	 * @return JSON object where each key is ID of document,
+	 * and the value is the whole updated document as it was stored in the
+	 * DB, including updated _rev
+	 *
+	 * @note there can be automatic conflict resolver in the future version of the library. It
+	 * is better to take whole document, not just the _rev field. The document
+	 * can be merged with conflicted version, so more fields can be updated.
+	 */
+	Value getCommited() const;
+
+	///moves changes from one container to other
+	Changeset &operator=(Changeset &&other) {
+		this->scheduledDocs = std::move(other.scheduledDocs);
+		this->commitedDocs = std::move(other.commitedDocs);
+		return *this;
+	}
+
+	std::size_t size() const {
+		return scheduledDocs.size() + commitedDocs.size();
+	}
+	bool empty() const {
+		return scheduledDocs.empty() && commitedDocs.empty();
+	}
+
 
 protected:
 
 	ScheduledDocs scheduledDocs;
 	CommitedDocs commitedDocs;
 
+	CouchDB *db;
 
-	CouchDB &db;
-
-	template<typename X>
-	static bool docOrder(const X &a, const X &b);
-
-
-
-
-
+	void checkDB() const ;
 };
 
 

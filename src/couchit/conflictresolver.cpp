@@ -23,10 +23,8 @@ namespace couchit {
 using ondra_shared::MTCounter;
 using ondra_shared::logDebug;
 
-Value ConflictResolver::makeDiff(Value curRev, Value oldRev, Flags flags) const {
+Value ConflictResolver::makeDiff(Value curRev, Value oldRev, bool recursive) const {
 
-	bool skipReserved = (flags & ConflictResolver::skipReserved) != 0;
-	bool recursive = (flags & ConflictResolver::recursive) != 0;
 	if (curRev.type() == json::object && oldRev.type() == json::object) {
 
 		std::vector<Value> diffData;
@@ -42,23 +40,17 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, Flags flags) const 
 			StrViewA crvk = crv.getKey();
 			int cmpname = crvk.compare(orvk);
 			if (cmpname < 0)  {
-				if (!skipReserved || crvk.substr(0,1) !="_") {
-					diffData.push_back(crv);
-				}
+				diffData.push_back(crv);
 				++crit;
 			} else if (cmpname > 0) {
-				if (!skipReserved || orvk.substr(0,1) !="_") {
-					diffData.push_back(Value(orvk, json::undefined));
-				}
+				diffData.push_back(Value(orvk, json::undefined));
 				++orit;
 			} else {
-				if (!skipReserved || crvk.substr(0,1) !="_") {
-					if (recursive) {
-						Value d = Value(orvk, makeDiff(crv,orv,false));
-						if (d.defined()) diffData.push_back(d);
-					} else if (crv != orv) {
-						diffData.push_back(crv);
-					}
+				if (recursive) {
+					Value d = Value(orvk, makeDiff(crv,orv,false));
+					if (d.defined()) diffData.push_back(d);
+				} else if (crv != orv) {
+					diffData.push_back(crv);
 				}
 				++crit;
 				++orit;
@@ -66,18 +58,13 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, Flags flags) const 
 		}
 		while (crit != cre) {
 			Value crv = *crit;
-			StrViewA crvk = crv.getKey();
-			if (!skipReserved || crvk.substr(0,1) !="_") {
-				diffData.push_back(crv);
-			}
+			diffData.push_back(crv);
 			++crit;
 		}
 		while (orit != ore) {
 			Value orv = *orit;
 			StrViewA orvk = orv.getKey();
-			if (!skipReserved || orvk.substr(0,1) !="_") {
-				diffData.push_back(Value(orvk, json::undefined));
-			}
+			diffData.push_back(Value(orvk, json::undefined));
 			++crit;
 		}
 		if (diffData.empty()) return json::undefined;
@@ -91,7 +78,7 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, Flags flags) const 
 }
 
 
-Value ConflictResolver::mergeDiffs(bool recursive, Value baseRev, Value diff1, Value diff2, const Path &path) const {
+Value ConflictResolver::mergeDiffs(Value baseRev, Value diff1, Value diff2, bool recursive, const Path &path) const {
 	if (diff1.type() == json::object && diff2.type() == json::object) {
 
 		std::vector<Value> diffData;
@@ -115,7 +102,7 @@ Value ConflictResolver::mergeDiffs(bool recursive, Value baseRev, Value diff1, V
 			} else {
 				if (recursive) {
 					diffData.push_back(Value(d1vk,
-							mergeDiffs(recursive, baseRev[d1vk],d1v,d2v,Path(path, d1vk))));
+							mergeDiffs(baseRev[d1vk],d1v,d2v,recursive,Path(path, d1vk))));
 				} else if (d1v != d2v) {
 					diffData.push_back(resolveConflict(Path(path, d1vk), baseRev, d1v, d2v));
 				}
@@ -146,7 +133,7 @@ Value ConflictResolver::mergeDiffs(bool recursive, Value baseRev, Value diff1, V
 
 }
 
-Value ConflictResolver::applyDiff(Value curRev, Value diff) const {
+Value ConflictResolver::applyDiff(Value curRev, Value diff, bool recursive) const {
 	if (curRev.type() == json::object && diff.type() == json::object) {
 
 		std::vector<Value> diffData;
@@ -168,7 +155,7 @@ Value ConflictResolver::applyDiff(Value curRev, Value diff) const {
 				diffData.push_back(dfv);
 				++dfit;
 			} else {
-				diffData.push_back(Value(crvk,applyDiff(crv, dfv)));
+				diffData.push_back(Value(crvk,recursive?applyDiff(crv, dfv,recursive):dfv));
 				++crit;
 				++dfit;
 			}
@@ -191,25 +178,33 @@ Value ConflictResolver::applyDiff(Value curRev, Value diff) const {
 
 }
 
+static Value removeSystemProps(Value v) {
+	Object o(v);
+	o.unset("_rev");
+	o.unset("_conflicts");
+	o.unset("_revisions");
+	return o;
+}
 
-Value ConflictResolver::merge3way(Value baseRev, Value curVer, Value conflictVer, Flags flags) const {
+
+Value ConflictResolver::merge3way(Value baseRev, Value curVer, Value conflictVer, bool recursive) const {
 
 	logDebug("base $1", baseRev.stringify());
 	logDebug("curVer $1", curVer.stringify());
 	logDebug("conlifct $1", conflictVer.stringify());
-	Value diff1 = makeDiff(curVer, baseRev, flags);
+	Value diff1 = removeSystemProps(makeDiff(curVer, baseRev, recursive));
 	logDebug("diff1 $1", diff1.stringify());
-	Value diff2 = makeDiff(conflictVer, baseRev,flags);
+	Value diff2 = removeSystemProps(makeDiff(conflictVer, baseRev,recursive));
 	logDebug("diff2 $1", diff2.stringify());
-	Value diffMerged = mergeDiffs((flags & recursive) != 0, baseRev, diff1, diff2);
+	Value diffMerged = mergeDiffs( baseRev, diff1, diff2, recursive);
 	logDebug("diffMerged $1", diffMerged.stringify());
-	Value result = applyDiff(baseRev, diffMerged);
+	Value result = applyDiff(baseRev, diffMerged, recursive);
 	logDebug("result $1", result.stringify());
 	return result;
 
 }
 
-Value ConflictResolver::merge2way(Value curVer, Value , Flags) const {
+Value ConflictResolver::merge2way(Value curVer, Value , bool) const {
 	return curVer;
 }
 
@@ -256,7 +251,29 @@ static Value findCommonRev(Value curVer, Value conflictVer) {
 
 }
 
-bool ConflictResolver::resolveAllConflicts(CouchDB& couch, String id,Document& doc, Array &conflictsArr) {
+struct AttachmentInfo {
+	String name;
+	String revision;
+};
+
+template<typename T>
+void find_attachments_for_download(T &cont, Value curVer, Value newVer, Value rev) {
+	Value curAtt = curVer["_attachments"];
+	Value newAtt = newVer["_attachments"];
+	for (Value v : newAtt) {
+		StrViewA name = v.getKey();
+		Value c = curAtt[name];
+		if (!c.defined() || c["digest"] != v["digest"]) {
+			AttachmentInfo nfo;
+			logDebug("Registered attachment for download: rev=$1 $2",rev.getString(), name);
+			nfo.name = name;
+			nfo.revision = String(rev);
+			cont.push_back(nfo);
+		}
+	}
+}
+
+bool ConflictResolver::resolveAllConflicts(CouchDB& couch, String id,Document& doc) {
 	Value curVer = couch.get(id,CouchDB::flgRevisions|CouchDB::flgConflicts|CouchDB::flgNullIfMissing);
 	if (curVer.isNull()) return false;
 
@@ -265,7 +282,7 @@ bool ConflictResolver::resolveAllConflicts(CouchDB& couch, String id,Document& d
 
 	std::unordered_map<Value, Value> commonRevCache;
 
-	Value conflictDocs = couch.getRevisions(id,conflicts,CouchDB::flgRevisions|CouchDB::flgAttachments);
+	Value conflictDocs = couch.getRevisions(id,conflicts,CouchDB::flgRevisions);
 	Array revToDownload;
 	for (Value cdoc : conflictDocs) {
 		 if (cdoc.getKey() == "ok") {
@@ -284,6 +301,9 @@ bool ConflictResolver::resolveAllConflicts(CouchDB& couch, String id,Document& d
 				commonRevCache[x["_rev"]] =  x;
 		}
 	}
+
+	std::vector<AttachmentInfo> att_need_download;
+
 	Value newVer = curVer;
 	for (Value cdoc : conflictDocs) {
 		 if (cdoc.getKey() == "ok") {
@@ -292,42 +312,34 @@ bool ConflictResolver::resolveAllConflicts(CouchDB& couch, String id,Document& d
 				 auto iter = commonRevCache.find(commonRev);
 				 if (iter != commonRevCache.end()) {
 					 Value commonDoc = iter->second;
-					 newVer = merge3way(commonDoc, newVer, cdoc);
-					 newVer = merge3way_attachments(commonDoc,newVer, cdoc);
+					 newVer = merge3way(commonDoc, newVer, cdoc, true);
 				 } else {
-					 newVer = merge2way(newVer, cdoc);
-					 newVer = merge2way_attachments(newVer, cdoc);
+					 newVer = merge2way(newVer, cdoc, true);
 
 				 }
 			 } else{
-				 newVer = merge2way(newVer, cdoc);
-				 newVer = merge2way_attachments(newVer, cdoc);
+				 newVer = merge2way(newVer, cdoc, true);
 			 }
+			 find_attachments_for_download(att_need_download, curVer, newVer, cdoc["_rev"]);
 		 }
 	}
 	doc.clear();
 	doc.setBaseObject(newVer);
 	doc.setRev(curVer["_rev"]);
 	doc.set("_revisions", curVer["_revisions"]);
-	conflictsArr.setBaseObject(conflicts);
+
+	for (auto &&item : att_need_download) {
+		logDebug("Inlining attachment: $1",item.name);
+		Download dwn = couch.getAttachment(doc.getID(),item.name,"",item.revision);
+		auto data = dwn.load();
+		doc.inlineAttachment(item.name,AttachmentDataRef(BinaryView(data.data(), data.size()),dwn.contentType));
+	}
+	doc.set("_conflicts", conflicts);
 	logDebug("merged doc $1", Value(doc).stringify());
 	return true;
 
 
 
-}
-
-Value ConflictResolver::merge3way_attachments(Value baseRev, Value curVer, Value conflictVer) const {
-
-	return curVer.replace("_attachments",
-			merge3way(baseRev["_attachments"], curVer["_attachments"], conflictVer["_attachments"], 0));
-
-
-}
-
-Value ConflictResolver::merge2way_attachments(Value curVer, Value conflictVer) const {
-	return curVer.replace("_attachments",
-			merge3way(json::object, curVer["_attachments"], conflictVer["_attachments"], 0));
 }
 
 
@@ -376,9 +388,8 @@ void ConflictResolver::runResolver(CouchDB& db) {
 				auto processFn = [&](const ChangeEvent &d){
 					if (!d.deleted) {
 						Document doc;
-						Array conflicts;
-						if (resolveAllConflicts(xdb,d.id,doc, conflicts)) {
-							db.pruneConflicts(doc, conflicts);
+						if (resolveAllConflicts(xdb,d.id,doc)) {
+							db.pruneConflicts(doc);
 						}
 					}
 					state.set("since",d.seqId);

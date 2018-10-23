@@ -780,23 +780,15 @@ Download CouchDB::getAttachment(const Document &document, const StrViewA &attach
 	StrViewA documentId = document["_id"].getString();
 	StrViewA revId = document["_rev"].getString();
 
-	if (revId.empty()) return getAttachment(documentId, attachmentName, etag);
-
-	PConnection url = getConnection("");
-	url->add(documentId);
-	url->add(attachmentName);
-	url->add("_rev",revId);
-
-	return downloadAttachmentCont(url,etag);
-
-
+	return getAttachment(documentId, attachmentName, etag, revId);
 }
 
-Download CouchDB::getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag) {
+Download CouchDB::getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag, const StrViewA &rev) {
 
 	PConnection url = getConnection("");
 	url->add(docId);
 	url->add(attachmentName);
+	if (!rev.empty()) url->add("rev",rev);
 
 	return downloadAttachmentCont(url,etag);
 }
@@ -1376,7 +1368,7 @@ Value CouchDB::getRevisions(const StrViewA docId, Value revisions, Flags flags) 
 	return output;
 }
 
-void CouchDB::pruneConflicts(Document& doc, const Array& conflicts) {
+void CouchDB::pruneConflicts(Document& doc) {
 	PConnection conn = getConnection();
 	conn->add("_bulk_docs");
 	{
@@ -1399,7 +1391,7 @@ void CouchDB::pruneConflicts(Document& doc, const Array& conflicts) {
 	}
 
 	Array docs;
-	for (Value c : conflicts) {
+	for (Value c : doc.conflicts()) {
 		Revision curRev(c);
 		Revision newRev(curRev.getRevId()+1, String({curRev.getTag(),"R"}));
 		docs.push_back(Value(json::object,{
@@ -1413,11 +1405,13 @@ void CouchDB::pruneConflicts(Document& doc, const Array& conflicts) {
 		}));
 	}
 
+	docs.push_back(docv);
+
+
 	Value req(json::object,{
 		Value("new_edits",false),
 		Value("docs",docs)
 	});
-	docs.push_back(docv);
 
 	std::cout << req.toString();
 	Value r = requestPOST(conn,req,nullptr,0);
@@ -1430,6 +1424,7 @@ void CouchDB::pruneConflicts(Document& doc, const Array& conflicts) {
 			err.errorType = x["error"].toString();
 			err.reason = x["reason"].toString();
 			err.errorDetails = x;
+			errors.push_back(err);
 		}
 	}
 	if (!errors.empty()) {

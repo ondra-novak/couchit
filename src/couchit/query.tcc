@@ -9,6 +9,7 @@
 #define LIGHTCOUCH_QUERY_TCC_
 
 #include "query.h"
+#include "changeset.h"
 
 namespace couchit {
 
@@ -284,6 +285,23 @@ Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &
 				("offset",res.getOffset());
 }
 
+
+
+template<typename Fn>
+couchit::Changeset couchit::Result::update(Fn &&fn) {
+	Changeset ch;
+	for (Row rw : *this) {
+		Value doc = rw.doc;
+		if (doc.defined()) {
+			Value udoc = fn(doc);
+			if (udoc.defined()) {
+				ch.update(Document(udoc));
+			}
+		}
+	}
+
+	return ch;
+}
 
 
 

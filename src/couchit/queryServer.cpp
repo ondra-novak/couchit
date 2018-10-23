@@ -372,7 +372,7 @@ Value QueryServer::commandDDoc(const Value& req, std::istream &input, std::ostre
 				case ddcmdViews: resp = commandView(fn,arguments);break;
 			}
 			return resp;
-		} catch (std::bad_cast) {
+		} catch (std::bad_cast &) {
 			const IValue *p = fn.getHandle()->unproxy();
 			throw QueryServerError("compile error",{"Error to execute compiled function: ", typeid(*p).name()});
 		}

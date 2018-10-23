@@ -8,7 +8,7 @@ namespace couchit {
 
 template<typename A, typename B, typename C> class JoinedQuery;
 
-
+class Changeset;
 
 
 class Query {
@@ -185,42 +185,16 @@ public:
 	///Returns update_seq if available
 	Value getUpdateSeq() const {return updateSeq;}
 
-	///Updates all rows in the view
-	/**
-	 * The function processes the whole result and calls updateFn for each document in it. Then, documents are updated.
-	 *
-	 * @param db database where the documents are put
-	 * @param updateFn function, which accepts Value. It have to return updated value of the document.
-	 *
-	 * @return count of affected documents
-	 *
-	 */
-	template<typename UpdateFn>
-	unsigned int update(CouchDB &db, UpdateFn &&updateFn);
 
-	///Updates all rows in the view
+	///Updates all documents in the result
 	/**
-	 * The function processes the whole result and calls updateFn for each document in it. Then, documents are updated.
-	 *
-	 * @param db database where the documents are put
-	 * @param updateFn the function, which accepts Value. It have to return updated value of the document.
-	 * @param commitFn the function, which is called after the document is stored to the database. The argument
-	 * can contain either updated document or an error, which happened during commit. To distinguish between
-	 * success and error, you can use getCommitError(). If the result is null, the document has been stored
-	 * @return count if affected documents
-	 *
+	 * @param db reference to current database.
+	 * @param fn
+	 * @return
 	 */
-	template<typename UpdateFn, typename CommitFn>
-	unsigned int update(CouchDB &db, UpdateFn &&updateFn, CommitFn &&commitFn);
+	template<typename Fn>
+	Changeset update(Fn &&fn);
 
-
-	///Retrieves error status in commit function
-	/**
-	 * @param commitRes commit result.
-	 * @retval null no error happened, commitRes contains updated document
-	 * @retval object error happened, returns error object (commitRes is useless)
-	 */
-	static Value getCommitError(Value commitRes);
 
 protected:
 
@@ -405,58 +379,7 @@ inline JoinedQuery<BindFn, AgregFn, MergeFn> couchit::Query::join(
 }
 
 
-template<typename UpdateFn>
-inline unsigned int Result::update(CouchDB& db, UpdateFn&& fn) {
-	return update(db, std::forward<UpdateFn>(fn), [](const Value &){});
-}
 
 
-template<typename UpdateFn, typename CommitFn>
-inline unsigned int couchit::Result::update(CouchDB& db, UpdateFn&& updateFn, CommitFn&& commitFn) {
-
-	Array chs;
-
-	for (Value rw: *this) {
-		Value doc = rw["doc"];
-		if (doc.type() == json::object) {
-			Value newDoc = updateFn(doc);
-			if (!newDoc.isCopyOf(doc)) {
-				chs.push_back(newDoc);
-			}
-		}
-
-	}
-
-	unsigned int cnt = 0;
-
-	if (!chs.empty()) {
-		Value upload(chs);
-		Value res = _details::bulkUpload(db, upload);
-		chs.clear();
-		for (std::size_t i = 0, sz = res.size(); i < sz; ++i) {
-
-			Value r = res[i];
-			if (r["ok"].getBool()) {
-				Value nd = upload[i].replace("_rev", r["rev"]);
-				commitFn(nd);
-				cnt++;
-			} else if (r["error"].getString() == "conflict") {
-				chs.push_back(r["id"]);
-			} else {
-				commitFn(r);
-			}
-
-		}
-
-		if (!chs.empty()) {
-			Query q = _details::allDocs(db);
-			q.keys(chs);
-			Result res = q.exec();
-			cnt += res.update(db,updateFn, commitFn);
-		}
-	}
-
-	return cnt;
-}
 
 }

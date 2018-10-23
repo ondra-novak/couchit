@@ -107,24 +107,10 @@ public:
 	 */
 	void enableRevTracking();
 
-	///States, that document resolved all conflicts so conflicts can be deleted during update
-	/** This state can be cleared by revert()
-	 *
-	 * Function simply put _conflicts into separate field
-	 *
-	 *  */
-	void resolveConflicts();
-	///Stats that document resolved all conflicts. You must specify conflicts by argument
-	/**
-	 * @param conflicts array of conflicts revision to delete
-	 */
-	void resolveConflicts(Value conflicts);
 
 	void setID(const Value &id);
 	void setRev(const Value &rev);
 
-	///Retrieves list of conflicts to be deleted by this document (because conflicts has been resolved)
-	Value getConflictsToDelete() const;
 
 	///Retrieves all attatchments
 	Value attachments() const;
@@ -155,9 +141,6 @@ public:
 	 * @retval false, document is not deleted
 	 */
 	bool isDeleted() const;
-
-protected:
-	Value conflictsToDelete;
 
 };
 
