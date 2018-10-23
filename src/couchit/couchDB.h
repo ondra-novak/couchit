@@ -395,9 +395,10 @@ public:
 	 * @param docId document Id
 	 * @param attachmentName attachment name
 	 * @param etag (optional) etag, if not empty, then it is put to the header and result can be notModified
+	 * @param rev (optional) revision, if empty, latest revision is used
 	 * @return download object
 	 */
-	Download getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
+	Download getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA(), const StrViewA &rev = StrViewA());
 
 
 	///For function updateDesignDocument
@@ -519,8 +520,8 @@ public:
 
 	///Updates document and removes all conflicts
 	/**
-	 * @param doc new revision of the document (merged)
-	 * @param conflicts list of revisions considered as conflicted, they will be removed
+	 * @param doc new revision of the document (merged). The document must have field _conflict filled with
+	 * conflicted revisions ids to prune them.
 	 *
 	 * @note it is strongly recommended to run a local validator. If the validation fails on the server,
 	 * the document is left unchanged, but conflicted revisions are removed. No-one is able to repeate the merging,
@@ -530,7 +531,7 @@ public:
 	 *  merged document is ends with letter "M" (main). Deleted conflicts ends with "R" (resolved). This the only
 	 *  way how to distinguish between conflict deleted due resolution and deleted by a user.
 	 */
-	void pruneConflicts(Document &doc, const Array &conflicts);
+	void pruneConflicts(Document &doc);
 protected:
 
 	mutable std::mutex lock;

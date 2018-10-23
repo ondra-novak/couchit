@@ -20,10 +20,6 @@ class ConflictResolver {
 public:
 
 
-	typedef unsigned int Flags;
-
-	static const Flags skipReserved = 0x01;
-	static const Flags recursive = 0x02;
 
 	///Merge three-way
 	/**
@@ -36,7 +32,7 @@ public:
 	 * @param skipReserved set true (default) to skip couchdb's reserved keys (starting with underscore)
 	 * @return merged object
 	 */
-	virtual Value merge3way(Value baseRev, Value curVer, Value conflictVer, Flags flags= skipReserved|recursive) const;
+	virtual Value merge3way(Value baseRev, Value curVer, Value conflictVer, bool recursive) const;
 
 	///Merge two-way
 	/** Function is called when merge three-way is not possible. You can override default behaviour
@@ -53,11 +49,11 @@ public:
 	 * @note current implementation simply discard all conflicts leaving curVer untouched
 	 *
 	 */
-	virtual Value merge2way(Value curVer, Value conflictVer, Flags flags = skipReserved|recursive) const;
+	virtual Value merge2way(Value curVer, Value conflictVer, bool recursive) const;
 
-	virtual Value makeDiff(Value curRev, Value oldRev, Flags flags = skipReserved|recursive) const;
-	virtual Value mergeDiffs(bool recursive,Value baseRev, Value diff1, Value diff2, const Path &path = Path::root) const;
-	virtual Value applyDiff(Value curRev, Value diff) const;
+	virtual Value makeDiff(Value curRev, Value oldRev, bool recursive) const;
+	virtual Value mergeDiffs(Value baseRev, Value diff1, Value diff2, bool recursive, const Path &path = Path::root) const;
+	virtual Value applyDiff(Value curRev, Value diff, bool recursive) const;
 
 	virtual Value resolveConflict(const Path &path,
 			const Value &baseRev, const Value &rev1, const Value &rev2) const;
@@ -71,10 +67,8 @@ public:
 	 * @retval true conflicts resolved
 	 * @retval false no conflicts found
 	 */
-	virtual bool resolveAllConflicts(CouchDB &couch, String id, Document &doc, Array &conflicts);
+	virtual bool resolveAllConflicts(CouchDB &couch, String id, Document &doc);
 
-	virtual Value merge3way_attachments(Value baseRev, Value curVer, Value conflictVer) const;
-	virtual Value merge2way_attachments(Value curVer, Value conflictVer) const;
 
 
 	///Starts conflict resolver
@@ -92,7 +86,7 @@ public:
 	 */
 	void runResolver(CouchDB &db);
 	void stopResolver();
-	void onResolverError() {throw;}
+	virtual void onResolverError() {throw;}
 	virtual ~ConflictResolver();
 protected:
 	typedef std::function<void()> Action;

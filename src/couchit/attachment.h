@@ -188,6 +188,14 @@ public:
 		return sptr->read();
 	}
 
+	///Load whole attachment into memory
+	std::vector<unsigned char> load() {
+		std::vector<unsigned char> buffer;
+		buffer.resize(length);
+		this->read(buffer.data(),length);
+		return buffer;
+	}
+
 	///Read to buffer
 	/**
 	 * @param buffer pointer to buffer

@@ -24,12 +24,6 @@ StrViewA Document::getRev() const {
 }
 
 
-void Document::resolveConflicts() {
-	conflictsToDelete = base["_conflicts"];
-}
-void Document::resolveConflicts(Value conflicts) {
-	conflictsToDelete = conflicts;
-}
 
 void Document::setContent(const Value& v) {
 	Value id = getIDValue();
@@ -41,9 +35,6 @@ void Document::setContent(const Value& v) {
 }
 
 
-Value Document::getConflictsToDelete() const {
-	return conflictsToDelete;
-}
 
 Value Document::getIDValue() const {
 	return (*this)["_id"];
