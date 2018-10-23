@@ -33,7 +33,6 @@ class UIDIterator;
 class Query;
 class Changeset;
 class QueryCache;
-class Conflicts;
 class Document;
 class Validator;
 class Changes;
