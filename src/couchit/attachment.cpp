@@ -9,6 +9,7 @@
 #include "attachment.h"
 #include <imtjson/binary.h>
 #include <imtjson/stringValue.h>
+#include <imtjson/parser.h>
 
 namespace couchit {
 
@@ -69,6 +70,21 @@ String Upload::finish() {
 	tptr = nullptr;
 	return res;
 
+}
+
+Value Download::json() {
+	BinaryView data;
+	std::size_t pos = 0;
+	Value x =  Value::parse([&]{
+		if (pos >= data.length) {
+			data = this->read();
+			pos = 0;
+			if (data.empty()) return -1;
+		}
+		return static_cast<int>(data[pos++]);
+	});
+	this->putBack(data.substr(pos));
+	return x;
 }
 
 Upload::Upload(Target* t):write(*t),tptr(t) {

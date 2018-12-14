@@ -412,6 +412,8 @@ protected:
 	std::unique_ptr<std::thread> thr;
 
 	class Distributor;
+
+
 };
 }
 
