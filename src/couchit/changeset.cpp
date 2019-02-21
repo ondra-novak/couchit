@@ -102,7 +102,7 @@ Changeset& Changeset::commit(CouchDB& db) {
 				e.reason = String(item["reason"]);
 				errors.push_back(e);
 		} else {
-			commitedDocs.push_back(CommitedDoc(id, String(rev), *siter));
+			commitedDocs.push_back(CommitedDoc(orgitem["_id"].getString(), String(rev), orgitem));
 		}
 		++siter;
 	}
