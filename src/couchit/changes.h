@@ -335,6 +335,7 @@ public:
 	constexpr static RegistrationID noreg = nullptr;
 
 	ChangesDistributor(ChangesFeed &&feed);
+	explicit ChangesDistributor(CouchDB &db, bool include_docs = true);
 
 
 	///Add observer as reference

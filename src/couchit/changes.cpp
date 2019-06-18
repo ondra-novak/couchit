@@ -287,5 +287,11 @@ void ChangesDistributor::stopService() {
 	}
 }
 
+ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs)
+	:ChangesFeed(db)
+{
+	includeDocs(include_docs);
+}
+
 
 }
