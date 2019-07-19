@@ -8,6 +8,7 @@
 #ifndef LIGHTCOUCH_QUERY_TCC_
 #define LIGHTCOUCH_QUERY_TCC_
 
+#include "document.h"
 #include "query.h"
 #include "changeset.h"
 
