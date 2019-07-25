@@ -41,6 +41,7 @@ class ChangesFeedHandler;
 class Validator;
 class UpdateResult;
 class ShowResult;
+class Result;
 
 ///Client connection to CouchDB server
 /** Each instance can keep only one connection at time. However, you can create
@@ -532,6 +533,24 @@ public:
 	 *  way how to distinguish between conflict deleted due resolution and deleted by a user.
 	 */
 	void pruneConflicts(Document &doc);
+
+
+
+	///Retrieves multiple documents
+	/** Function retrieves multiple documents form the databse. Documents
+	 * contains complete informations including revision list, and conflicts.
+	 * There is no way to control which fiels will be available
+	 * @param idlist a cointainer which contains list of ids or pairs
+	 *   {"id":"...","rev":"12-xxx"}
+	 *
+	 * @return standard query result. However, each row is document (you can't
+	 * apply Row to resolut)
+	 *
+	 * @note this function is available from CouchDB 2.0. In earlier version
+	 * this function is emulated and can be very slow for large sets of documents
+	 */
+	Result mget(const Array &idlist);
+
 protected:
 
 	mutable std::mutex lock;

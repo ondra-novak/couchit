@@ -152,13 +152,8 @@ StrViewA CouchDB::lkGenUID(StrViewA prefix) const {
 
 Value CouchDB::get(const StrViewA &docId, const StrViewA & revId, std::size_t flags) {
 	PConnection conn = getConnection();
-	conn->add(docId).add("rev",revId);
-	return requestGET(conn,nullptr, flags & (flgDisableCache|flgRefreshCache));
-}
-
-Value CouchDB::get(const StrViewA &docId, std::size_t flags) {
-	PConnection conn = getConnection();
 	conn->add(docId);
+	if (!revId.empty()) conn->add("rev",revId);
 
 	if (flags & flgAttachments) conn->add("attachments","true");
 	if (flags & flgAttEncodingInfo) conn->add("att_encoding_info","true");
@@ -180,6 +175,10 @@ Value CouchDB::get(const StrViewA &docId, std::size_t flags) {
 		}
 		throw;
 	}
+}
+
+Value CouchDB::get(const StrViewA &docId, std::size_t flags) {
+	return get(docId, StrViewA(), flags);
 }
 
 UpdateResult CouchDB::execUpdateProc(StrViewA updateHandlerPath, StrViewA documentId,
@@ -1413,7 +1412,7 @@ void CouchDB::pruneConflicts(Document& doc) {
 		Value("docs",docs)
 	});
 
-	std::cout << req.toString();
+//	std::cout << req.toString();
 	Value r = requestPOST(conn,req,nullptr,0);
 	lksqid.markOld();
 	std::vector<UpdateException::ErrorItem> errors;
@@ -1432,6 +1431,56 @@ void CouchDB::pruneConflicts(Document& doc) {
 	}
 }
 
+Result CouchDB::mget(const Array &idlist)  {
+	if (idlist.empty()) return Result(idlist, 0 ,0, nullptr);
+	PConnection conn = getConnection();
+	conn->add("_bulk_get");
+	conn->addJson("revs",true);
+	Array lst;
+	lst.reserve(idlist.size());
+	for (Value v : idlist) {
+		if (v.type() == json::string) {
+			lst.push_back(Object("id", v));
+		} else if (v.type() == json::object) {
+			Value id = v["id"];
+			if (id.defined()) {
+				Value rev = v["rev"];
+				lst.push_back(Object("id",id)("rev",rev));
+			}
+		}
+	}
+	Value req = Object("docs", lst);
+	try {
+		Value r = requestPOST(conn, req, nullptr, 0);
+		Value res = r["results"];
+		lst.clear();
+		for (Value v : res) {
+			Value docs = v["docs"][0];
+			Value ok = docs["ok"];
+			if (ok.defined()) lst.push_back(ok.stripKey());
+			else lst.push_back(nullptr);
+		}
+		return Result(lst,lst.size(),0,nullptr);
+	} catch (RequestError &e) {
+		if (e.getCode() != 400) throw;
+
+		Array response;
+		for (Value v: req["docs"]) {
+
+			Value id = v["id"];
+			Value rev = v["rev"];
+			Value r;
+			if (rev.defined()) {
+				r=this->get(id.getString(),rev.getString(),flgNullIfMissing|flgRevisions);
+			} else {
+				r=this->get(id.getString(),flgNullIfMissing|flgRevisions);
+			}
+		}
+
+		return Result(response,response.size(),0,nullptr);
+	}
+
+}
 
 }
 
