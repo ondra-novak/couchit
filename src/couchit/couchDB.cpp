@@ -1431,38 +1431,88 @@ void CouchDB::pruneConflicts(Document& doc) {
 	}
 }
 
-Result CouchDB::mget(const Array &idlist)  {
-	if (idlist.empty()) return Result(idlist, 0 ,0, nullptr);
-	PConnection conn = getConnection();
-	conn->add("_bulk_get");
-	conn->addJson("revs",true);
-	Array lst;
-	lst.reserve(idlist.size());
-	for (Value v : idlist) {
-		if (v.type() == json::string) {
-			lst.push_back(Object("id", v));
-		} else if (v.type() == json::object) {
-			Value id = v["id"];
-			if (id.defined()) {
-				Value rev = v["rev"];
-				lst.push_back(Object("id",id)("rev",rev));
+Result CouchDB::mget_impl(Array &idlist, Flags flags)  {
+
+	if (idlist.empty()) return Result(json::undefined);
+	if ((flags & flgOpenRevs) == 0){
+
+		Query q = createQuery(0);
+		Array keys;
+		for (Value v: idlist) {
+			if (!v["rev"].defined()) keys.push_back(v["id"]);
+		}
+		q.keys(keys);
+		Result res = q.exec();
+		auto src = res.begin();
+		auto trg = idlist.begin();
+		auto src_end = res.end();
+		auto trg_end = idlist.end();
+		while (trg != trg_end) {
+			if (!(*trg)["rev"].defined()){
+				if (src != src_end && (*trg)["id"] == (*src)["id"]) {
+					*trg = (*trg).replace("rev", (*src)["rev"]);
+					++src;
+				}
 			}
+			++trg;
 		}
 	}
-	Value req = Object("docs", lst);
+
+	bool only_deleted = (flags & flgOpenRevs) && (!(flags & flgConflicts) || (flags & flgDeletedConflicts)) ;
+	bool only_conflicts = (flags & flgOpenRevs) && (!(flags & flgDeletedConflicts) || (flags & flgConflicts));
+
+
+	PConnection conn = getConnection();
+	conn->add("_bulk_get");
+	conn->addJson("revs",(flags & flgRevisions) != 0);
+	Value req = Object("docs", idlist);
+	Array lst;
 	try {
 		Value r = requestPOST(conn, req, nullptr, 0);
 		Value res = r["results"];
-		lst.clear();
+		Array conflicts;
+		Array deleted_conflicts;
 		for (Value v : res) {
-			Value docs = v["docs"][0];
-			Value ok = docs["ok"];
-			if (ok.defined()) lst.push_back(ok.stripKey());
-			else lst.push_back(nullptr);
+			Value docs = v["docs"];
+			Value lastDoc = docs[docs.size()-1]["ok"];
+			if (lastDoc.defined()) {
+				for (Value d: docs) {
+					Value doc = d[0];
+					Value itm;
+					bool deleted;
+					if (doc.getKey() == "ok") {
+						deleted = doc["_deleted"].getBool();
+						itm = doc;
+					} else {
+						deleted = doc["deleted"].getBool();
+						itm = doc["rev"];
+					}
+					if (!itm.isCopyOf(lastDoc)) {
+						if (deleted) {
+							if (only_deleted) deleted_conflicts.push_back(itm);
+						} else {
+							if (only_conflicts) conflicts.push_back(itm);
+						}
+					}
+				}
+
+				if (!conflicts.empty()) {
+					lastDoc = lastDoc.replace("_conflicts", conflicts);
+					conflicts.clear();
+				}
+				if (!deleted_conflicts.empty()) {
+					lastDoc = lastDoc.replace("_deleted_conflicts", deleted_conflicts);
+					deleted_conflicts.clear();
+				}
+				lst.push_back(lastDoc);
+			}
+			else {
+				lst.push_back(nullptr);
+			}
 		}
 		return Result(lst,lst.size(),0,nullptr);
 	} catch (RequestError &e) {
-		if (e.getCode() != 400) throw;
+/*		if (e.getCode() != 400) throw;
 
 		Array response;
 		for (Value v: req["docs"]) {
@@ -1477,7 +1527,8 @@ Result CouchDB::mget(const Array &idlist)  {
 			}
 		}
 
-		return Result(response,response.size(),0,nullptr);
+		return Result(response,response.size(),0,nullptr);*/
+		throw;
 	}
 
 }

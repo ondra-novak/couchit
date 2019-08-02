@@ -116,6 +116,11 @@ public:
 	static const Flags flgConflicts = 0x200;
 	///Retrieve all deleted conflicts
 	static const Flags flgDeletedConflicts = 0x400;
+	///Retrieve all open revisions
+	/** Used with mget(). It returns document of latest revision, other open revisions
+	 *  are put into _conflicts or _deleted_conflicts. Whole documents are put there (not just revisions)
+	 */
+	static const Flags flgOpenRevs = 0x800;
 	///create new document when requesting document doesn't exists
 	static const Flags flgCreateNew = 0x1000;
 	///do not use authentification (token is not used)
@@ -536,20 +541,57 @@ public:
 
 
 
-	///Retrieves multiple documents
-	/** Function retrieves multiple documents form the databse. Documents
-	 * contains complete informations including revision list, and conflicts.
-	 * There is no way to control which fiels will be available
-	 * @param idlist a cointainer which contains list of ids or pairs
-	 *   {"id":"...","rev":"12-xxx"}
-	 *
-	 * @return standard query result. However, each row is document (you can't
-	 * apply Row to resolut)
-	 *
-	 * @note this function is available from CouchDB 2.0. In earlier version
-	 * this function is emulated and can be very slow for large sets of documents
+	///Item used in function mget
+	struct MGetItem {
+		///contains id of document
+		StrViewA id;
+		///contains revision, it can be empty for latest revision
+		StrViewA rev;
+
+		template<typename T>
+		static StrViewA getId(const T &x) {
+			if constexpr(std::is_class<T>::value) {
+				return x.id;
+			} else {
+				return x;
+			}
+		}
+		template<typename T>
+		static StrViewA getRev(const T &x) {
+			if constexpr(std::is_class<T>::value) {
+				return x.rev;
+			} else {
+				return StrViewA();
+			}
+		}
+
+	};
+
+
+	///Multiple get documents
+	/**
+	 * @param begin first item (each item should have MGetItem layout)
+	 * @param end end of selection
+	 * @param flags various flags. Supported: flgRevisionsInfo,  flgOpenRevs
+	 * @return
 	 */
-	Result mget(const Array &idlist);
+	template<typename Iter>
+	auto mget(Iter &&begin, Iter &&end, Flags flags = 0) {
+		Array req;
+
+		while (begin != end) {
+			const auto &x = *begin;
+			StrViewA rev = MGetItem::getRev(x);
+			StrViewA id = MGetItem::getId(x);
+			if (rev.empty()) {
+				req.push_back(Object("id", id));
+			} else {
+				req.push_back(Object("id", id)("rev", rev));
+			}
+			++begin;
+		}
+		return mget_impl(req, flags);
+	}
 
 protected:
 
@@ -770,6 +812,8 @@ private:
 	 * lost in time of return
 	 */
 	StrViewA lkGenUID(StrViewA prefix) const;
+
+	Result mget_impl(Array &req, Flags flags = 0);
 
 };
 
