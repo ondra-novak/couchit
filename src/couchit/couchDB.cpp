@@ -385,7 +385,6 @@ public:
 	}
 };
 
-static const StrViewA _designSlash("_design/");
 
 
 
@@ -1064,7 +1063,7 @@ CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath, bool fresh) {
 	b->http.setTimeout(cfg.iotimeout);
 	setUrl(b,resourcePath);
 	curConnections++;
-	return std::move(b);
+	return b;
 }
 
 void CouchDB::setUrl(PConnection &conn, StrViewA resourcePath) {
