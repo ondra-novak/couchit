@@ -373,16 +373,18 @@ void ConflictResolver::runResolver(CouchDB& db) {
 
 		finishWait.setCounter(1);
 
-		while (true) {
+		stopResolverFn = [&]{
+			stopResolverFn = nullptr;
+			chfeed.cancelWait();
+			finishWait.wait();
+		};
+
+
+		while (stopResolverFn!=nullptr) {
 			try {
 
 				chfeed.setTimeout(0);
 				chfeed.setIOTimeout(xdb.getConfig().syncQueryTimeout);
-				stopResolverFn = [&]{
-					stopResolverFn = nullptr;
-					chfeed.cancelWait();
-					finishWait.wait();
-				};
 
 
 				auto processFn = [&](const ChangeEvent &d){
@@ -409,13 +411,13 @@ void ConflictResolver::runResolver(CouchDB& db) {
 
 				chfeed.setTimeout((std::size_t)-1);
 				chfeed >> processFn;
-				finishWait.dec();
-				return;
+				break;
 			} catch (...) {
 				onResolverError();
 				std::this_thread::sleep_for(std::chrono::seconds(10));
 			}
 		}
+		finishWait.dec();
 	});
 	thr.detach();
 	initwait.wait();

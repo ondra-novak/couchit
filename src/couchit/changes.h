@@ -411,6 +411,7 @@ protected:
 
 	std::vector<PObserver> observers;
 	std::unique_ptr<std::thread> thr;
+	bool exit = false;
 
 	class Distributor;
 

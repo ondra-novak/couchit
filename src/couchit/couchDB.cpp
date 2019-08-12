@@ -627,35 +627,43 @@ Changes CouchDB::receiveChanges(ChangesFeed& feed) {
 	}
 
 	int status = initChangesFeed(conn, feed);
-	if (status == 0 || feed.state.canceled) {
+	if (feed.state.canceled) {
 		feed.state.cancelEpilog();
 		return Value(json::undefined);
 	}
 
-	Value v;
-	if (status/100 != 2) {
-		handleUnexpectedStatus(conn);
-	} else {
-		InputStream stream = conn->http.getResponse();
-		try {
-			v = Value::parse(stream);
-		} catch (...) {
-			feed.state.errorEpilog();
-			return Value(json::undefined);
+	try {
+		Value v;
+		if (status/100 != 2) {
+			handleUnexpectedStatus(conn);
+		} else {
+			InputStream stream = conn->http.getResponse();
+			try {
+				v = Value::parse(stream);
+			} catch (...) {
+				feed.state.errorEpilog();
+				return Value(json::undefined);
+			}
+			conn->http.close();
+			feed.state.finishEpilog();
 		}
-		conn->http.close();
-		feed.state.finishEpilog();
+
+		Value results=v["results"];
+		feed.seqNumber = v["last_seq"];
+		{
+			SeqNumber l (feed.seqNumber);
+			LockGuard _(lock);
+			if (l > lksqid) lksqid = l;
+		}
+
+		return results;
+
+
+	} catch (...) {
+		feed.state.errorEpilog();
+		throw;
 	}
 
-	Value results=v["results"];
-	feed.seqNumber = v["last_seq"];
-	{
-		SeqNumber l (feed.seqNumber);
-		LockGuard _(lock);
-		if (l > lksqid) lksqid = l;
-	}
-
-	return results;
 }
 
 void CouchDB::updateSeqNum(const Value& seq) {
@@ -678,7 +686,7 @@ void CouchDB::receiveChangesContinuous(ChangesFeed& feed, ChangesFeedHandler &fn
 
 
 	int status = initChangesFeed(conn, feed);
-	if (status == 0) {
+	if (feed.state.canceled) {
 		feed.state.cancelEpilog();
 		return;
 	}

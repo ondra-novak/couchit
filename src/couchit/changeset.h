@@ -8,6 +8,7 @@
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
 #include "couchDB.h"
+#include "document.h"
 
 
 namespace couchit {
@@ -48,6 +49,19 @@ public:
 	 *
 	 */
 	Changeset &update(const Document &document);
+
+	///Performs mass update of query's Result.
+	/**
+	 * Each row must define a document, so it is good idea to execute query with include_docs=true
+	 *
+	 * @param results results
+	 * @param updateFn function called for every result. The return value of the function is stored for update. If the
+	 * return value is undefined or null, no document is updated
+	 *
+	 * @return this
+	 */
+	template<typename Fn>
+	Changeset &update(const Result &results, Fn &&updateFn);
 
 	///Erases document defined only by documentId and revisionId. Useful to erase conflicts
 	/**
@@ -219,6 +233,20 @@ protected:
 
 	void checkDB() const ;
 };
+
+template<typename Fn>
+Changeset &Changeset::update(const Result &result, Fn &&updateFn) {
+	for (Row rw : result) {
+		Value doc = rw.doc;
+		if (doc.defined()) {
+			Value udoc = updateFn(doc);
+			if (udoc.defined() && udoc != nullptr) {
+				update(Document(udoc));
+			}
+		}
+	}
+	return *this;
+}
 
 
 

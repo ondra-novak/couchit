@@ -86,7 +86,7 @@ public:
 	 */
 	void runResolver(CouchDB &db);
 	void stopResolver();
-	virtual void onResolverError() {throw;}
+	virtual void onResolverError() {}
 	virtual ~ConflictResolver();
 protected:
 	typedef std::function<void()> Action;

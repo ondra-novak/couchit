@@ -288,22 +288,6 @@ Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &
 
 
 
-template<typename Fn>
-couchit::Changeset couchit::Result::update(Fn &&fn) {
-	Changeset ch;
-	for (Row rw : *this) {
-		Value doc = rw.doc;
-		if (doc.defined()) {
-			Value udoc = fn(doc);
-			if (udoc.defined()) {
-				ch.update(Document(udoc));
-			}
-		}
-	}
-
-	return ch;
-}
-
 
 
 }

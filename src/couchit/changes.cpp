@@ -256,11 +256,12 @@ void ChangesDistributor::runService() {
 
 void ChangesDistributor::runService(std::function<bool()> onError) {
 	stopService();
+	exit = false;
 	thr = std::unique_ptr<std::thread> (
 			new std::thread([=]{
 				setTimeout(-1);
 				bool goon = true;
-				while (goon) {
+				while (goon && !exit) {
 					try {
 						run();
 						goon = false;
@@ -280,6 +281,7 @@ ChangesDistributor::ChangesDistributor(ChangesFeed &&feed):ChangesFeed(std::move
 
 
 void ChangesDistributor::stopService() {
+	exit = true;
 	if (thr != nullptr) {
 		cancelWait();
 		thr->join();

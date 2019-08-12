@@ -25,6 +25,7 @@
 #include "iqueryable.h"
 #include "urlBuilder.h"
 #include "revision.h"
+#include "result.h"
 
 namespace couchit {
 
@@ -576,7 +577,7 @@ public:
 	 * @return
 	 */
 	template<typename Iter>
-	auto mget(Iter &&begin, Iter &&end, Flags flags = 0) {
+	Result mget(Iter &&begin, Iter &&end, Flags flags = 0) {
 		Array req;
 
 		while (begin != end) {
