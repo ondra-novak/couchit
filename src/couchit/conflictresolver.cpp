@@ -65,7 +65,7 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, bool recursive) con
 			Value orv = *orit;
 			StrViewA orvk = orv.getKey();
 			diffData.push_back(Value(orvk, json::undefined));
-			++crit;
+			++orit;
 		}
 		if (diffData.empty()) return json::undefined;
 		else return Value(json::object, diffData,false);
