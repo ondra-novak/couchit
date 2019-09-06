@@ -6,8 +6,6 @@
  */
 
 #include <thread>
-#include "shared/defer.h"
-#include "shared/defer.tcc"
 #include "changes.h"
 
 #include "couchDB.h"
@@ -183,7 +181,7 @@ Value ChangesDistributor::getInitialUpdateSeq() const {
 			if (z.defined()) {
 				SeqNumber seq_cur(z);
 				SeqNumber seq_now(a);
-				if (seq_cur < seq_now) {
+				if (seq_cur > seq_now) {
 					z = a;
 				}
 			} else {
@@ -200,19 +198,17 @@ public:
 	Distributor(ChangesDistributor *_this):_this(_this) {}
 	bool operator()(const ChangeEvent &doc) const {
 
-		using ondra_shared::DeferContext;
-		using ondra_shared::defer_root;
-
-		DeferContext defer(defer_root);
+		std::vector<RegistrationID> toRemove;
 		std::unique_lock<std::mutex> _(_this->state.initLock);
 		for (auto &&x : _this->observers) {
 			bool r =x->onEvent(doc);
 			if (!r) {
 				RegistrationID reg = x.get();
-				defer >> [=] {
-					_this->remove(reg);
-				};
+				toRemove.push_back(reg);
 			}
+		}
+		for (auto &&x: toRemove) {
+			_this->remove(x);
 		}
 		return true;
 
@@ -233,7 +229,6 @@ void ChangesDistributor::run() {
 }
 
 void ChangesDistributor::sync() {
-
 
 	Value s = getInitialUpdateSeq();
 	ChangesFeed chf(*this);
@@ -259,6 +254,7 @@ void ChangesDistributor::runService(std::function<bool()> onError) {
 	exit = false;
 	thr = std::unique_ptr<std::thread> (
 			new std::thread([=]{
+
 				setTimeout(-1);
 				bool goon = true;
 				while (goon && !exit) {
