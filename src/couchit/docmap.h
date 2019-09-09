@@ -54,11 +54,10 @@ public:
 		auto iter = map.find(id);
 		if (iter == map.end() || iter->second->rev != rev) {
 
-			auto iter = map.insert(
-						std::make_pair(id, Ref(new Item(std::move(rev), mapfn(doc))))
-					);
-
-			return iter.first->second;
+			Ref newValue(new Item(std::move(rev), mapfn(doc)));
+			auto r = map.insert(std::make_pair(id, newValue));
+			if (!r.second) r.first->second = newValue;
+			return newValue;
 		} else {
 			return iter->second;
 		}
