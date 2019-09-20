@@ -74,6 +74,11 @@ Query MemView::createQuery(std::size_t viewFlags) const {
 	return Query(v, queryable);
 }
 
+Query MemView::createDocQuery(std::size_t viewFlags) const {
+	View v(String(),viewFlags);
+	return Query(v, queryableDocs);
+}
+
 Query MemView::createQuery(std::size_t viewFlags, View::Postprocessing fn, CouchDB* ) const {
 	View v(String(),viewFlags,fn);
 	return Query(v, queryable);
@@ -95,10 +100,17 @@ bool MemView::empty() const {
 
 MemView::Queryable::Queryable(const MemView& mview):mview(mview) {
 }
+MemView::QueryableDocs::QueryableDocs(const MemView& mview):mview(mview) {
+}
 
 Value MemView::Queryable::executeQuery(const QueryRequest& r) {
 
 	return mview.runQuery(r);
+
+}
+Value MemView::QueryableDocs::executeQuery(const QueryRequest& r) {
+
+	return mview.runDocQuery(r);
 
 }
 
@@ -145,6 +157,42 @@ Value MemView::runQuery(const QueryRequest& r) const {
 		to.push_back(Query::maxKey);
 		out = getItemsByRange(from,to,false,false);
 		} break;
+	}
+
+	if (r.reversedOrder) {
+		out = out.reverse();
+	}
+
+	if (viewDef.listFn != nullptr) out = viewDef.listFn(out);
+
+
+	return Object("rows",out)("total", keyToValueMap.size());
+
+}
+
+Value MemView::runDocQuery(const QueryRequest& r) const {
+
+	SharedSync _(lock);
+
+	Value out;
+	switch (r.mode) {
+	case qmAllItems:
+		out = getAllItems();
+		break;
+	case qmKeyList:
+		out = getItemsByDocs(r.keys);
+		break;
+	case qmStringPrefix: {
+		String k = r.keys[0].toString();
+		String from = k;
+		String to({from, Query::maxString});
+		out = getItemsByDocsRange(from,to,false);
+		} break;
+	case qmKeyRange:
+		out = getItemsByDocsRange(r.keys[0].toString(),r.keys[1].toString(),r.exclude_end);
+		break;
+	default:
+		break;
 	}
 
 	if (r.reversedOrder) {
@@ -330,6 +378,36 @@ void MemView::makeCheckpoint(PCheckpoint chkpStore) {
 
 }
 
+Value MemView::getItemsByDocsRange(const json::String& from,
+		const json::String& to, bool exclude_end) const {
+
+	Array out;
+	auto iter1 = docToKeyMap.lower_bound(from);
+	auto iter2 = exclude_end?docToKeyMap.lower_bound(to):docToKeyMap.upper_bound(to);
+	for (auto &&kk: range(std::pair(std::move(iter1),std::move(iter2)))) {
+		Value key = kk.second;
+		auto iter2 = keyToValueMap.find(KeyAndDocId(key,kk.first));
+		out.push_back(resultToValue(*iter2));
+	}
+	return out;
+
+
+}
+
+Value MemView::getItemsByDocs(const json::Array& keys) const {
+	Array out;
+	for (Value k : keys) {
+		String docid = k.toString();
+		auto iter = docToKeyMap.equal_range(docid);
+		for (auto &&kk: range(std::move(iter))) {
+			Value key = kk.second;
+			auto iter2 = keyToValueMap.find(KeyAndDocId(key,docid));
+			out.push_back(resultToValue(*iter2));
+		}
+	}
+	return out;
+
+}
 
 void MemView::onUpdate() {
 	if (chkpStore == nullptr) return;

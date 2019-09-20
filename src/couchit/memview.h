@@ -54,9 +54,9 @@ public:
 	static const Flags  flgIncludeDesignDocs = 0x2;
 
 
-	MemView(Flags flags = 0):flags(flags),queryable(*this),viewDef(&defaultMapFn) {}
+	MemView(Flags flags = 0):flags(flags),queryable(*this),queryableDocs(*this),viewDef(&defaultMapFn) {}
 
-	MemView(MemViewDef viewDef, Flags flags = 0):flags(flags),queryable(*this), viewDef(viewDef) {}
+	MemView(MemViewDef viewDef, Flags flags = 0):flags(flags),queryable(*this), queryableDocs(*this),viewDef(viewDef) {}
 
 	SeqNumber load(const Query &q);
 	SeqNumber load(CouchDB &db, const View &view);
@@ -124,6 +124,16 @@ public:
 		const MemView &mview;
 	};
 
+	class QueryableDocs: public IQueryableObject {
+	public:
+		QueryableDocs(const MemView &mview);
+
+		virtual Value executeQuery(const QueryRequest &r);
+
+	protected:
+		const MemView &mview;
+	};
+
 	///Creates Query object to ask LocalView
 	/**
 	 * @param viewFlags various flags defined by View object. You cannot supply View object directly
@@ -132,6 +142,15 @@ public:
 	 * @return created query.
 	 */
 	Query createQuery(std::size_t viewFlags) const;
+
+	///Queries by document-id
+	/** Returns Query object, which can be used to query by document-id.
+	 * For every document-id, it returns rows which has been emited by
+	 * this document;
+	 *
+	 * @return created query
+	 */
+	Query createDocQuery(std::size_t viewFlags) const;
 
 	///Creates Query object to ask LocalView with list function
 	/**
@@ -241,9 +260,12 @@ protected:
 	KeyToValue keyToValueMap;
 
 	mutable Queryable queryable;
+	mutable QueryableDocs queryableDocs;
 
 	friend class Queryable;
+	friend class QueryableDocs;
 	Value runQuery(const QueryRequest& r) const;
+	Value runDocQuery(const QueryRequest& r) const;
 
 	void addDocLk(const String &id, const Value &doc, const Value &key, const Value &value);
 	void addDocLk(const RRow &rw);
@@ -261,6 +283,8 @@ protected:
 	Value getAllItems() const;
 	Value getItemsByKeys(const json::Array &keys) const;
 	Value getItemsByRange(const json::Value &from, const json::Value &to, bool exclude_end, bool extractDocIDs) const;
+	Value getItemsByDocs(const json::Array &keys) const;
+	Value getItemsByDocsRange(const json::String &from, const json::String &to, bool exclude_end) const;
 	void updateLk(CouchDB &db);
 	void eraseDocLk(const String &docId);
 
