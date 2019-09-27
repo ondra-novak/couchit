@@ -67,12 +67,19 @@ public:
 	DocCache(CouchDB &db, ChangesDistributor *distributor, Config config);
 	virtual ~DocCache();
 
-	///Retrieves document from the cache or directly asking the databse
+	///Retrieves document from the cache or directly asking the database
 	/** Function retrieves document or null if document is not found
 	 *
 	 *
 	 * */
 	Value get(StrViewA name);
+
+	///Retrieves document from the cache or directly asking the database
+	/** Function retrieves document or null if document is not found
+	 *
+	 *
+	 * */
+	Value operator[](StrViewA name) {return get(name);}
 
 	///Puts document to the cache.
 	/**
