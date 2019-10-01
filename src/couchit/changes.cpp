@@ -95,7 +95,7 @@ ChangesFeed& ChangesFeed::setFilterFlags(std::size_t flags) {
 }
 
 void ChangesFeed::State::cancelWait() {
-	std::lock_guard<std::mutex> _(initLock);
+	std::lock_guard<std::recursive_mutex> _(initLock);
 	canceled = true;
 	if (curConn != nullptr) {
 		curConn->http.abort();
@@ -108,21 +108,21 @@ void ChangesFeed::cancelWait() {
 }
 
 void ChangesFeed::State::cancelEpilog() {
-	std::lock_guard<std::mutex> _(initLock);
+	std::lock_guard<std::recursive_mutex> _(initLock);
 	curConn = nullptr;
 	canceled = false;
 	wasCanceledState = true;
 }
 
 void ChangesFeed::State::finishEpilog() {
-	std::lock_guard<std::mutex> _(initLock);
+	std::lock_guard<std::recursive_mutex> _(initLock);
 	curConn = nullptr;
 	wasCanceledState = false;
 }
 
 
 void ChangesFeed::State::errorEpilog() {
-	std::lock_guard<std::mutex> _(initLock);
+	std::lock_guard<std::recursive_mutex> _(initLock);
 	if (curConn != nullptr) {
 		curConn->http.abort();
 		curConn = nullptr;
@@ -147,7 +147,7 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeEventObserver 
 	return add(PObserver(&observer, &stdLeaveObserver));
 }
 ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer) {
-	std::unique_lock<std::mutex> _(state.initLock);
+	std::unique_lock<std::recursive_mutex> _(state.initLock);
 	RegistrationID id = observer.get();
 	observers.push_back(std::move(observer));
 	return id;
@@ -158,7 +158,7 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChan
 
 
 void ChangesDistributor::remove(RegistrationID regid) {
-	std::unique_lock<std::mutex> _(state.initLock);
+	std::unique_lock<std::recursive_mutex> _(state.initLock);
 	auto e = observers.end();
 	for (auto b = observers.begin(); b != e; ++b) {
 		if (b->get() == regid) {
@@ -173,7 +173,7 @@ void ChangesDistributor::remove(RegistrationID regid) {
 Value ChangesDistributor::getInitialUpdateSeq() const {
 	Value z;
 
-	std::unique_lock<std::mutex> _(state.initLock);
+	std::unique_lock<std::recursive_mutex> _(state.initLock);
 	for (auto &&x: observers) {
 		Value a = x->getLastKnownSeqID();
 		if (a.defined()) {
@@ -199,7 +199,7 @@ public:
 	bool operator()(const ChangeEvent &doc) const {
 
 		std::vector<RegistrationID> toRemove;
-		std::unique_lock<std::mutex> _(_this->state.initLock);
+		std::unique_lock<std::recursive_mutex> _(_this->state.initLock);
 		for (auto &&x : _this->observers) {
 			bool r =x->onEvent(doc);
 			if (!r) {

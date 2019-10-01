@@ -276,7 +276,7 @@ protected:
 		CouchDB::Connection *curConn = nullptr;
 		bool canceled = false;
 		bool wasCanceledState = false;
-		mutable std::mutex initLock;
+		mutable std::recursive_mutex initLock;
 
 		State() {}
 		State(const State &) {}

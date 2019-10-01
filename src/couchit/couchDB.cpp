@@ -503,7 +503,7 @@ bool  CouchDB::putDesignDocument(const char* content,
 
 int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 	ChangesFeed::State &state = feed.state;
-	std::unique_lock<std::mutex> _(state.initLock);
+	std::unique_lock<std::recursive_mutex> _(state.initLock);
 	Value jsonBody;
 	StrViewA method = "GET";
 	if (state.curConn != nullptr) {
