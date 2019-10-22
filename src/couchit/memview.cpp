@@ -13,7 +13,7 @@ MemView::RRow MemView::makeRow(String id, Value key, Value value, Value doc) {
 			("key",key)
 			("value",value)
 			("doc",doc);
-	return out;
+	return RRow(out);
 
 }
 
@@ -51,6 +51,7 @@ void MemView::eraseDocLk(const String& docId) {
 	IterRange<DocToKey::const_iterator> rng ( docToKeyMap.equal_range(docId));
 	for (auto &&itm : rng) {
 		keyToValueMap.erase(KeyAndDocId(itm.second, itm.first));
+		fireKeyChangeEvent(itm.second);
 	}
 	docToKeyMap.erase(docId);
 }
@@ -66,7 +67,7 @@ Value MemView::getDocument(const String& docId) const {
 	if (it == docToKeyMap.end()) return Value();
 	auto it2 = keyToValueMap.find(KeyAndDocId(it->second, docId));
 	if (it2 == keyToValueMap.end()) return Value();
-	return it2->second.doc;
+	return it2->second["doc"];
 }
 
 Query MemView::createQuery(std::size_t viewFlags) const {
@@ -305,6 +306,7 @@ void MemView::addDocLk(const String &id, const Value& doc, const Value& key, con
 
 	keyToValueMap.insert(std::make_pair(KeyAndDocId(skey,id),makeRow(id,skey,svalue,idocs)));
 	docToKeyMap.insert(std::make_pair(id,skey));
+	fireKeyChangeEvent(skey);
 }
 
 void MemView::addDocLk(const RRow &rw) {
@@ -312,6 +314,7 @@ void MemView::addDocLk(const RRow &rw) {
 	String id(rw["id"]);
 	keyToValueMap.insert(std::make_pair(KeyAndDocId(key,id),rw));
 	docToKeyMap.insert(std::make_pair(id,key));
+	fireKeyChangeEvent(key);
 }
 
 void MemView::update(CouchDB& db) {
@@ -473,6 +476,144 @@ Value MemView::getLastKnownSeqID() const {
 	return updateSeq;
 }
 
+void MemView::fireKeyChangeEvent(Value key) {
+	auto iter = keyAlterListeners.begin();
+	auto end = keyAlterListeners.end();
+	//process all listeners
+	while (iter != end) {
+		//if listener is to remove
+		if (!(*iter)->event(key)) {
+			//now this is new way
+			//mark this position
+			auto pb = iter;
+			//move to next
+			++iter;
+			//until it is end
+			while (iter != end) {
+				//process each next
+				if ((*iter)->event(key)) {
+					//copy its pointer to previous place to cover hole
+					*pb = *iter;
+					//move push back iterator next
+					++pb;
+				}
+				//move to next item
+				++iter;
+			}
+			//erase till end
+			keyAlterListeners.erase(pb,end);
+			//now stop
+			break;
+		} else {
+			++iter;
+		}
+	}
+}
+
+
+
+
+MemView::~MemView() {
+	for (auto &&k: keyAlterListeners) k->release();
+}
+
+void MemView::reg(IKeyAlterListener* cb) {
+	Sync _(lock);
+	keyAlterListeners.push_back(cb);
+}
+
+void MemView::unreg(IKeyAlterListener* cb) {
+	Sync _(lock);
+	auto iter = std::find(keyAlterListeners.begin(), keyAlterListeners.end(), cb);
+	if (iter != keyAlterListeners.end()) keyAlterListeners.erase(iter);
+}
+
+MemReduce::MemReduce(MemView& srcmap, ReduceFn&& reduceFn)
+	:srcmap(&srcmap), reduceFn(std::move(reduceFn))
+{
+	srcmap.reg(this);
+}
+
+MemReduce::~MemReduce() {
+	if (srcmap) srcmap->unreg(this);
 
 }
 
+MemReduce::DirectAccess MemReduce::direct() const {
+	const_cast<MemReduce *>(this)->update();
+	return MemView::direct();
+}
+
+Query MemReduce::createQuery(std::size_t viewFlags) const {
+	const_cast<MemReduce *>(this)->update();
+	return MemView::createQuery(viewFlags);
+}
+
+void MemReduce::update() {
+	USync _(updateLock);
+
+	if (srcmap) {
+
+		if (!updatedKeys.empty()) {
+
+			std::unordered_set<Value> wrk;
+			std::swap(updatedKeys, wrk);
+			for (auto &&v : wrk) {
+				Query q = srcmap->createQuery(View::includeDocs);
+				if (v.type() == json::array) {
+					Value slc = v.slice(0,-1);
+					if (!slc.empty()) {
+						updatedKeys.insert(slc);
+					}
+					q.prefixKey(v);
+				} else {
+					q.key(v);
+				}
+				Result res = q.exec();
+				Value reduced = reduceFn(res, false);
+				KeyAndDocId kdi(v, String());
+				if (reduced.defined()) {
+					keyToValueMap[kdi] = RRow(Object("value",reduced)("key",v));
+				} else {
+					keyToValueMap.erase(kdi);
+				}
+				fireKeyChangeEvent(v);
+			}
+
+			while (!updatedKeys.empty()) {
+				std::unordered_set<Value> wrk;
+				std::swap(updatedKeys, wrk);
+				for (auto &&v : wrk) {
+					Query q = MemView::createQuery(View::includeDocs);
+					Value slc = v.slice(0,-1);
+					if (!slc.empty()) {
+						updatedKeys.insert(slc);
+					}
+					KeyAndDocId kdi(v, String());
+					q.prefixKey(v);
+					Result res = q.exec();
+					if (!res.empty() && res[0]["key"] == v) {
+						res = res.slice(1);
+					}
+					Sync _(lock);
+					Value reduced = reduceFn(res, true);
+					if (reduced.defined()) {
+						keyToValueMap[kdi] = RRow(Object("value",reduced)("key",v));
+					}
+				}
+			}
+		}
+	}
+}
+
+void MemReduce::release() {
+	srcmap = nullptr;
+}
+
+bool MemReduce::event(Value v) {
+	updatedKeys.insert(v);
+	return true;
+}
+
+
+}

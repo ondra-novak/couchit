@@ -24,7 +24,9 @@ using namespace json;
 class SyncCheckpointFile: public AbstractCheckpoint {
 public:
 
-	SyncCheckpointFile(const std::string &fname):fname(fname) {}
+	SyncCheckpointFile(const std::string &fname, int load_optimize_level)
+		:fname(fname)
+		,load_optimize_level(load_optimize_level) {}
 
 	virtual Value load() const override;
 	virtual void store (const Value &res) override;
@@ -32,6 +34,7 @@ public:
 
 protected:
 	std::string fname;
+	int load_optimize_level;
 
 
 };
@@ -118,12 +121,35 @@ public:
 	}
 };
 
-PCheckpoint checkpointFile(StrViewA fname) {
-	return new SyncCheckpointFile(fname);
+PCheckpoint checkpointFile(StrViewA fname, int load_optimize_level) {
+	return new SyncCheckpointFile(fname, load_optimize_level);
 }
 
-PCheckpoint asyncCheckpointFile(StrViewA fname) {
-	return new AsyncCheckpointFile(fname);
+PCheckpoint asyncCheckpointFile(StrViewA fname, int load_optimize_level) {
+	return new AsyncCheckpointFile(fname, load_optimize_level);
+}
+
+static Value optimize_object(std::unordered_set<Value> &s, Value v, int max_level) {
+	auto iter = s.find(v);
+	if (iter != s.end())
+		return v;
+	if (max_level > 0) {
+		if (v.type() == json::object) {
+			Object res;
+			for (Value z: v) {
+				res.set(z.getKey(), optimize_object(s, z, max_level-1));
+			}
+			v = res;
+		} else if (v.type() == json::array) {
+			Array res;
+			for (Value z: v) {
+				res.push_back(optimize_object(s, z, max_level-1));
+			}
+			v = res;
+		}
+	}
+	s.insert(v);
+	return v;
 }
 
 Value SyncCheckpointFile::load() const {
@@ -144,16 +170,7 @@ Value SyncCheckpointFile::load() const {
 	Array newrows;
 	newrows.reserve(rows.size());
 	for (Value rw : rows) {
-		Object o(rw);
-		for (Value x: rw) {
-			auto itr = objects.find(x);
-			if (itr != objects.end()) {
-				o.set(x.getKey(), *itr);
-			} else {
-				objects.insert(x.stripKey());
-			}
-		}
-		newrows.push_back(o);
+		newrows.push_back(optimize_object(objects,rw,load_optimize_level));
 	}
 	return data.replace("rows",newrows);
 }

@@ -8,6 +8,8 @@
 #include "view.h"
 #include "query.h"
 #include "changes.h"
+#include <unordered_map>
+#include <unordered_set>
 
 namespace couchit {
 
@@ -38,6 +40,15 @@ public:
 };
 
 
+class IKeyAlterListener {
+public:
+	virtual bool event(Value key) = 0;
+	virtual void release() = 0;
+};
+
+
+
+
 ///Memory view
 /** a view materialized in the memory. It brings similar functionality as couchdb's view but
  * faster, however if has some limitations
@@ -57,6 +68,7 @@ public:
 	MemView(Flags flags = 0):flags(flags),queryable(*this),queryableDocs(*this),viewDef(&defaultMapFn) {}
 
 	MemView(MemViewDef viewDef, Flags flags = 0):flags(flags),queryable(*this), queryableDocs(*this),viewDef(viewDef) {}
+	~MemView();
 
 	SeqNumber load(const Query &q);
 	SeqNumber load(CouchDB &db, const View &view);
@@ -210,6 +222,11 @@ public:
 	///manually creates a checkpoint to specified store
 	void makeCheckpoint(PCheckpoint chkpStore);
 
+	void reg(IKeyAlterListener *cb);
+	void unreg(IKeyAlterListener *cb);
+
+
+
 protected:
 
 	Flags flags;
@@ -225,20 +242,22 @@ protected:
 
 	};
 
-	struct ValueAndDoc {
-		Value value;
-		Value doc;
-
-		ValueAndDoc() {}
-		ValueAndDoc(const Value &value,const Value &doc):value(value),doc(doc) {}
-	};
 
 
 	struct CmpKeyAndDocId {
 		bool operator()(const KeyAndDocId &l, const KeyAndDocId &r) const { return l.compare(r) < 0;}
 	};
 
-	typedef Value RRow;
+	class RRow: public Value {
+	public:
+		RRow() {}
+		RRow(const Value &v):Value(v) {};
+
+		Value document() const {return (*this)["doc"];}
+		Value value() const {return (*this)["value"];}
+		String id() const {return (*this)["id"].toString();}
+		Value key() const {return (*this)["key"];}
+	};
 
 
 	static RRow makeRow(String id, Value key, Value value, Value doc);
@@ -246,8 +265,8 @@ protected:
 	/** It is used to easy find keys to erase during update */
 	typedef std::multimap<String, Value> DocToKey;
 	///Contains keys mapped to documents
-	/** Key contains the key itself and documentId to easyly handle duplicated keys */
-	typedef std::map<KeyAndDocId, Row, CmpKeyAndDocId> KeyToValue;
+	/** Key contains the key itself and documentId to easily handle duplicated keys */
+	typedef std::map<KeyAndDocId, RRow, CmpKeyAndDocId> KeyToValue;
 
 	///Contains map where documendID is key and view's key is value
 	/** This helps to search all keys for selected document. The documentID string can
@@ -295,8 +314,11 @@ protected:
 	std::size_t chkpNextUpdate = 0;
 	std::size_t chkpInterval = 0;
 	Value chkSrNr;
+	std::vector<IKeyAlterListener *> keyAlterListeners;
 
 	void onUpdate();
+
+	void fireKeyChangeEvent(Value key);
 
 public:
 	class DirectAccess {
@@ -357,6 +379,45 @@ public:
 };
 
 
+///Materialized reduce
+/**
+ * Object is connected with a MapView and contains materialized reduce of the map. You
+ * can connect multiple reduces with single map
+ *
+ * MemReduce is also MapView, which is updated through the reduce function
+ *
+ * Update of the MapReduce is performed on the first query after a change has been recorded. Note
+ * that to avoid slowing down the MapView, only changed keys are recorded during update of the source view.
+ * If there are not often a single query, record of changes can be huge and to process all changes
+ * can take a while (whole MemReduce is updated regardless on the query)
+ *
+ * If the connected view is destroyed, this object stops updating self. You can still read the
+ * last state of the object
+ */
+class MemReduce: public IKeyAlterListener, public MemView {
+public:
+	using ReduceFn= std::function<Value(const Result &, bool rereduce)>;
+
+
+	MemReduce(MemView &srcmap, ReduceFn &&reduceFn);
+	~MemReduce();
+
+	DirectAccess direct() const;
+	Query createQuery(std::size_t viewFlags) const;
+
+	///invoke manual update without query
+	void update();
+
+
+protected:
+	MemView *srcmap;
+	ReduceFn reduceFn;
+
+	void release();
+	bool event(Value v);
+
+	std::unordered_set<Value> updatedKeys;
+};
 
 
 }
