@@ -7,6 +7,7 @@
 
 #ifndef SRC_LIGHTCOUCH_CONFIG_H_
 #define SRC_LIGHTCOUCH_CONFIG_H_
+#include <string>
 
 namespace BredyHttpClient {
 	class IHttpsProvider;
@@ -22,8 +23,8 @@ class IIDGen;
 
 
 struct AuthInfo {
-	String username;
-	String password;
+	std::string username;
+	std::string password;
 
 };
 
@@ -39,9 +40,9 @@ struct Config {
 	/** Put there database's root url (path to the server's root). Don't specify path to
 	 * particular database.
 	 */
-	String baseUrl;
+	std::string baseUrl;
 	///name of database (optional) if set, object initializes self to work with database
-	String databaseName;
+	std::string databaseName;
 	///authentification information
 	AuthInfo authInfo;
 	///Pointer to query cache.

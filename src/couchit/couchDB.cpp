@@ -68,7 +68,7 @@ CouchDB::CouchDB(const CouchDB& other)
 
 
 void CouchDB::setCurrentDB(String database) {
-	cfg.databaseName = database;
+	cfg.databaseName = database.str();
 }
 
 String CouchDB::getCurrentDB() const {
@@ -1157,8 +1157,8 @@ Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) 
 		std::size_t databaseLen = cfg.databaseName.length();
 		std::size_t prefixLen = baseUrlLen+databaseLen+1;
 
-		if (path.substr(0,baseUrlLen) != cfg.baseUrl
-			|| path.substr(baseUrlLen, databaseLen) != cfg.databaseName) {
+		if (path.substr(0,baseUrlLen) != StrViewA(cfg.baseUrl)
+			|| path.substr(baseUrlLen, databaseLen) != StrViewA(cfg.databaseName)) {
 			usecache = false;
 		} else {
 			cacheKey = path.substr(prefixLen);
