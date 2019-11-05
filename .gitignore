@@ -43,3 +43,6 @@ src/couchit/Debug/
 *.filters
 couchit.VC.db
 couchit.VC.VC.opendb
+CMakeFiles
+Makefile
+cmake_install.cmake
