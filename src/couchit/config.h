@@ -43,6 +43,18 @@ struct Config {
 	std::string baseUrl;
 	///name of database (optional) if set, object initializes self to work with database
 	std::string databaseName;
+	///specify unique identifier of this node
+	/** Starting from CouchDB 2.0, the local documents are replicated between nodes in
+	 * the cluster. Because of this, you cannot use local databse to store node-local
+	 * documents. However, the CouchDB class supports flgNodeLocal for retrival and
+	 * storing node-local documents. This field is used as prefix.
+	 *
+	 * This field can be empty. In this case, the library tries to generate or determine
+	 * some unique id for the current computer.
+	 *
+	 */
+	std::string node_id;
+
 	///authentification information
 	AuthInfo authInfo;
 	///Pointer to query cache.

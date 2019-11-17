@@ -130,6 +130,8 @@ public:
 	static const Flags flgLongOperation = 0x4000;
 	///disable exception if document is missing (for function get()), instead null is returned
 	static const Flags flgNullIfMissing = 0x8000;
+	///For the getLocal() - retrieves document local for current node (in the cluster)
+	static const Flags flgNodeLocal = 0x10000;
 
 
 	CouchDB(const Config &cfg);
@@ -269,15 +271,18 @@ public:
 
 
 	///Retrieves local document (by its id)
-	/** You can use function to retrieve local document, because Query object will not retrieve it. To store
-	 * document, you can use ChangeSet object. Note that mixing writting standard documents and local documents
-	 * in single ChangeSet can cause undefined behaviour when local document is in conflict.
-	 * @param localId
-	 * @param flags can contain 0 or flgDisableCache, other flags are ignored
-	 * @return JSON document;
+	/**
 	 *
-	 * @note if sequence numbers are tracked, function disables caching, because
-	 * sequence numbers are not updated when local document is stored
+	 * @param localId id of the document without _local prefix
+	 * @param flags similar flags as get(). If you include flgNodeLocal, the returned
+	 * document is assigned to this node. Note that node local documents are still
+	 * replicated to the other nodes, but this flag prevent to mixing these documents into
+	 * one.
+	 *
+	 * @return returned document. Note that _ID of the document doesn't contain requested localId.
+	 * The _ID contains whole ID including _local prefix and thus whole document can be
+	 * stored by put() or by ChangeSet. You can also use get() to access this document if you
+	 * use _ID instead its local name.
 	 */
 	Value getLocal(const StrViewA &localId, Flags flags = 0);
 

@@ -16,6 +16,7 @@
 #include <imtjson/json.h>
 #include <imtjson/value.h>
 #include <imtjson/binjson.tcc>
+#include <experimental/string_view>
 
 #include "exception.h"
 #include "query.h"
@@ -29,6 +30,8 @@
 #include "document.h"
 #include "showProc.h"
 #include "updateProc.h"
+
+using std::experimental::fundamentals_v1::string_view;
 
 
 namespace couchit {
@@ -129,7 +132,46 @@ Query CouchDB::createQuery(std::size_t viewFlags) {
 	return createQuery(v);
 }
 
+static std::string readFile(const std::string &name) {
+	std::ifstream in(name);
+	if (!in) return std::string();
+	std::string res;
+	std::getline(in, res);
+	return res;
+}
+static std::string generateNodeID() {
+	std::string id = readFile("/etc/machine-id");
+	if (!id.empty()) return id;
+	std::string path;
+	const char* home = getenv("HOME");
+	path.append(home);
+	path.append("/.couchit-machine-id");
+	id = readFile(path);
+	if (!id.empty()) return id;
+	std::vector<char> buffer;
+	DefaultUIDGen::getInstance()(buffer, "");
+	{
+		std::ofstream out(path, std::ios::out| std::ios::trunc);
+		out.write(buffer.data(), buffer.size());
+		out << std::endl;
+		if (!out) throw std::runtime_error("Need node_id - and can't generate anyone");
+	}
+	id = readFile(path);
+	if (!id.empty()) return id;
+	throw std::runtime_error("Unable to generate node_id");
+}
+
 Value CouchDB::getLocal(const StrViewA &localId, std::size_t flags) {
+	if (flags & flgNodeLocal) {
+		if (cfg.node_id.empty()) {
+			static std::string localId =generateNodeID();
+			cfg.node_id = localId;
+		}
+		std::string id = cfg.node_id;
+		id.push_back(':');
+		id.append(localId.data, localId.length);
+		return getLocal(id, flags & ~flgNodeLocal);
+	}
 	PConnection conn = getConnection("_local");
 	conn->add(localId);
 	try {
