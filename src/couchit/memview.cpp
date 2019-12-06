@@ -615,5 +615,48 @@ bool MemReduce::event(Value v) {
 	return true;
 }
 
+void MemView::changesFromSeqID(CouchDB &db, SeqNumber since, std::function<void(Value)> &&listenKeys) const {
+	class Emit: public EmitFn {
+	public:
+		Emit(std::unordered_set<json::Value> &reported_keys, std::function<void(Value)> &listenKeys)
+			:reported_keys(reported_keys)
+			,listenKeys(listenKeys) {}
+		virtual void operator()(const Value &key, const Value &) const {
+			if (reported_keys.find(key) == reported_keys.end()) {
+				reported_keys.insert(key);
+				listenKeys(key);
+			}
+		}
+
+	protected:
+		std::unordered_set<json::Value> &reported_keys;
+		std::function<void(Value)> &listenKeys;
+	};
+
+
+	auto chfeed = db.createChangesFeed();
+	std::unordered_set<json::Value> reported_keys;
+	chfeed.since(since);
+	chfeed.includeDocs(true);
+	Changes chgs = chfeed.exec();
+	Emit emitFn(reported_keys, listenKeys);
+	{
+		Sync _(lock);
+		for (ChangeEvent chdoc : chgs) {
+			String id = chdoc.doc["_id"].toString();
+			{
+				auto r = docToKeyMap.equal_range(id);
+				for (auto &&k : range(r))
+					if (reported_keys.find(k.second) == reported_keys.end()) {
+						reported_keys.insert(k.second);
+						listenKeys(k.second);
+					}
+				}
+			}
+		}
+	for (ChangeEvent chdoc : chgs) {
+		viewDef.mapFn(chdoc.doc, emitFn);
+	}
+}
 
 }

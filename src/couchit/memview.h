@@ -226,6 +226,9 @@ public:
 	void unreg(IKeyAlterListener *cb);
 
 
+	void changesFromSeqID(CouchDB &db, SeqNumber since, std::function<void(Value)> &&listenKeys) const;
+
+
 
 protected:
 
