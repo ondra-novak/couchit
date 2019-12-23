@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-add_compile_options(-std=c++11)
+add_compile_options(-std=c++17)
 #file(GLOB couchity_test_SRC "*.cpp")
 file(GLOB couchit_test_SRC "runtests.cpp" "test_minihttp.cpp" "test_uuids.cpp" "test_common.cpp" "test_basics.cpp" "test_localview.cpp" "test_qserver.cpp")
 add_executable (couchit_test ${couchit_test_SRC}) 

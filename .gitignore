@@ -46,3 +46,6 @@ couchit.VC.VC.opendb
 CMakeFiles
 Makefile
 cmake_install.cmake
+/CMakeCache.txt
+/bin
+/.settings

@@ -96,7 +96,6 @@ tst.test("couchdb.minihttp.readChunked", "Wikipedia in\r\n\r\nchunks.-Wikipedia 
 	};*/
 
 
-	std::size_t pos = 0;
 
 	std::string res;
 	res.reserve(2000);
@@ -114,13 +113,10 @@ tst.test("couchdb.minihttp.readChunked", "Wikipedia in\r\n\r\nchunks.-Wikipedia 
 	res2.reserve(2000);
 	 {
 		InputStream stream(new ChunkedInputStream(new StringInputStream(BinaryView(testdata))));
-		BinaryView c = stream(0);
-		while (!c.empty()) {
-			std::size_t rd = c.length;
-			if (rd > 4) rd = 4;
-			res2.append(reinterpret_cast<const char *>(c.data), rd);
-			stream(rd);
-			c = stream(0);
+		auto c = stream();
+		while (c != EOF) {
+			res2.push_back(c);
+			c = stream();
 		}
 	}
 
