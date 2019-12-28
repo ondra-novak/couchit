@@ -376,8 +376,8 @@ public:
 
 	typedef json::Parser<Fn> Super;
 
-	DesignDocumentParse(const Fn &source)
-		:Super(source) {}
+	DesignDocumentParse(Fn &&source)
+		:Super(std::forward<Fn>(source)) {}
 
 
 	virtual json::Value parse() {
@@ -517,8 +517,8 @@ bool CouchDB::putDesignDocument(const Value &content, DesignDocUpdateRule update
 }
 
 template<typename Fn>
-Value parseDesignDocument(const Fn &fn) {
-	DesignDocumentParse<Fn> parser(fn);
+Value parseDesignDocument(Fn &&fn) {
+	DesignDocumentParse<Fn> parser(std::forward<Fn>(fn));
 	return parser.parse();
 }
 
