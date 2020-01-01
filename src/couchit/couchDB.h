@@ -130,7 +130,13 @@ public:
 	static const Flags flgLongOperation = 0x4000;
 	///disable exception if document is missing (for function get()), instead null is returned
 	static const Flags flgNullIfMissing = 0x8000;
-	///For the getLocal() - retrieves document local for current node (in the cluster)
+	///retrieves document local for current node (in the cluster)
+	/**This flag can be used with get and getLocal. If used with getLocal, then document
+	 *  is replicated inside of the cluster, but it is not replicated between databases. If
+	 *  used with get(), then document is also replicated between databases.
+	 *
+	 *  nodeLocal documents has prefix/suffix cointaining node's unique ID
+	 */
 	static const Flags flgNodeLocal = 0x10000;
 
 

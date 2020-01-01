@@ -193,6 +193,17 @@ StrViewA CouchDB::lkGenUID(StrViewA prefix) const {
 }
 
 Value CouchDB::get(const StrViewA &docId, const StrViewA & revId, std::size_t flags) {
+	if (flags & flgNodeLocal) {
+		if (cfg.node_id.empty()) {
+			static std::string localId =generateNodeID();
+			cfg.node_id = localId;
+		}
+		std::string id = docId;
+		id.push_back(':');
+		id.append(cfg.node_id);
+		return get(id, flags & ~flgNodeLocal);
+	}
+
 	PConnection conn = getConnection();
 	conn->add(docId);
 	if (!revId.empty()) conn->add("rev",revId);
