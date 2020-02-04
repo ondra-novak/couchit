@@ -37,24 +37,34 @@ public:
 	public:
 		const json::String rev;
 		const T data;
+		std::chrono::steady_clock::time_point store_time;
 
-		Item(json::String &&rev, T &&data)
+		Item(json::String &&rev, T &&data, std::chrono::steady_clock::time_point &&store_time)
 			:rev(std::move(rev))
-			,data(std::move(data)) {}
+			,data(std::move(data))
+			,store_time(std::move(store_time)){}
 	};
 
 	using Ref = ondra_shared::RefCntPtr<Item>;
 
 	DocMap(MapFn &&fn):mapfn(std::move(fn)) {}
 
-	Ref operator()(json::Value doc) const {
+	///Perform document tranform with caching
+	/**
+	 * @param doc document to transform
+	 * @param ttl optional time to live in seconds. Default value stores document for infinite time. If ttl is specified, transformed document
+	 * is discarded when ttl expires. To rerun transformation, use 0, which invalidates the cache immediately.
+	 *
+	 */
+	Ref operator()(json::Value doc, int ttl = -1) const {
 		Sync _(lock);
 		auto id = doc["_id"].toString();
 		auto rev = doc["_rev"].toString();
 		auto iter = map.find(id);
-		if (iter == map.end() || iter->second->rev != rev) {
-
-			Ref newValue(new Item(std::move(rev), mapfn(doc)));
+		std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+		bool hasExp = ttl >= 0;
+		if (iter == map.end() || iter->second->rev != rev || (hasExp && iter->second->store_time+std::chrono::seconds(ttl) <= now)) {
+			Ref newValue(new Item(std::move(rev), mapfn(doc), std::chrono::steady_clock::now()));
 			auto r = map.insert(std::make_pair(id, newValue));
 			if (!r.second) r.first->second = newValue;
 			return newValue;

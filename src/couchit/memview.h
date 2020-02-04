@@ -229,7 +229,6 @@ public:
 	void changesFromSeqID(CouchDB &db, SeqNumber since, std::function<void(Value)> &&listenKeys) const;
 
 
-
 protected:
 
 	Flags flags;
