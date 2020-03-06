@@ -1010,7 +1010,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 
 
-Value CouchDB::bulkUpload(const Value docs) {
+Value CouchDB::bulkUpload(const Value docs, bool replication ) {
 
 	if (docs.size() > cfg.maxBulkSizeDocs) {
 
@@ -1031,6 +1031,7 @@ Value CouchDB::bulkUpload(const Value docs) {
 			Value r;
 			try {
 				PConnection b = getConnection("");;
+				if (replication) b->add("new_edits","false");
 				if (id.defined()) {
 					b->add(id.getString());
 					r= requestPUT(b,v,nullptr,0);
@@ -1048,6 +1049,7 @@ Value CouchDB::bulkUpload(const Value docs) {
 	} else {
 
 		PConnection b = getConnection("_bulk_docs");
+		if (replication) b->add("new_edits","false");
 
 		Object wholeRequest;
 		wholeRequest.set("docs", docs);
@@ -1064,6 +1066,8 @@ void CouchDB::put(Document& doc) {
 	chset.commit();
 	doc = chset.getUpdatedDoc(doc.getID());
 }
+
+
 
 
 
@@ -1592,6 +1596,33 @@ Result CouchDB::mget_impl(Array &idlist, Flags flags)  {
 	}
 
 }
+
+Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception ) {
+	Value id = doc["_id"];
+	if (id.type() != json::string) throw std::runtime_error("CoucDB::put needs document _id");
+	PConnection b = getConnection("");
+	b->add(id.getString());
+	if (opts.batchok) b->add("batch","ok");
+	if (opts.replication) b->add("new_edits","false");
+	if (opts.quorum) b->add("w",opts.quorum);
+	try {
+		Value resp = requestPUT(b,doc,nullptr,0);
+		return resp["rev"];
+	} catch (const RequestError &e) {
+		if (e.getCode() == 409) {
+			if (no_exception) return nullptr;
+
+			else throw UpdateException(StringView({
+				UpdateException::ErrorItem{
+					"conflict","conflict",doc,nullptr
+				}
+			}));
+		} else {
+			throw;
+		}
+	}
+}
+
 
 }
 

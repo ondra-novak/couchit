@@ -211,7 +211,7 @@ public:
 
 
 	///Bulk upload
-	Value bulkUpload(const Value docs);
+	Value bulkUpload(const Value docs, bool replication = false);
 
 
 	///Determines last sequence number
@@ -481,6 +481,15 @@ public:
 	 */
 	bool putDesignDocument(const char *content, std::size_t contentLen, DesignDocUpdateRule updateRule = ddurOverwrite);
 
+	struct WriteOptions {
+		///enable batch mode
+		bool batchok = false;
+		///document is being replicated
+		bool replication = false;
+		///setting value above 0 defines minimum count of writes to return
+		unsigned int quorum = 0;
+	};
+
 
 	///Updates single document
 	/**
@@ -491,6 +500,17 @@ public:
 	 * @note function "collapses" document and its changes
 	 */
 	void put(Document &doc);
+	void put(Document &doc, const WriteOptions &opts);
+
+
+
+	///Updates single document
+	/**
+	 * @param doc document as JSON value, it must have _id, and for update, it needs _rev
+	 * @return new revision value
+	 */
+	Value put(const Value &doc);
+	Value put(const Value &doc, const WriteOptions &opts, bool no_exception = false);
 
 
 

@@ -7,8 +7,10 @@
 
 #ifndef LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
 #define LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGESET_H_
+#include <shared/scheduler.h>
 #include "couchDB.h"
 #include "document.h"
+#include <thread>
 
 
 namespace couchit {
@@ -248,6 +250,60 @@ Changeset &Changeset::update(const Result &result, Fn &&updateFn) {
 	return *this;
 }
 
+///Performs batch writting using background thread
+/** it collects writes and send them as batch to the database
+ * Writes are collected when thread is busy to communicate with the database
+ *
+ * Every write request can contain callback, which is called when write is succeed
+ *
+ */
+class BatchWrite {
+public:
+	///Initialize instance and start background thread
+	BatchWrite(CouchDB &db);
+	///Destroy instance and stop thread
+	/** Note that destructor ensures, that all queued requests are finalized */
+	virtual ~BatchWrite();
+
+	///A callback function
+	/**@param bool contains true if operation suceed, or false, if there were an error
+	 * @param Value carries revision of newly stored document, in case of succes, otherwise it contains objects describing the error.
+	 */
+	using Callback = std::function<void(bool, json::Value)>;
+	///Puts document to the database
+	/**
+	 * @param doc document to put. There is no callback, so program will not be notified, when operation fails
+	 */
+	void put(const Value &doc);
+	///Puts document to the database
+	/**
+	 * @param doc document to put
+	 * @param cb callback function
+	 */
+	void put(const Value &doc, Callback &&cb);
+	///Replicate existing document
+	void replicate(const Value &doc);
+
+	///Called on exception
+	/** You must rethrow and catch exception to process. */
+	virtual void onException() noexcept;
+
+protected:
+	struct Msg {
+		Value doc;
+		Callback cb;
+		bool replication;
+		Msg(const Value &doc, Callback &&cb, bool replication);
+	};
+	using Queue = ondra_shared::MsgQueue<Msg>;
+	CouchDB &db;
+	std::thread thr;
+	Queue queue;
+	void worker();
+
+
+
+};
 
 
 } /* namespace assetex */
