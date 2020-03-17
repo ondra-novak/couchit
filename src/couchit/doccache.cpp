@@ -44,6 +44,9 @@ DocCache::DocCache(CouchDB& db, ChangesDistributor* observer,
 	regid = chdist->add(std::unique_ptr<IChangeEventObserver>(new Update(*this)));
 }
 
+DocCache::DocCache(CouchDB& db, Config config):db(db), chdist(nullptr), config(std::move(config)) {}
+
+
 DocCache::~DocCache() {
 	if (chdist) chdist->remove(regid);
 	lock.lock();

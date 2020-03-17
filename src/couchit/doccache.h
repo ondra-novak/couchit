@@ -39,7 +39,7 @@ public:
 		///limit of the cache in the items
 		/** If zero is given there is no limit. Otherwise the cache
 		 * performs garbage collection. Note that garbage collection
-		 * runs excludive blocking other threads during
+		 * runs exclusive blocking other threads during
 		 */
 		std::size_t limit = 0;
 		///Retrieve documents with revision log (CouchDB 2+)
@@ -65,6 +65,11 @@ public:
 	 * @param config cache configuration
 	 */
 	DocCache(CouchDB &db, ChangesDistributor *distributor, Config config);
+
+	///Initialize cache
+	DocCache(CouchDB &db, Config config);
+
+
 	virtual ~DocCache();
 
 	///Retrieves document from the cache or directly asking the database
@@ -97,6 +102,10 @@ public:
 	///Receieves associated database object
 	CouchDB &getDB() {return db;}
 
+	///Manually update from changes stream
+	void update(const ChangeEvent &ev);
+
+
 protected:
 	std::recursive_mutex lock;
 	using Sync = std::unique_lock<std::recursive_mutex>;
@@ -123,7 +132,6 @@ protected:
 
 	void rungc();
 
-	void update(const ChangeEvent &ev);
 
 
 	class Update;

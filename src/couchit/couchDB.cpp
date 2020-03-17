@@ -1597,6 +1597,9 @@ Result CouchDB::mget_impl(Array &idlist, Flags flags)  {
 
 }
 
+Value CouchDB::put(const Value &doc) {
+	return 	put(doc, {}, false);
+}
 Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception ) {
 	Value id = doc["_id"];
 	if (id.type() != json::string) throw std::runtime_error("CoucDB::put needs document _id");
