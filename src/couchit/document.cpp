@@ -115,6 +115,11 @@ bool Document::isDeleted() const {
 	return (*this)["_deleted"].getBool();
 }
 
+void Document::clear() {
+	setBaseObject(Value(json::object,{getIDValue(),getRevValue()}));
+	revert();
+}
+
 
 } /* namespace couchit */
 
