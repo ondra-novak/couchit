@@ -1528,7 +1528,8 @@ Result CouchDB::mget_impl(Array &idlist, Flags flags)  {
 
 	PConnection conn = getConnection();
 	conn->add("_bulk_get");
-	conn->addJson("revs",(flags & flgRevisions) != 0);
+	if (flags & flgAttachments) conn->add("attachments","true");
+	if (flags & flgRevisions) conn->add("revs","true");
 	Value req = Object("docs", idlist);
 	Array lst;
 	try {
