@@ -68,7 +68,7 @@ CompareResult compareJson(const Value &left, const Value &right) {
 		case json::array: {
 				auto li = left.begin(),le= left.end();
 				auto ri = right.begin(), re =right.end();
-				while (li!=le && li!=le) {
+				while (li!=le && ri!=re) {
 					CompareResult r = compareJson(*li,*ri);
 					if (r != cmpResultEqual) return r;
 					++li;++ri;
@@ -80,7 +80,7 @@ CompareResult compareJson(const Value &left, const Value &right) {
 		case json::object: {
 			auto li = left.begin(),le= left.end();
 			auto ri = right.begin(), re =right.end();
-			while (li!=le && li!=le) {
+			while (li!=le && ri!=re) {
 				CompareResult r = compareStringsUnicode((*li).getKey(),(*ri).getKey());
 				if (r != cmpResultEqual) return r;
 				r = compareJson(*li,*ri);

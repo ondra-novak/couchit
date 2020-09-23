@@ -142,6 +142,11 @@ public:
 	 */
 	bool isDeleted() const;
 
+	///Clears content, but left _id and _rev
+	void clear();
+
+
+
 };
 
 
