@@ -12,4 +12,12 @@ add_subdirectory (src/tests)
 add_subdirectory (src/chfeed)
 add_compile_options(-std=c++11)
 add_custom_target( test bin/couchit_test DEPENDS bin/couchit_test)
- 
+
+install(TARGETS couchit
+        DESTINATION "lib"
+        ) 
+INSTALL(FILES ${couchit_HDR}
+        DESTINATION "include/couchit"
+        )  
+INSTALL(FILES ${couchit_http_HDR}
+        DESTINATION "include/couchit/minihttp"
