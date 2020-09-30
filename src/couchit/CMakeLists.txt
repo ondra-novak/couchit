@@ -5,13 +5,4 @@ file(GLOB couchit_SRC "*.cpp" "minihttp/netio.cpp" "minihttp/httpclient.cpp" "mi
 file(GLOB couchit_HDR "*.h" "*.tcc")
 file(GLOB couchit_http_HDR "minihttp/*.h")
 add_library (couchit ${couchit_SRC})
-
-install(TARGETS couchit
-        DESTINATION "lib"
-        ) 
-INSTALL(FILES ${couchit_HDR}
-        DESTINATION "include/couchit"
-        )  
-INSTALL(FILES ${couchit_http_HDR}
-        DESTINATION "include/couchit/minihttp"
-        )  	
+  	
