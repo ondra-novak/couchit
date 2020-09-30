@@ -101,6 +101,10 @@ struct Config {
 	std::size_t syncQueryTimeout = 600000;
 
 
+	///Specifies amount of seconds to wait after initial connection if connection cannot be established
+	/** This helps to start the application as service when database is not yet started */
+	std::size_t inintialWait = 30;
+
 	///Allows to limit maximum connections per client instance. Default is unlimited
 	std::size_t maxConnections = (std::size_t)-1;
 
