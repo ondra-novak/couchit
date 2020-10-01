@@ -1284,6 +1284,7 @@ auto CouchDB::retry(Fn &&fn) -> decltype(std::declval<Fn>()()) {
 			if (e.getCode() != 0) throw;
 			now = std::chrono::system_clock::now();
 			if (now > exp) throw;
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 	}
 }
