@@ -1286,6 +1286,7 @@ auto CouchDB::retry(Fn &&fn) -> decltype(std::declval<Fn>()()) {
 		try {
 			auto x = fn();
 			cfg.inintialWait = 0;
+			return x;
 		} catch (const RequestError &e) {
 			if (e.getCode() != 0) throw;
 			now = std::chrono::system_clock::now();
