@@ -555,115 +555,120 @@ bool  CouchDB::putDesignDocument(const char* content,
 }
 
 int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
-	return retry([&]{
-		ChangesFeed::State &state = feed.state;
-		std::unique_lock<std::recursive_mutex> _(state.initLock);
-		Value jsonBody;
-		StrViewA method = "GET";
-		if (state.curConn != nullptr) {
-			throw std::runtime_error("Changes feed is already in progress");
-		}
-		if (state.canceled) return 0;
+	ChangesFeed::State &state = feed.state;
+		return retry([&]{
+			std::unique_lock<std::recursive_mutex> _(state.initLock);
+			Value jsonBody;
+			StrViewA method = "GET";
+			if (state.curConn != nullptr) {
+				throw std::runtime_error("Changes feed is already in progress");
+			}
+			if (state.canceled) return 0;
 
-		if (feed.seqNumber.defined()) {
-			conn->add("since", feed.seqNumber.toString());
-		}
-		if (feed.outlimit != ((std::size_t) (-1))) {
-			conn->add("limit", feed.outlimit);
-		}
-		if (feed.filterInUse) {
-			const Filter& flt = feed.filter;
-			if (!flt.viewPath.empty()) {
-				StrViewA fltpath = flt.viewPath;
-				StrViewA ddocName;
-				StrViewA filterName;
-				bool isView = false;
-				auto iter = fltpath.split("/");
-				StrViewA x = iter();
-				if (x == "_design")
+			if (feed.seqNumber.defined()) {
+				conn->add("since", feed.seqNumber.toString());
+			}
+			if (feed.outlimit != ((std::size_t) (-1))) {
+				conn->add("limit", feed.outlimit);
+			}
+			if (feed.filterInUse) {
+				const Filter& flt = feed.filter;
+				if (!flt.viewPath.empty()) {
+					StrViewA fltpath = flt.viewPath;
+					StrViewA ddocName;
+					StrViewA filterName;
+					bool isView = false;
+					auto iter = fltpath.split("/");
+					StrViewA x = iter();
+					if (x == "_design")
+						x = iter();
+
+					ddocName = x;
 					x = iter();
+					if (x == "_view") {
+						isView = true;
+						x = iter();
+					}
+					filterName = x;
+					String fpath( { ddocName, "/", filterName });
+					if (isView) {
+						conn->add("filter", "_view");
+						conn->add("view", fpath);
+					} else {
+						conn->add("filter", fpath);
+					}
+				}
+				if (flt.flags & Filter::allRevs)
+					conn->add("style", "all_docs");
 
-				ddocName = x;
-				x = iter();
-				if (x == "_view") {
-					isView = true;
-					x = iter();
+				if (flt.flags & Filter::includeDocs || feed.forceIncludeDocs) {
+					conn->add("include_docs", "true");
+					if (flt.flags & Filter::attachments) {
+						conn->add("attachments", "true");
+					}
+					if (flt.flags & Filter::conflicts) {
+						conn->add("conflicts", "true");
+					}
+					if (flt.flags & Filter::attEncodingInfo) {
+						conn->add("att_encoding_info", "true");
+					}
 				}
-				filterName = x;
-				String fpath( { ddocName, "/", filterName });
-				if (isView) {
-					conn->add("filter", "_view");
-					conn->add("view", fpath);
-				} else {
-					conn->add("filter", fpath);
+				if (((flt.flags & Filter::reverseOrder) != 0) != feed.forceReversed) {
+					conn->add("descending", "true");
+				}
+				for (auto&& itm : flt.args) {
+					if (!feed.filterArgs[itm.getKey()].defined()) {
+						conn->add(StrViewA(itm.getKey()), StrViewA(itm.toString()));
+					}
+				}
+			} else {
+				if (feed.forceIncludeDocs) {
+					conn->add("include_docs", "true");
+				}
+				if (feed.forceReversed) {
+					conn->add("descending", "true");
+				}
+				if (feed.docFilter.defined()) {
+					conn->add("filter","_doc_ids");
+					Value docIds;
+					if (feed.docFilter.type() == json::string) {
+						docIds = Value(json::array, {feed.docFilter});
+					} else {
+						docIds = feed.docFilter;
+					}
+					jsonBody = Object("doc_ids", docIds);
+					method="POST";
 				}
 			}
-			if (flt.flags & Filter::allRevs)
-				conn->add("style", "all_docs");
-
-			if (flt.flags & Filter::includeDocs || feed.forceIncludeDocs) {
-				conn->add("include_docs", "true");
-				if (flt.flags & Filter::attachments) {
-					conn->add("attachments", "true");
-				}
-				if (flt.flags & Filter::conflicts) {
-					conn->add("conflicts", "true");
-				}
-				if (flt.flags & Filter::attEncodingInfo) {
-					conn->add("att_encoding_info", "true");
-				}
-			}
-			if (((flt.flags & Filter::reverseOrder) != 0) != feed.forceReversed) {
-				conn->add("descending", "true");
-			}
-			for (auto&& itm : flt.args) {
-				if (!feed.filterArgs[itm.getKey()].defined()) {
-					conn->add(StrViewA(itm.getKey()), StrViewA(itm.toString()));
-				}
-			}
-		} else {
-			if (feed.forceIncludeDocs) {
-				conn->add("include_docs", "true");
-			}
-			if (feed.forceReversed) {
-				conn->add("descending", "true");
-			}
-			if (feed.docFilter.defined()) {
-				conn->add("filter","_doc_ids");
-				Value docIds;
-				if (feed.docFilter.type() == json::string) {
-					docIds = Value(json::array, {feed.docFilter});
-				} else {
-					docIds = feed.docFilter;
-				}
-				jsonBody = Object("doc_ids", docIds);
-				method="POST";
-			}
-		}
 
 
-		for (auto&& v : feed.filterArgs) {
-			String val = v.toString();
-			StrViewA key = v.getKey();
-			conn->add(key, val);
-		}
-		conn->http.open(conn->getUrl(), method, true);
-		conn->http.connect();
-		state.curConn = conn.get();
-		_.unlock();
-
-		conn->http.setTimeout(feed.iotimeout);
-		conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
-		OutputStream out(nullptr);
-		if (jsonBody.defined()) {
-				out = conn->http.beginBody();
-				jsonBody.serialize(out);
-				out(nullptr);
-				out.flush();
+			for (auto&& v : feed.filterArgs) {
+				String val = v.toString();
+				StrViewA key = v.getKey();
+				conn->add(key, val);
 			}
-		int status = conn->http.send();
-		return status;
-	});
+			conn->http.open(conn->getUrl(), method, true);
+			conn->http.connect();
+			state.curConn = conn.get();
+			_.unlock();
+			try {
+
+				conn->http.setTimeout(feed.iotimeout);
+				conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
+				OutputStream out(nullptr);
+				if (jsonBody.defined()) {
+						out = conn->http.beginBody();
+						jsonBody.serialize(out);
+						out(nullptr);
+						out.flush();
+					}
+				int status = conn->http.send();
+				return status;
+			} catch (...) {
+				state.curConn = nullptr;
+				throw;
+			}
+		});
 }
 
 
@@ -1279,7 +1284,8 @@ auto CouchDB::retry(Fn &&fn) -> decltype(std::declval<Fn>()()) {
 	auto exp = now+std::chrono::seconds(cfg.inintialWait);
 	while(true) {
 		try {
-			return fn();
+			auto x = fn();
+			cfg.inintialWait = 0;
 		} catch (const RequestError &e) {
 			if (e.getCode() != 0) throw;
 			now = std::chrono::system_clock::now();
