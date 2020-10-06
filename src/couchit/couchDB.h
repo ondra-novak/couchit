@@ -500,7 +500,16 @@ public:
 	 * @note function "collapses" document and its changes
 	 */
 	void put(Document &doc);
-	void put(Document &doc, const WriteOptions &opts);
+
+	///Updates single document
+	/**
+	 * @param doc document to update
+	 * @param opts write options
+	 * @param no_exception set true to prevent throwing conflict exception
+	 * @retval true updated
+	 * @retval false conflict
+	 */
+	bool put(Document &doc, const WriteOptions &opts, bool no_exception = false);
 
 
 

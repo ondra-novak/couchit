@@ -121,6 +121,9 @@ struct Config {
 	 * appear in the couchdb's log file. However for high numbers this drastically reduces update speed.
 	 */
 	std::size_t minBulkSizeDocs = 0;
+
+	///Specify read quorum - set 0 to let DB to choose
+	std::size_t readQuorum = 0;
 };
 
 
