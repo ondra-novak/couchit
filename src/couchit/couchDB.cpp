@@ -557,112 +557,119 @@ bool  CouchDB::putDesignDocument(const char* content,
 
 int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 	ChangesFeed::State &state = feed.state;
-	std::unique_lock<std::recursive_mutex> _(state.initLock);
-	Value jsonBody;
-	StrViewA method = "GET";
-	if (state.curConn != nullptr) {
-		throw std::runtime_error("Changes feed is already in progress");
-	}
-	if (state.canceled) return 0;
-
-	if (feed.seqNumber.defined()) {
-		conn->add("since", feed.seqNumber.toString());
-	}
-	if (feed.outlimit != ((std::size_t) (-1))) {
-		conn->add("limit", feed.outlimit);
-	}
-	if (feed.filterInUse) {
-		const Filter& flt = feed.filter;
-		if (!flt.viewPath.empty()) {
-			StrViewA fltpath = flt.viewPath;
-			StrViewA ddocName;
-			StrViewA filterName;
-			bool isView = false;
-			auto iter = fltpath.split("/");
-			StrViewA x = iter();
-			if (x == "_design")
-				x = iter();
-
-			ddocName = x;
-			x = iter();
-			if (x == "_view") {
-				isView = true;
-				x = iter();
+		return retry([&]{
+			std::unique_lock<std::recursive_mutex> _(state.initLock);
+			Value jsonBody;
+			StrViewA method = "GET";
+			if (state.curConn != nullptr) {
+				throw std::runtime_error("Changes feed is already in progress");
 			}
-			filterName = x;
-			String fpath( { ddocName, "/", filterName });
-			if (isView) {
-				conn->add("filter", "_view");
-				conn->add("view", fpath);
+			if (state.canceled) return 0;
+
+			if (feed.seqNumber.defined()) {
+				conn->add("since", feed.seqNumber.toString());
+			}
+			if (feed.outlimit != ((std::size_t) (-1))) {
+				conn->add("limit", feed.outlimit);
+			}
+			if (feed.filterInUse) {
+				const Filter& flt = feed.filter;
+				if (!flt.viewPath.empty()) {
+					StrViewA fltpath = flt.viewPath;
+					StrViewA ddocName;
+					StrViewA filterName;
+					bool isView = false;
+					auto iter = fltpath.split("/");
+					StrViewA x = iter();
+					if (x == "_design")
+						x = iter();
+
+					ddocName = x;
+					x = iter();
+					if (x == "_view") {
+						isView = true;
+						x = iter();
+					}
+					filterName = x;
+					String fpath( { ddocName, "/", filterName });
+					if (isView) {
+						conn->add("filter", "_view");
+						conn->add("view", fpath);
+					} else {
+						conn->add("filter", fpath);
+					}
+				}
+				if (flt.flags & Filter::allRevs)
+					conn->add("style", "all_docs");
+
+				if (flt.flags & Filter::includeDocs || feed.forceIncludeDocs) {
+					conn->add("include_docs", "true");
+					if (flt.flags & Filter::attachments) {
+						conn->add("attachments", "true");
+					}
+					if (flt.flags & Filter::conflicts) {
+						conn->add("conflicts", "true");
+					}
+					if (flt.flags & Filter::attEncodingInfo) {
+						conn->add("att_encoding_info", "true");
+					}
+				}
+				if (((flt.flags & Filter::reverseOrder) != 0) != feed.forceReversed) {
+					conn->add("descending", "true");
+				}
+				for (auto&& itm : flt.args) {
+					if (!feed.filterArgs[itm.getKey()].defined()) {
+						conn->add(StrViewA(itm.getKey()), StrViewA(itm.toString()));
+					}
+				}
 			} else {
-				conn->add("filter", fpath);
+				if (feed.forceIncludeDocs) {
+					conn->add("include_docs", "true");
+				}
+				if (feed.forceReversed) {
+					conn->add("descending", "true");
+				}
+				if (feed.docFilter.defined()) {
+					conn->add("filter","_doc_ids");
+					Value docIds;
+					if (feed.docFilter.type() == json::string) {
+						docIds = Value(json::array, {feed.docFilter});
+					} else {
+						docIds = feed.docFilter;
+					}
+					jsonBody = Object("doc_ids", docIds);
+					method="POST";
+				}
 			}
-		}
-		if (flt.flags & Filter::allRevs)
-			conn->add("style", "all_docs");
-
-		if (flt.flags & Filter::includeDocs || feed.forceIncludeDocs) {
-			conn->add("include_docs", "true");
-			if (flt.flags & Filter::attachments) {
-				conn->add("attachments", "true");
-			}
-			if (flt.flags & Filter::conflicts) {
-				conn->add("conflicts", "true");
-			}
-			if (flt.flags & Filter::attEncodingInfo) {
-				conn->add("att_encoding_info", "true");
-			}
-		}
-		if (((flt.flags & Filter::reverseOrder) != 0) != feed.forceReversed) {
-			conn->add("descending", "true");
-		}
-		for (auto&& itm : flt.args) {
-			if (!feed.filterArgs[itm.getKey()].defined()) {
-				conn->add(StrViewA(itm.getKey()), StrViewA(itm.toString()));
-			}
-		}
-	} else {
-		if (feed.forceIncludeDocs) {
-			conn->add("include_docs", "true");
-		}
-		if (feed.forceReversed) {
-			conn->add("descending", "true");
-		}
-		if (feed.docFilter.defined()) {
-			conn->add("filter","_doc_ids");
-			Value docIds;
-			if (feed.docFilter.type() == json::string) {
-				docIds = Value(json::array, {feed.docFilter});
-			} else {
-				docIds = feed.docFilter;
-			}
-			jsonBody = Object("doc_ids", docIds);
-			method="POST";
-		}
-	}
 
 
-	for (auto&& v : feed.filterArgs) {
-		String val = v.toString();
-		StrViewA key = v.getKey();
-		conn->add(key, val);
-	}
-	conn->http.open(conn->getUrl(), method, true);
-	conn->http.connect();
-	state.curConn = conn.get();
-	_.unlock();
+			for (auto&& v : feed.filterArgs) {
+				String val = v.toString();
+				StrViewA key = v.getKey();
+				conn->add(key, val);
+			}
+			conn->http.open(conn->getUrl(), method, true);
+			conn->http.connect();
+			state.curConn = conn.get();
+			_.unlock();
+			try {
 
-	conn->http.setTimeout(feed.iotimeout);
-	conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
-	OutputStream out(nullptr);
-	if (jsonBody.defined()) {
-			out = conn->http.beginBody();
-			jsonBody.serialize(out);
-			out(nullptr);
-			out.flush();
-		}
-	int status = conn->http.send();
-	return status;
+				conn->http.setTimeout(feed.iotimeout);
+				conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
+				OutputStream out(nullptr);
+				if (jsonBody.defined()) {
+						out = conn->http.beginBody();
+						jsonBody.serialize(out);
+						out(nullptr);
+						out.flush();
+					}
+				int status = conn->http.send();
+				return status;
+			} catch (...) {
+				state.curConn = nullptr;
+				throw;
+			}
+		});
 }
 
 
@@ -810,6 +817,7 @@ protected:
 
 Download CouchDB::downloadAttachmentCont(PConnection &conn, const StrViewA &etag) {
 
+	return retry([&]{
 		conn->http.open(conn->getUrl(), "GET", true);
 		Object hdr;
 		hdr("Cookie", getToken());
@@ -831,7 +839,7 @@ Download CouchDB::downloadAttachmentCont(PConnection &conn, const StrViewA &etag
 			if (status == 304) return Download(new EmptyDownload,ctx.getString(),etag.getString(),llen,true);
 			else return Download(new StreamDownload(conn->http.getResponse(),std::move(conn)),ctx.getString(),etag.getString(),llen,false);
 		}
-
+	});
 
 }
 
@@ -1210,96 +1218,122 @@ Value CouchDB::postRequest(PConnection& conn, const StrViewA &cacheKey, Value *h
 
 Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) {
 
-	bool usecache = (flags & flgDisableCache) == 0 && cfg.cache != nullptr;
+	return retry([&]{
+		bool usecache = (flags & flgDisableCache) == 0 && cfg.cache != nullptr;
 
-	StrViewA path = conn->getUrl();
-	StrViewA cacheKey;
+		StrViewA path = conn->getUrl();
+		StrViewA cacheKey;
 
-	if (usecache) {
-		std::size_t baseUrlLen = cfg.baseUrl.length();
-		std::size_t databaseLen = cfg.databaseName.length();
-		std::size_t prefixLen = baseUrlLen+databaseLen+1;
+		if (usecache) {
+			std::size_t baseUrlLen = cfg.baseUrl.length();
+			std::size_t databaseLen = cfg.databaseName.length();
+			std::size_t prefixLen = baseUrlLen+databaseLen+1;
 
-		if (path.substr(0,baseUrlLen) != StrViewA(cfg.baseUrl)
-			|| path.substr(baseUrlLen, databaseLen) != StrViewA(cfg.databaseName)) {
-			usecache = false;
-		} else {
-			cacheKey = path.substr(prefixLen);
-		}
-	}
-
-
-	//there will be stored cached item
-	QueryCache::CachedItem cachedItem;
-
-	if (usecache) {
-		cachedItem = cfg.cache->find(cacheKey);
-	}
-
-	HttpClient &http = conn->http;
-	http.open(path,"GET",true);
-	bool redirectRetry = false;
-
-	int status;
-
-    do {
-    	redirectRetry = false;
-    	Object hdr(headers?*headers:Value());
-    	if (!hdr["Accept"].defined()) {
-    		hdr("Accept","application/binjson, application/json");
-    	}
-		if (cachedItem.isDefined()) {
-			hdr("If-None-Match", cachedItem.etag);
-		}
-		if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
-
-		status = http.setHeaders(hdr).send();
-		if (status == 304 && cachedItem.isDefined()) {
-			http.close();
-			return cachedItem.value;
-		}
-		if (status == 301 || status == 302 || status == 303 || status == 307) {
-			json::Value val = http.getHeaders()["Location"];
-			if (!val.defined()) {
-				http.abort();
-				throw RequestError(path,http.getStatus(),http.getStatusMessage(), Value("Redirect without Location"));
+			if (path.substr(0,baseUrlLen) != StrViewA(cfg.baseUrl)
+				|| path.substr(baseUrlLen, databaseLen) != StrViewA(cfg.databaseName)) {
+				usecache = false;
+			} else {
+				cacheKey = path.substr(prefixLen);
 			}
-			http.close();
-			http.open(val.getString(), "GET",true);
-			redirectRetry = true;
 		}
-    }
-	while (redirectRetry);
-    return postRequest(conn,cacheKey,headers,flags);
 
+
+		//there will be stored cached item
+		QueryCache::CachedItem cachedItem;
+
+		if (usecache) {
+			cachedItem = cfg.cache->find(cacheKey);
+		}
+
+		HttpClient &http = conn->http;
+		http.open(path,"GET",true);
+		bool redirectRetry = false;
+
+		int status;
+
+		do {
+			redirectRetry = false;
+			Object hdr(headers?*headers:Value());
+			if (!hdr["Accept"].defined()) {
+				hdr("Accept","application/binjson, application/json");
+			}
+			if (cachedItem.isDefined()) {
+				hdr("If-None-Match", cachedItem.etag);
+			}
+			if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
+
+			status = http.setHeaders(hdr).send();
+			if (status == 304 && cachedItem.isDefined()) {
+				http.close();
+				return cachedItem.value;
+			}
+			if (status == 301 || status == 302 || status == 303 || status == 307) {
+				json::Value val = http.getHeaders()["Location"];
+				if (!val.defined()) {
+					http.abort();
+					throw RequestError(path,http.getStatus(),http.getStatusMessage(), Value("Redirect without Location"));
+				}
+				http.close();
+				http.open(val.getString(), "GET",true);
+				redirectRetry = true;
+			}
+		}
+		while (redirectRetry);
+		return postRequest(conn,cacheKey,headers,flags);
+	});
 
 }
 
+template<typename Fn>
+auto CouchDB::retry(Fn &&fn) -> decltype(std::declval<Fn>()()) {
+	auto now = std::chrono::system_clock::now();
+	auto exp = now+std::chrono::seconds(cfg.inintialWait);
+	while(true) {
+		try {
+			auto x = fn();
+			cfg.inintialWait = 0;
+			return x;
+		} catch (const RequestError &e) {
+			if (e.getCode() != 0) throw;
+			now = std::chrono::system_clock::now();
+			if (now > exp) throw;
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+	}
+}
+
+
 Value CouchDB::requestPOST(PConnection& conn,
 		const Value& postData, Value* headers, std::size_t flags) {
-	return jsonPUTPOST(conn,true,postData,headers,flags);
+	return retry([&]{
+		return jsonPUTPOST(conn,true,postData,headers,flags);
+	});
 }
 
 Value CouchDB::requestPUT(PConnection& conn, const Value& postData,
 		Value* headers, std::size_t flags) {
-	return jsonPUTPOST(conn,false,postData,headers,flags);
+	return retry([&]{
+		return jsonPUTPOST(conn,false,postData,headers,flags);
+	});
 }
 
 Value CouchDB::requestDELETE(PConnection& conn, Value* headers,
 		std::size_t flags) {
 
-	HttpClient &http = conn->http;
-	StrViewA path = conn->getUrl();
+	return retry([&]{
+		HttpClient &http = conn->http;
+		StrViewA path = conn->getUrl();
 
-	http.open(path,"DELETE",true);
-	Object hdr(headers?*headers:Value());
-	if (!hdr["Accept"].defined())
-		hdr("Accept","application/binjson, application/json");
+		http.open(path,"DELETE",true);
+		Object hdr(headers?*headers:Value());
+		if (!hdr["Accept"].defined())
+			hdr("Accept","application/binjson, application/json");
 
-	if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
+		if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
 
-	http.setHeaders(hdr).send();
-    return postRequest(conn,StrViewA(),headers,flags);
+		http.setHeaders(hdr).send();
+		return postRequest(conn,StrViewA(),headers,flags);
+	});
 }
 
 Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,

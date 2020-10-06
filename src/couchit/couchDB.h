@@ -856,6 +856,9 @@ private:
 
 	Result mget_impl(Array &req, Flags flags = 0);
 
+	template<typename Fn>
+	auto retry(Fn &&fn) -> decltype(std::declval<Fn>()());
+
 };
 
 
