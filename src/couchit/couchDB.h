@@ -27,6 +27,7 @@
 #include "revision.h"
 #include "result.h"
 
+
 namespace couchit {
 
 
@@ -43,6 +44,7 @@ class Validator;
 class UpdateResult;
 class ShowResult;
 class Result;
+class BatchWrite;
 
 ///Client connection to CouchDB server
 /** Each instance can keep only one connection at time. However, you can create
@@ -488,6 +490,19 @@ public:
 		bool replication = false;
 		///setting value above 0 defines minimum count of writes to return
 		unsigned int quorum = 0;
+		///setting value to true causes asynchornous write
+		/** asynchronous write is done using separate thread. The main benefit of such thread is
+		 * to batch writes into single request.
+		 */
+		bool async = false;
+		///callback for asynchronous write
+		/**
+		 * used when async = true to report result of write
+		 * @param $1 true=ok, false=error
+		 * @param $2 error description: "conflict" in case of conflict
+		 */
+		std::function<void(bool, json::Value)> async_cb;
+
 	};
 
 
@@ -508,6 +523,8 @@ public:
 	 * @param no_exception set true to prevent throwing conflict exception
 	 * @retval true updated
 	 * @retval false conflict
+	 *
+	 * @note in case of asynchronous write, function returns true and conflict error state is send through the asynchronous function
 	 */
 	bool put(Document &doc, const WriteOptions &opts, bool no_exception = false);
 
@@ -520,7 +537,6 @@ public:
 	 */
 	Value put(const Value &doc);
 	Value put(const Value &doc, const WriteOptions &opts, bool no_exception = false);
-
 
 
 	///Commands the database to update specified view
@@ -690,6 +706,8 @@ protected:
 	Queryable queryable;
 
 	Value serialNr;
+
+	std::unique_ptr<BatchWrite> batchWrite;
 
 public:
 

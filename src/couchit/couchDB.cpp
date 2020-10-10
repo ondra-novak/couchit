@@ -18,6 +18,7 @@
 #include <imtjson/binjson.tcc>
 #include <experimental/string_view>
 
+#include "batch.h"
 #include "exception.h"
 #include "query.h"
 
@@ -1648,31 +1649,47 @@ Value CouchDB::put(const Value &doc) {
 Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception ) {
 	Value id = doc["_id"];
 	if (id.type() != json::string) throw std::runtime_error("CoucDB::put needs document _id");
-	PConnection b = getConnection("");
-	b->add(id.getString());
-	if (opts.batchok) b->add("batch","ok");
-	if (opts.replication) b->add("new_edits","false");
-	if (opts.quorum) b->add("w",opts.quorum);
-	try {
-		Value wdoc;
-		if (doc[fldTimestamp].defined()) {
-			wdoc = doc.replace(fldTimestamp, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
-		} else {
-			wdoc = doc;
-		}
-		Value resp = requestPUT(b,wdoc,nullptr,0);
-		return resp["rev"];
-	} catch (const RequestError &e) {
-		if (e.getCode() == 409) {
-			if (no_exception) return nullptr;
 
-			else throw UpdateException(StringView({
-				UpdateException::ErrorItem{
-					"conflict","conflict",doc,nullptr
-				}
-			}));
+	if (opts.async) {
+
+		if (batchWrite == nullptr) {
+			std::lock_guard _(lock);
+			if (batchWrite == nullptr) batchWrite = std::make_unique<BatchWrite>(*this);
+		}
+		if (opts.replication) {
+			batchWrite->replicate(doc);
 		} else {
-			throw;
+			batchWrite->put(doc, BatchWrite::Callback(opts.async_cb));
+		}
+		return doc["_rev"];
+	} else {
+
+		PConnection b = getConnection("");
+		b->add(id.getString());
+		if (opts.batchok) b->add("batch","ok");
+		if (opts.replication) b->add("new_edits","false");
+		if (opts.quorum) b->add("w",opts.quorum);
+		try {
+			Value wdoc;
+			if (doc[fldTimestamp].defined()) {
+				wdoc = doc.replace(fldTimestamp, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+			} else {
+				wdoc = doc;
+			}
+			Value resp = requestPUT(b,wdoc,nullptr,0);
+			return resp["rev"];
+		} catch (const RequestError &e) {
+			if (e.getCode() == 409) {
+				if (no_exception) return nullptr;
+
+				else throw UpdateException(StringView({
+					UpdateException::ErrorItem{
+						"conflict","conflict",doc,nullptr
+					}
+				}));
+			} else {
+				throw;
+			}
 		}
 	}
 }
