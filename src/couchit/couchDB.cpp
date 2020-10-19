@@ -1650,6 +1650,14 @@ Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception
 	Value id = doc["_id"];
 	if (id.type() != json::string) throw std::runtime_error("CoucDB::put needs document _id");
 
+	Value wdoc;
+	if (doc[fldTimestamp].defined()) {
+		wdoc = doc.replace(fldTimestamp, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+	} else {
+		wdoc = doc;
+	}
+
+
 	if (opts.async) {
 
 		if (batchWrite == nullptr) {
@@ -1657,11 +1665,11 @@ Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception
 			if (batchWrite == nullptr) batchWrite = std::make_unique<BatchWrite>(*this);
 		}
 		if (opts.replication) {
-			batchWrite->replicate(doc);
+			batchWrite->replicate(wdoc);
 		} else {
-			batchWrite->put(doc, BatchWrite::Callback(opts.async_cb));
+			batchWrite->put(wdoc, BatchWrite::Callback(opts.async_cb));
 		}
-		return doc["_rev"];
+		return wdoc["_rev"];
 	} else {
 
 		PConnection b = getConnection("");
@@ -1670,12 +1678,6 @@ Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception
 		if (opts.replication) b->add("new_edits","false");
 		if (opts.quorum) b->add("w",opts.quorum);
 		try {
-			Value wdoc;
-			if (doc[fldTimestamp].defined()) {
-				wdoc = doc.replace(fldTimestamp, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
-			} else {
-				wdoc = doc;
-			}
 			Value resp = requestPUT(b,wdoc,nullptr,0);
 			return resp["rev"];
 		} catch (const RequestError &e) {
@@ -1684,7 +1686,7 @@ Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception
 
 				else throw UpdateException(StringView({
 					UpdateException::ErrorItem{
-						"conflict","conflict",doc,nullptr
+						"conflict","conflict",wdoc,nullptr
 					}
 				}));
 			} else {
