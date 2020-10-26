@@ -1573,7 +1573,19 @@ Result CouchDB::mget_impl(Array &idlist, Flags flags)  {
 		Array deleted_conflicts;
 		for (Value v : res) {
 			Value docs = v["docs"];
-			Value lastDoc = docs[docs.size()-1]["ok"];
+			Value lastDoc = docs.reduce([](Value a, Value b){
+				Value ok = b["ok"];
+				if (ok.hasValue() && !ok["_deleted"].getBool()) {
+					if (a.hasValue()) {
+						Revision reva(a["_rev"]);
+						Revision revb(b["_rev"]);
+						if (reva>revb) return a;
+					}
+					return ok.stripKey();
+				} else {
+					return a;
+				}
+			},Value());
 			if (lastDoc.defined()) {
 				for (Value d: docs) {
 					Value doc = d[0];
