@@ -18,6 +18,7 @@
 #include <imtjson/binjson.tcc>
 #include <experimental/string_view>
 
+#include "batch.h"
 #include "exception.h"
 #include "query.h"
 
@@ -215,6 +216,7 @@ Value CouchDB::get(const StrViewA &docId, const StrViewA & revId, std::size_t fl
 	if (flags & flgSeqNumber) conn->add("local_seq","true");
 	if (flags & flgRevisions) conn->add("revs","true");
 	if (flags & flgRevisionsInfo) conn->add("revs_info","true");
+	if (cfg.readQuorum) conn->add("r",cfg.readQuorum);
 
 	try {
 		return requestGET(conn,nullptr,flags & (flgDisableCache|flgRefreshCache));
@@ -976,6 +978,7 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 		if (r.view.flags & View::attEncodingInfo) conn->add("att_encoding_info","true");
 	}
 	if (r.exclude_end) conn->add("inclusive_end","false");
+	if (owner.cfg.readQuorum) conn->add("r",owner.cfg.readQuorum);
 	conn->add("update_seq","true");
 	if (r.view.flags & View::stale) conn->add("stale","ok");
 	else if ((r.view.flags & View::update) == 0) conn->add("stale","update_after");
@@ -1069,10 +1072,14 @@ Value CouchDB::bulkUpload(const Value docs, bool replication ) {
 }
 
 void CouchDB::put(Document& doc) {
-	Changeset chset = createChangeset();
-	chset.update(doc);
-	chset.commit();
-	doc = chset.getUpdatedDoc(doc.getID());
+	Value rev = put(Value(doc));
+	doc.setRev(rev);
+}
+bool CouchDB::put(Document& doc, const WriteOptions &opts, bool no_exception) {
+	Value rev = put(Value(doc), opts, no_exception);
+	if (rev == nullptr) return false;
+	doc.setRev(rev);
+	return true;
 }
 
 
@@ -1455,6 +1462,8 @@ Value CouchDB::getRevisions(const StrViewA docId, Value revisions, Flags flags) 
 
 	if (flags & flgAttachments) conn->add("attachments","true");
 	if (flags & flgRevisions) conn->add("revs","true");
+	if (cfg.readQuorum) conn->add("r",cfg.readQuorum);
+
 
 	Value res = requestGET(conn, nullptr,flags & (flgDisableCache|flgRefreshCache));
 	Array output;
@@ -1564,6 +1573,8 @@ Result CouchDB::mget_impl(Array &idlist, Flags flags)  {
 	conn->add("_bulk_get");
 	if (flags & flgAttachments) conn->add("attachments","true");
 	if (flags & flgRevisions) conn->add("revs","true");
+	if (cfg.readQuorum) conn->add("r",cfg.readQuorum);
+
 	Value req = Object("docs", idlist);
 	Array lst;
 	try {
@@ -1650,25 +1661,49 @@ Value CouchDB::put(const Value &doc) {
 Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception ) {
 	Value id = doc["_id"];
 	if (id.type() != json::string) throw std::runtime_error("CoucDB::put needs document _id");
-	PConnection b = getConnection("");
-	b->add(id.getString());
-	if (opts.batchok) b->add("batch","ok");
-	if (opts.replication) b->add("new_edits","false");
-	if (opts.quorum) b->add("w",opts.quorum);
-	try {
-		Value resp = requestPUT(b,doc,nullptr,0);
-		return resp["rev"];
-	} catch (const RequestError &e) {
-		if (e.getCode() == 409) {
-			if (no_exception) return nullptr;
 
-			else throw UpdateException(StringView({
-				UpdateException::ErrorItem{
-					"conflict","conflict",doc,nullptr
-				}
-			}));
+	Value wdoc;
+	if (doc[fldTimestamp].defined()) {
+		wdoc = doc.replace(fldTimestamp, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+	} else {
+		wdoc = doc;
+	}
+
+
+	if (opts.async) {
+
+		if (batchWrite == nullptr) {
+			std::lock_guard _(lock);
+			if (batchWrite == nullptr) batchWrite = std::make_unique<BatchWrite>(*this);
+		}
+		if (opts.replication) {
+			batchWrite->replicate(wdoc);
 		} else {
-			throw;
+			batchWrite->put(wdoc, BatchWrite::Callback(opts.async_cb));
+		}
+		return wdoc["_rev"];
+	} else {
+
+		PConnection b = getConnection("");
+		b->add(id.getString());
+		if (opts.batchok) b->add("batch","ok");
+		if (opts.replication) b->add("new_edits","false");
+		if (opts.quorum) b->add("w",opts.quorum);
+		try {
+			Value resp = requestPUT(b,wdoc,nullptr,0);
+			return resp["rev"];
+		} catch (const RequestError &e) {
+			if (e.getCode() == 409) {
+				if (no_exception) return nullptr;
+
+				else throw UpdateException(StringView({
+					UpdateException::ErrorItem{
+						"conflict","conflict",wdoc,nullptr
+					}
+				}));
+			} else {
+				throw;
+			}
 		}
 	}
 }
