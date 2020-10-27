@@ -1589,7 +1589,7 @@ Result CouchDB::mget_impl(Array &idlist, Flags flags)  {
 				if (ok.hasValue() && !ok["_deleted"].getBool()) {
 					if (a.hasValue()) {
 						Revision reva(a["_rev"]);
-						Revision revb(b["_rev"]);
+						Revision revb(ok["_rev"]);
 						if (reva>revb) return a;
 					}
 					return ok.stripKey();
