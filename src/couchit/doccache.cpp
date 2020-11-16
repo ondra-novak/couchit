@@ -41,10 +41,13 @@ DocCache::DocCache(CouchDB& db, ChangesDistributor* observer,
 		Config config)
 :db(db), chdist(observer), config(std::move(config))
 {
+	gc_queue.resize(config.limit);
 	regid = chdist->add(std::unique_ptr<IChangeEventObserver>(new Update(*this)));
 }
 
-DocCache::DocCache(CouchDB& db, Config config):db(db), chdist(nullptr), config(std::move(config)) {}
+DocCache::DocCache(CouchDB& db, Config config):db(db), chdist(nullptr), config(std::move(config)) {
+		gc_queue.resize(config.limit);
+}
 
 
 DocCache::~DocCache() {
@@ -71,10 +74,7 @@ Value DocCache::get(StrViewA name) {
 		}
 	} else {
 		Item &itm = f->second;
-		if (!itm.accessed && itm.lru < 4) {
-			itm.accessed = true;
-			itm.lru++;
-		}
+		itm.accessed = true;
 		return itm.data;
 	}
 }
@@ -96,6 +96,8 @@ void DocCache::update(const ChangeEvent &ev) {
 				dataMap.erase(f);
 			}
 		}
+	} else if (config.precache) {
+		put(ev.doc);
 	}
 }
 
@@ -108,9 +110,7 @@ void DocCache::put(Value doc) {
 	} else {
 		auto f = dataMap.find(id);
 		if (f == dataMap.end()) {
-			if (config.limit && config.limit<=dataMap.size()) {
-				rungc();
-			}
+			allocSlot(id);
 			dataMap[id].data = doc;
 		} else {
 			f->second.data = doc;
@@ -122,10 +122,8 @@ void DocCache::put_missing(String id) {
 	Sync _(lock);
 	auto f = dataMap.find(id);
 	if (f == dataMap.end()) {
-		if (config.limit && config.limit<=dataMap.size()) {
-			rungc();
-		}
 		dataMap[id].data = nullptr;
+		allocSlot(id);
 	} else {
 		f->second.data = nullptr;
 	}
@@ -140,21 +138,6 @@ void DocCache::unreg() {
 	chdist=nullptr;
 }
 
-void DocCache::rungc() {
-	Sync _(lock);
-
-	std::vector<StrViewA> delKeys;
-	for (auto &&x: dataMap) {
-		if (x.second.lru == 0) delKeys.push_back(x.first);
-		else {
-			x.second.accessed = false;
-			x.second.lru--;
-		}
-	}
-	for (auto &&x: delKeys) {
-		dataMap.erase(x);
-	}
-}
 
 std::size_t DocCache::Hash::operator ()(StrViewA data) const {
 	std::size_t val = 0;
@@ -163,6 +146,25 @@ std::size_t DocCache::Hash::operator ()(StrViewA data) const {
 	return val;
 }
 
+std::size_t DocCache::allocSlot(const String new_id) {
+	if (gc_queue.empty()) return 0;
+	while (true) {
+		auto pos = gc_queue_index;
+		auto id = gc_queue[gc_queue_index];
+		gc_queue_index = (gc_queue_index+1) % gc_queue.size();
+		auto iter = dataMap.find(id);
+		if (iter == dataMap.end()) {
+			gc_queue[pos] = new_id;
+			return pos;
+		} else if (iter->second.accessed) {
+			iter->second.accessed = false;
+		} else {
+			dataMap.erase(iter);
+			gc_queue[pos] = new_id;
+			return pos;
+		}
+	}
+}
 
 }
 

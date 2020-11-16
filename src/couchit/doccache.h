@@ -48,6 +48,8 @@ public:
 		bool conflicts = false;
 		///also stores results for missing documents
 		bool missing = false;
+		///cache all items received through update stream, even if not has been accessed yet
+		bool precache = false;
 	};
 
 	///Inicialize the cache
@@ -113,7 +115,6 @@ protected:
 	struct Item {
 		Value data;
 		mutable bool accessed = false;
-		char lru = 0;
 	};
 
 	struct Hash {
@@ -127,11 +128,13 @@ protected:
 	Config config;
 	DataMap dataMap;
 	ChangesDistributor::RegistrationID regid;
+	std::vector<String> gc_queue;
+	std::size_t gc_queue_index = 0;
 
 	void unreg();
 
-	void rungc();
 
+	std::size_t allocSlot(const String id);
 
 
 	class Update;
