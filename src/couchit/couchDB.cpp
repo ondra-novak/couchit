@@ -1373,8 +1373,10 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
 				bpos = 0;
 			}
 		});
-		if (bpos && hdrSent) {
-			outstr(BinaryView(buffer,bpos));
+		if (hdrSent) {
+			if (bpos) {
+				outstr(BinaryView(buffer,bpos));
+			}
 			outstr(nullptr);
 		}
 		outstr = nullptr;
