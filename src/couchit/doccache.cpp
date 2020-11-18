@@ -11,6 +11,9 @@
 #include "doccache.h"
 
 #include <imtjson/fnv.h>
+#include "shared/logOutput.h"
+
+using ondra_shared::logInfo;
 
 namespace couchit {
 
@@ -82,40 +85,34 @@ Value DocCache::get(StrViewA name) {
 void DocCache::update(const ChangeEvent &ev) {
 	Sync _(lock);
 	auto f = dataMap.find(ev.id);
-	if (f != dataMap.end()) {
-		if (ev.deleted) {
-			if (config.missing) {
-				f->second.data = nullptr;
-			} else {
-				dataMap.erase(f);
-			}
+	if (config.precache || f != dataMap.end()) {
+		put_lk(ev.doc, f);
+	}
+}
+
+void DocCache::put_lk(Value doc, DataMap::iterator &f) {
+	String id = doc["_id"].toString();
+	bool deleted = doc["_deleted"].getBool();
+	Value tostore = deleted?Value(nullptr):doc;
+	Revision rev(doc["_rev"]);
+	if (f == dataMap.end()) {
+		allocSlot(id);
+		dataMap[id].data = tostore;
+		dataMap[id].rev = rev;
+	} else {
+		if (rev > f->second.rev) {
+			f->second.data = tostore;
+			f->second.rev = rev;
 		} else {
-			if (ev.doc.defined()) {
-				f->second.data = ev.doc;
-			} else {
-				dataMap.erase(f);
-			}
+			ondra_shared::logWarning("Old version cannot rewrite new");
 		}
-	} else if (config.precache) {
-		put(ev.doc);
 	}
 }
 
 void DocCache::put(Value doc) {
 	Sync _(lock);
-	String id = doc["_id"].toString();
-	if (doc["_deleted"].getBool()) {
-		if (config.missing) put_missing(id);
-		else erase(id);
-	} else {
-		auto f = dataMap.find(id);
-		if (f == dataMap.end()) {
-			allocSlot(id);
-			dataMap[id].data = doc;
-		} else {
-			f->second.data = doc;
-		}
-	}
+	auto f = dataMap.find(doc["_id"].getString());
+	put_lk(doc, f);
 }
 
 void DocCache::put_missing(String id) {

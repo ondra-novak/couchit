@@ -114,6 +114,7 @@ protected:
 
 	struct Item {
 		Value data;
+		Revision rev;
 		mutable bool accessed = false;
 	};
 
@@ -139,6 +140,7 @@ protected:
 
 	class Update;
 
+	void put_lk(Value doc, DataMap::iterator &iter);
 
 };
 
