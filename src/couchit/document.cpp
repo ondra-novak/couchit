@@ -119,6 +119,12 @@ void Document::clear() {
 	setBaseObject(Value(json::object,{getIDValue(),getRevValue()}));
 	revert();
 }
+bool Document::isSame(const Value &otherDoc) const {
+	return getIDValue() == otherDoc["_id"];
+}
+bool Document::isNewer(const Value &otherDoc) const {
+	return Revision(getRevValue()).getRevId() < Revision(otherDoc["_rev"]).getRevId();
+}
 
 
 } /* namespace couchit */

@@ -145,6 +145,9 @@ public:
 	///Clears content, but left _id and _rev
 	void clear();
 
+	bool isSame(const Value &otherDoc) const;
+	bool isNewer(const Value &otherDoc) const;
+
 
 
 };
