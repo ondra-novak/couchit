@@ -738,55 +738,69 @@ void CouchDB::updateSeqNum(const Value& seq) {
 
 void CouchDB::receiveChangesContinuous(ChangesFeed& feed, ChangesFeedHandler &fn) {
 
-	PConnection conn = getConnection("_changes",true);
 
-	conn->add("feed","continuous");
-	if (feed.timeout == ((std::size_t)-1)) {
-		conn->add("heartbeat","true");
-	} else {
-		conn->add("timeout",feed.timeout);
-	}
+	bool restartable = false;
+	do {
+		std::chrono::steady_clock::time_point stop_time;
 
 
-	int status = initChangesFeed(conn, feed);
-	if (feed.state.canceled) {
-		feed.state.cancelEpilog();
-		return;
-	}
+		PConnection conn = getConnection("_changes",true);
 
-	try {
-
-		Value v;
-		if (status/100 != 2) {
-			handleUnexpectedStatus(conn);
+		conn->add("feed","continuous");
+		if (feed.timeout == ((std::size_t)-1)) {
+			conn->add("timeout",feed.restart_after);
+			restartable =true;
+			stop_time = std::chrono::steady_clock::now()+ std::chrono::milliseconds(feed.restart_after);
 		} else {
-
-			InputStream stream = conn->http.getResponse();
-
-			do {
-				v = Value::parse(stream);
-				Value lastSeq = v["last_seq"];
-				if (lastSeq.defined()) {
-					feed.seqNumber = lastSeq;
-					updateSeqNum(feed.seqNumber);
-					conn->http.close();
-					break;
-				} else {
-					ChangeEvent chdoc(v);
-					feed.seqNumber = v["seq"];
-					if (!fn(chdoc)) {
-						conn->http.abort();
-						break;
-					}
-				}
-			} while (true);
-			feed.state.finishEpilog();
-
+			conn->add("timeout",feed.timeout);
 		}
-	} catch (...) {
-		feed.state.errorEpilog();
-	}
-	updateSeqNum(feed.seqNumber);
+
+
+		int status = initChangesFeed(conn, feed);
+		if (feed.state.canceled) {
+			feed.state.cancelEpilog();
+			return;
+		}
+
+		try {
+
+			Value v;
+			if (status/100 != 2) {
+				handleUnexpectedStatus(conn);
+			} else {
+
+				InputStream stream = conn->http.getResponse();
+				bool rep = true;
+				do {
+					v = Value::parse(stream);
+					Value lastSeq = v["last_seq"];
+					if (lastSeq.defined()) {
+						feed.seqNumber = lastSeq;
+						updateSeqNum(feed.seqNumber);
+						conn->http.close();
+						rep = false;
+					} else {
+						ChangeEvent chdoc(v);
+						feed.seqNumber = v["seq"];
+						if (!fn(chdoc)) {
+							conn->http.abort();
+							restartable = false;
+							rep = false;
+						}
+						if (restartable && std::chrono::steady_clock::now() > stop_time) {
+							conn->http.abort();
+							rep = false;
+						}
+					}
+				} while (rep);
+				feed.state.finishEpilog();
+
+			}
+		} catch (...) {
+			feed.state.errorEpilog();
+		}
+		updateSeqNum(feed.seqNumber);
+	} while (restartable && !feed.state.wasCanceledState);
 }
 
 
