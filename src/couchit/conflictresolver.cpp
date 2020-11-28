@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include "changes.h"
 #include "couchDB.h"
+#include "query.h"
 #include "conflictresolver.h"
 #include "shared/mtcounter.h"
 
@@ -343,81 +344,78 @@ bool ConflictResolver::resolveAllConflicts(CouchDB& couch, String id,Document& d
 }
 
 
-static StrViewA conflictDesignDoc(
-R"json(
-{
-   "_id": "_design/couchit_conflicts",
-   "language": "javascript",
-   "filters": {
-       "conflicts": "function(doc) {\n return doc._conflicts;\n}"
-   }
-}
-)json");
+static json::Value conflictDesignDoc = json::Object
+		("_id","_design/couchit_conflicts")
+		("language","javascript")
+		("views", json::Object
+				("conflicts",json::Object
+						("map","function(doc) {"
+								"if (doc._conflicts) emit(null,null);"
+								"}")
+				))
+		("filters",json::Object
+				("conflicts", "function(doc) {"
+									"return doc._conflicts;"
+							   "}")
+				);
+
+
+static View conflictView("_design/couchit_conflicts/_view/conflicts");
+static Filter conflictFilter("couchit_conflicts/conflicts");
 
 void ConflictResolver::runResolver(CouchDB& db) {
 
 	if (stopResolverFn) return;
 
-	db.putDesignDocument(conflictDesignDoc.data, conflictDesignDoc.length);
+	db.putDesignDocument(conflictDesignDoc);
 
 	MTCounter initwait(1);
 
-	std::thread thr([&] {
-		CouchDB &xdb = db;
-		ChangesFeed chfeed = xdb.createChangesFeed();
-		chfeed.setFilter(Filter("couchit_conflicts/conflicts"));
-		Document state (xdb.getLocal("conflict_resolver",CouchDB::flgCreateNew));
-		Value since = state["since"];
-		if (since.defined()) chfeed.since(since);
+	std::thread thr([&db,&initwait,this] {
+		std::atomic_bool stopped;
+		stopped.store(false);
 
+		Result res = db.createQuery(conflictView).includeDocs().exec();
+		auto since = res.getUpdateSeq();
+		ChangesFeed chfeed = db.createChangesFeed();
+		chfeed.setFilter(conflictFilter);
+		chfeed.since(since);
 
-		finishWait.setCounter(1);
-
-		stopResolverFn = [&]{
-			stopResolverFn = nullptr;
+		stopResolverFn = [&] {
+			stopped.store(true);
 			chfeed.cancelWait();
-			finishWait.wait();
 		};
 
+		initwait.dec();
 
-		while (stopResolverFn!=nullptr) {
-			try {
-
-				chfeed.setTimeout(0);
-				chfeed.setIOTimeout(xdb.getConfig().syncQueryTimeout);
-
-
-				auto processFn = [&](const ChangeEvent &d){
-					if (!d.deleted) {
-						Document doc;
-						if (resolveAllConflicts(xdb,d.id,doc)) {
-							db.pruneConflicts(doc);
-						}
-					}
-					state.set("since",d.seqId);
-					xdb.put(state);
-					return true;
-				};
-
-
-				for (ChangeEvent d: chfeed.exec()) {
-					processFn(d);
+		auto processFn = [&](const ChangeEvent &d){
+			if (!d.deleted && !stopped.load()) {
+				Document doc;
+				if (resolveAllConflicts(db,d.id,doc)) {
+					db.pruneConflicts(doc);
 				}
+			}
+			return true;
+		};
 
-				state.set("since",chfeed.getLastSeq());
-				xdb.put(state);
-
-				initwait.dec();
-
-				chfeed.setTimeout((std::size_t)-1);
-				chfeed >> processFn;
-				break;
-			} catch (...) {
-				onResolverError();
-				std::this_thread::sleep_for(std::chrono::seconds(10));
+		for (Row rw: res) {
+			Document doc(rw.doc);
+			if (resolveAllConflicts(db,doc.getIDValue().toString(),doc)) {
+				db.pruneConflicts(doc);
 			}
 		}
-		finishWait.dec();
+
+		while (!stopped.load()) {
+			try {
+				chfeed >> processFn;
+				stopped.store(true);
+			} catch (...) {
+				if (!stopped.load()) {
+					onResolverError();
+					std::this_thread::sleep_for(std::chrono::seconds(10));
+				}
+			}
+		}
 	});
 	thr.detach();
 	initwait.wait();

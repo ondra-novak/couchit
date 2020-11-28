@@ -171,6 +171,19 @@ public:
 	ChangesFeed& limit(std::size_t count);
 
 
+	///Applies for continuous streams with timeout set to infinity
+	/**This allows to restart stream after specified count of milliseconds
+	 *
+	 * This can handle various bug in couchdb engine, when stream is not fully recovered when
+	 * one of the shards are down for a while. This can cause, that data from the recovered shard
+	 * are not streamed. With this feature, stream is restarted after some time allowing to
+	 * reconnect recovered shard.
+	 *
+	 *
+	 * @param ms number of milliseconds of interval of restarting of the stream. Default is 30s
+	 */
+	ChangesFeed& restartAfter(std::size_t ms);
+
 	///Executes the operation - reads all changes
 	/**
 	 *
@@ -295,6 +308,7 @@ protected:
 	Value seqNumber;
 	std::size_t outlimit = (std::size_t)-1;
 	std::size_t timeout = (std::size_t)-1;
+	std::size_t restart_after = 30000;
 	std::size_t iotimeout = 120000;
 	Filter filter = Filter("");
 	Value docFilter;
@@ -302,6 +316,7 @@ protected:
 	bool forceIncludeDocs = false;
 	bool forceReversed = false;
 	bool filterInUse = false;
+
 
 	State state;
 

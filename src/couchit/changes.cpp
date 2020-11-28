@@ -90,6 +90,11 @@ void  ChangesFeed::continuous(ChangesFeedHandler &handler) {
 	return couchdb.receiveChangesContinuous(*this,handler);
 }
 
+ChangesFeed& ChangesFeed::restartAfter(std::size_t ms) {
+	restart_after = ms;
+	return *this;
+}
+
 ChangesFeed& ChangesFeed::setFilterFlags(std::size_t flags) {
 	return setFilter(Filter(String(),flags));
 }

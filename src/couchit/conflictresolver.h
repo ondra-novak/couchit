@@ -93,6 +93,7 @@ protected:
 	Action stopResolverFn;
 	ondra_shared::Countdown finishWait;
 
+
 };
 
 } /* namespace couchit */
