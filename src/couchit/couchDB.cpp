@@ -18,6 +18,7 @@
 #include <imtjson/binjson.tcc>
 #include <experimental/string_view>
 
+#include "shared/logOutput.h"
 #include "batch.h"
 #include "exception.h"
 #include "query.h"
@@ -32,6 +33,7 @@
 #include "showProc.h"
 #include "updateProc.h"
 
+using ondra_shared::logFatal;
 using std::experimental::fundamentals_v1::string_view;
 
 
@@ -1087,6 +1089,10 @@ bool CouchDB::put(Document& doc, const WriteOptions &opts, bool no_exception) {
 
 
 CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath, bool fresh) {
+	if (magic != magic_const) {
+		logFatal("Magic const damaged");
+		abort();
+	}
 	std::unique_lock<std::mutex> _(lock);
 
 	auto now = SysClock::now();

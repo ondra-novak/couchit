@@ -651,7 +651,8 @@ public:
 	}
 
 protected:
-
+	static constexpr std::uint64_t magic_const = 0x1234567812345678UL;
+	std::uint64_t magic = magic_const;
 	mutable std::mutex lock;
 	std::condition_variable connRelease;
 	typedef std::lock_guard<std::mutex> LockGuard;
