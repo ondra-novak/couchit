@@ -42,7 +42,6 @@ namespace couchit {
 
 
 StrViewA CouchDB::fldTimestamp("~timestamp");
-StrViewA CouchDB::fldPrevRevision("~prevRev");
 std::size_t CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
@@ -247,6 +246,7 @@ Value CouchDB::get(const StrViewA &docId, const StrViewA & revId, std::size_t fl
 Value CouchDB::get(const StrViewA &docId, std::size_t flags) {
 	return get(docId, StrViewA(), flags);
 }
+
 
 UpdateResult CouchDB::execUpdateProc(StrViewA updateHandlerPath, StrViewA documentId,
 		Value arguments) {
@@ -1738,6 +1738,14 @@ Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception
 			}
 		}
 	}
+}
+
+void CouchDB::getAsync(const json::String &docId, std::function<void(Document &doc)> &&cb) {
+	if (batchWrite == nullptr) {
+		std::lock_guard _(lock);
+		if (batchWrite == nullptr) batchWrite = std::make_unique<BatchWrite>(*this);
+	}
+	batchWrite->get(docId, std::move(cb));
 }
 
 
