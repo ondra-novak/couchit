@@ -262,6 +262,12 @@ public:
 	 */
 	Query createQuery(Flags viewFlags);
 
+	///Create query to ask _all_docs
+	Query allDocs(Flags viewFlags);
+
+	///Create query to ask _all_docs
+	Query localDocs(Flags viewFlags);
+
 
 	///Creates changeset
 	/** Changeset will use this database connection to update document

@@ -56,6 +56,7 @@ public:
 	 */
 	static const std::size_t reverseOrder = 0x400;
 
+
 	///specify group level
 	/** Use this flag and multiply it by selected group level. You have to turn on reduce
 	 *

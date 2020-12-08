@@ -135,6 +135,16 @@ Query CouchDB::createQuery(std::size_t viewFlags) {
 	return createQuery(v);
 }
 
+Query CouchDB::allDocs(Flags viewFlags) {
+	View v("_all_docs", viewFlags|View::update);
+	return createQuery(v);
+}
+
+Query CouchDB::localDocs(Flags viewFlags) {
+	View v("_local_docs", viewFlags|View::update);
+	return createQuery(v);
+}
+
 static std::string readFile(const std::string &name) {
 	std::ifstream in(name);
 	if (!in) return std::string();
