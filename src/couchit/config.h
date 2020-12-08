@@ -117,7 +117,7 @@ struct Config {
 	/** If there are more documents in single request, the request is split. This operation is invisible, but
 	 * it results to multiple requests and reduced performance
 	 */
-	std::size_t maxBulkSizeDocs = 5000;
+	std::size_t maxBulkSizeDocs = 1000;
 
 	///Minimum count of documents sned by the _bulkd_doc request
 	/** There is no reason to set this value other than zero, unless you need to debug updates through
