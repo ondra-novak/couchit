@@ -47,18 +47,6 @@ class Result;
 class BatchWrite;
 
 ///Client connection to CouchDB server
-/** Each instance can keep only one connection at time. However, you can create
- * multiple instances, or use CouchDBPool to manage multiple connections to the database.
- *
- * Although CouchDB uses http/https protocol, keeping one connection can benefit from keep-alive
- * feature.
- *
- * The instance should be MT safe, however, you are limited to max one request at time. This also
- * includes listenChanges() feature which means that request can take a long time to process blocking
- * other threads to process other requests. Then you should consider to use extra instances
- * of CouchDB class.
- *
- */
 class CouchDB {
 public:
 
@@ -68,11 +56,6 @@ public:
 	 * is supported by Changeset class
 	 */
 	static StrViewA fldTimestamp;
-	///Contains ID of previous revision
-	/** Note this feature is optional and supported only by couchit. The class Changeset
-	 * will put there id of previous revision.
-	 */
-	static StrViewA fldPrevRevision;
 
 
 	typedef std::size_t Flags;
@@ -315,6 +298,18 @@ public:
 	 * @return json with document
 	 */
 	Value get(const StrViewA &docId, const StrViewA &revId, Flags flags = flgDisableCache);
+
+	///Asynchronously retrieve document
+	/**
+	 * @param docId document to retrieve
+	 * @param cb callback which is called when document is retrieved
+	 *
+	 * @note function uses background batch to retrieve documents. It combines multiple
+	 * requests into single database request. Function always retrieves document with conflicts.
+	 * If the document doesn't exists, it generates new empty document. Use Document::isNew() to
+	 * determine, whether document has been found or generated empty
+	 */
+	void getAsync(const json::String &docId, std::function<void(Document &doc)> &&cb);
 
 	///Creates new document
 	/**

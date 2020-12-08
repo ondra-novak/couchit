@@ -66,9 +66,6 @@ void Document::enableTimestamp() {
 	set(CouchDB::fldTimestamp,nullptr);
 }
 
-void Document::enableRevTracking() {
-	set(CouchDB::fldPrevRevision,nullptr);
-}
 
 
 void Document::deleteAttachment(const StrViewA &name) {
@@ -107,9 +104,6 @@ Value Document::getTimestamp() const {
 	return (*this)[CouchDB::fldTimestamp];
 }
 
-String Document::getPrevRevision() const {
-	return String((*this)[CouchDB::fldPrevRevision]);
-}
 
 bool Document::isDeleted() const {
 	return (*this)["_deleted"].getBool();

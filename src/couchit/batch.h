@@ -11,12 +11,13 @@
 #include <atomic>
 #include <thread>
 #include <functional>
+#include <variant>
 #include <imtjson/value.h>
 #include <shared/msgqueue.h>
 
 
 namespace couchit {
-
+class Document;
 class CouchDB;
 
 ///Performs batch writting using background thread
@@ -57,12 +58,27 @@ public:
 	/** You must rethrow and catch exception to process. */
 	virtual void onException() noexcept;
 
+	using ReadCallback = std::function<void(Document &doc)>;
+
+	void get(const json::String docId, ReadCallback &&cb);
+
 protected:
-	struct Msg {
+	enum Mode {
+		batch_put,
+		batch_replicate,
+		batch_get,
+		thread_exit
+	};
+
+	class Msg {
+	public:
 		json::Value doc;
-		Callback cb;
-		bool replication;
+		std::variant<Callback, ReadCallback> cb;
+		Mode mode;
 		Msg(const json::Value &doc, Callback &&cb, bool replication);
+		Msg(const json::String &docid, ReadCallback &&cb);
+		Msg():mode(thread_exit) {}
+
 	};
 
 	class Queue : public ondra_shared::MsgQueue<Msg> {
@@ -81,7 +97,7 @@ protected:
 	std::thread thr;
 	Queue queue;
 	void worker();
-
+	void init_worker();
 
 
 };

@@ -95,18 +95,6 @@ public:
 	 */
 	void enableTimestamp();
 
-	///Enables tracking revision tree
-	/** By default couchDb traces only revisions of main branch while side revision are considered
-	 * as conflicts without history. Enabling revision tracking causes that special field will
-	 * contain ID of previous revision. This is done by Changeset object before document is updated.
-     *
-	 * @param json json object that provides new value creation
-	 *
-	 * @note previous revision is stored in CouchDB::fldPrevRevision.
-	 * First revision has this field equal to null
-	 */
-	void enableRevTracking();
-
 
 	void setID(const Value &id);
 	void setRev(const Value &rev);
@@ -127,13 +115,6 @@ public:
 	 */
 	Value getTimestamp() const;
 
-	///Retrieves id of previous revision
-	/**
-	 * @return id of previous revision.
-	 *
-	 * @note Revision tracking must be enabled for the document. see enableRevTracking()
-	 */
-	String getPrevRevision() const;
 
 	///Determines, whether document is deleted
 	/**
@@ -147,6 +128,7 @@ public:
 
 	bool isSame(const Value &otherDoc) const;
 	bool isNewer(const Value &otherDoc) const;
+	bool isNew() const {return !getRevValue().defined();}
 
 
 
