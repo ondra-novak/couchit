@@ -66,7 +66,8 @@ public:
 	ChangeObserverFromFn(Fn &&fn, json::Value since=json::undefined):fn(std::forward<Fn>(fn)),since(since) {}
 
 	virtual bool onEvent(const ChangeEvent &doc) {
-		since = doc.seqId;
+		if (doc.seqId.hasValue())
+			since = doc.seqId;
 		return fn(doc);
 	}
 

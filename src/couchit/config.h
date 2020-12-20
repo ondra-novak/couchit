@@ -128,6 +128,13 @@ struct Config {
 
 	///Specify read quorum - set 0 to let DB to choose
 	std::size_t readQuorum = 0;
+
+	///Limits batch size for reading changes through receiveChanges.
+	unsigned int maxChangesBatchSize = 1000;
+
+
+	///Specifies minimal poll interval for reading changes through receiveChanges
+	unsigned int minChangesPollInterval = 500;
 };
 
 

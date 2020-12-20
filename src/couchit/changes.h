@@ -49,6 +49,8 @@ public:
 	 */
 	Changes(Value jsonResult);
 
+	Changes();
+
 	///Receive next change
 	/**
 	 * @return next change in collection. It is returned as JSON object. You can convert it
@@ -340,7 +342,7 @@ inline ChangesFeed& couchit::ChangesFeed::arg(StrViewA key, T value) {
 class IChangeEventObserver;
 
 
-class ChangesDistributor: public ChangesFeed {
+class ChangesDistributor {
 public:
 
 	typedef std::function<void(IChangeEventObserver *)>  Deleter;
@@ -349,8 +351,8 @@ public:
 	typedef const IChangeEventObserver *RegistrationID;
 	constexpr static RegistrationID noreg = nullptr;
 
-	ChangesDistributor(ChangesFeed &&feed);
 	explicit ChangesDistributor(CouchDB &db, bool include_docs = true);
+	ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState);
 
 
 	///Add observer as reference
@@ -415,18 +417,25 @@ public:
 	///stops the service thread
 	void stopService();
 
-	~ChangesDistributor();
+	virtual ~ChangesDistributor();
 
 	template<typename Fn>
 	RegistrationID addFn(Fn &&fn) {
 		return add(std::unique_ptr<IChangeEventObserver>(new ChangeObserverFromFn<Fn>(std::forward<Fn>(fn))));
 	}
 
+	virtual void onException();
+
+	CouchDB &getDB() const {return db;}
+
 protected:
 
+	CouchDB &db;
+	CouchDB::ChangeFeedState feedState;
 	std::vector<PObserver> observers;
 	std::unique_ptr<std::thread> thr;
 	bool exit = false;
+	mutable std::recursive_mutex lock;
 
 	class Distributor;
 

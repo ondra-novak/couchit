@@ -118,7 +118,7 @@ Changeset CouchDB::createChangeset() {
 
 SeqNumber CouchDB::getLastSeqNumber() {
 	ChangesFeed chsink = createChangesFeed();
-	Changes chgs = chsink.setFilterFlags(Filter::reverseOrder).limit(1).setTimeout(0).exec();
+	Changes chgs = chsink.setFilterFlags(::couchit::Filter::reverseOrder).limit(1).setTimeout(0).exec();
 	if (chgs.hasItems()) return ChangeEvent(chgs.getNext()).seqId;
 	else return SeqNumber();
 }
@@ -586,7 +586,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 				conn->add("limit", feed.outlimit);
 			}
 			if (feed.filterInUse) {
-				const Filter& flt = feed.filter;
+				const ::couchit::Filter& flt = feed.filter;
 				if (!flt.viewPath.empty()) {
 					StrViewA fltpath = flt.viewPath;
 					StrViewA ddocName;
@@ -612,22 +612,22 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 						conn->add("filter", fpath);
 					}
 				}
-				if (flt.flags & Filter::allRevs)
+				if (flt.flags & ::couchit::Filter::allRevs)
 					conn->add("style", "all_docs");
 
-				if (flt.flags & Filter::includeDocs || feed.forceIncludeDocs) {
+				if (flt.flags & ::couchit::Filter::includeDocs || feed.forceIncludeDocs) {
 					conn->add("include_docs", "true");
-					if (flt.flags & Filter::attachments) {
+					if (flt.flags & ::couchit::Filter::attachments) {
 						conn->add("attachments", "true");
 					}
-					if (flt.flags & Filter::conflicts) {
+					if (flt.flags & ::couchit::Filter::conflicts) {
 						conn->add("conflicts", "true");
 					}
-					if (flt.flags & Filter::attEncodingInfo) {
+					if (flt.flags & ::couchit::Filter::attEncodingInfo) {
 						conn->add("att_encoding_info", "true");
 					}
 				}
-				if (((flt.flags & Filter::reverseOrder) != 0) != feed.forceReversed) {
+				if (((flt.flags & ::couchit::Filter::reverseOrder) != 0) != feed.forceReversed) {
 					conn->add("descending", "true");
 				}
 				for (auto&& itm : flt.args) {
@@ -1748,6 +1748,111 @@ void CouchDB::getAsync(const json::String &docId, std::function<void(Document &d
 	batchWrite->get(docId, std::move(cb));
 }
 
+Changes CouchDB::receiveChanges(ChangeFeedState &feedState) {
+	feedState.connection = nullptr;
+	if (feedState.canceled.load()) return Changes();
+	auto pollInterval = std::min(std::max(feedState.poll_interval,cfg.minChangesPollInterval), feedState.timeout);
+	auto limit = std::min<unsigned int>(feedState.limit, cfg.maxChangesBatchSize);
+	auto now = std::chrono::system_clock::now();
+	auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(now-feedState.last_request_time).count();
+	if (dur < pollInterval) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(pollInterval-dur));
+		now = std::chrono::system_clock::now();
+	}
+	if (feedState.canceled.load()) return Changes();
+
+	feedState.last_request_time = now;
+	PConnection c = getConnection("_changes");
+	if (feedState.since.defined()) c->add("since", feedState.since.toString());
+	if (feedState.include_docs) c->add("include_docs", "true");
+	if (feedState.conflicts) c->add("conflicts", "true");
+	if (feedState.attachments) c->add("attachments", "true");
+	if (feedState.descending) c->add("descending", "true");
+	Value body;
+	switch (feedState.filter) {
+		case Filter::no_filter:break;
+		case Filter::custom: c->add("filter", feedState.filter_spec.toString());break;
+		case Filter::view: c->add("view", feedState.filter_spec.toString());
+						   c->add("filter","_view");
+						   break;
+		case Filter::selector: c->add("filter","_selector");body = feedState.filter_spec;break;
+		case Filter::docids: c->add("filter","_doc_ids");body = json::Object("doc_ids",feedState.filter_spec);break;
+		case Filter::design: c->add("filter","_design");break;
+	}
+	c->add("limit", limit);
+	c->add("r","1");
+	if (feedState.timeout) {
+		c->add("timeout", feedState.timeout);
+		c->add("feed","longpoll");
+		c->http.setTimeout(feedState.timeout+cfg.iotimeout);
+	} else {
+		c->add("feed","normal");
+	}
+	if (limit>0 && feedState.batching) c->add("seq_interval",limit);
+	if (feedState.extra_args.type() == json::object) {
+		for (Value a: feedState.extra_args) c->addJson(a.getKey(), a);
+	}
+	auto url = c->getUrl();
+	c->http.connect();
+	HttpClient &http = c->http;
+	feedState.connection = std::move(c);
+	if (feedState.canceled.load()) {
+		http.abort();
+		feedState.connection = nullptr;
+		return Changes();
+	}
+	int status;
+	Object headers;
+	headers("Cookie", getToken());
+	if (body.defined()) {
+		http.open(url, "POST");
+		headers("Content-Type","application/json");
+		http.setHeaders(headers);
+		status = http.send(body.toString());
+	} else {
+		http.open(url, "GET");
+		http.setHeaders(headers);
+		status = http.send();
+	}
+	if (feedState.canceled) {
+		http.close();
+		return Changes();
+	}
+
+	Value response;
+	try {
+		response = Value::parse(http.getResponse());
+		http.close();
+	} catch (...) {
+		http.close();
+		if (feedState.canceled.load())
+			return Changes();
+		if (status == 200) throw;
+	}
+	if (status != 200) {
+		throw RequestError(url,status, http.getStatusMessage(), response);
+	} else {
+		json::Value results = response["results"].stripKey();
+		if (results.size() >= limit/2) {
+			feedState.last_request_time = std::chrono::system_clock::from_time_t(0);
+		}
+		feedState.since = response["last_seq"].stripKey();
+		{
+			SeqNumber l (feedState.since);
+			LockGuard _(lock);
+			if (l > lksqid) lksqid = l;
+		}
+		return results;
+	}
+}
+
+void CouchDB::abortReceiveChanges(ChangeFeedState &feedState) {
+	bool c1 = false;
+	if (feedState.canceled.compare_exchange_strong(c1, true)) {
+		Connection *c = feedState.connection.get();
+		if (c) c->http.abort();
+	}
+}
 
 }
 

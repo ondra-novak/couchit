@@ -8,7 +8,10 @@
 #include <thread>
 #include "changes.h"
 
+#include "../../../shared/logOutput.h"
 #include "couchDB.h"
+
+using ondra_shared::logError;
 namespace couchit {
 
 
@@ -30,6 +33,13 @@ Changes::Changes(Value jsonResult)
 {
 
 }
+
+Changes::Changes()
+:Value(),pos(0),sz(0)
+{
+
+}
+
 
 Value Changes::getNext() {
 	return (*this)[pos++];
@@ -152,7 +162,7 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeEventObserver 
 	return add(PObserver(&observer, &stdLeaveObserver));
 }
 ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer) {
-	std::unique_lock<std::recursive_mutex> _(state.initLock);
+	std::unique_lock<std::recursive_mutex> _(lock);
 	RegistrationID id = observer.get();
 	observers.push_back(std::move(observer));
 	return id;
@@ -163,7 +173,7 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChan
 
 
 void ChangesDistributor::remove(RegistrationID regid) {
-	std::unique_lock<std::recursive_mutex> _(state.initLock);
+	std::unique_lock<std::recursive_mutex> _(lock);
 	auto e = observers.end();
 	for (auto b = observers.begin(); b != e; ++b) {
 		if (b->get() == regid) {
@@ -178,7 +188,7 @@ void ChangesDistributor::remove(RegistrationID regid) {
 Value ChangesDistributor::getInitialUpdateSeq() const {
 	Value z;
 
-	std::unique_lock<std::recursive_mutex> _(state.initLock);
+	std::unique_lock<std::recursive_mutex> _(lock);
 	for (auto &&x: observers) {
 		Value a = x->getLastKnownSeqID();
 		if (a.defined()) {
@@ -204,7 +214,7 @@ public:
 	bool operator()(const ChangeEvent &doc) const {
 
 		std::vector<RegistrationID> toRemove;
-		std::unique_lock<std::recursive_mutex> _(_this->state.initLock);
+		std::unique_lock<std::recursive_mutex> _(_this->lock);
 		for (auto &&x : _this->observers) {
 			bool r =x->onEvent(doc);
 			if (!r) {
@@ -225,52 +235,76 @@ protected:
 void ChangesDistributor::run() {
 
 
-
-	Value u = getInitialUpdateSeq();
-	if (u.defined()) this->since(u);
+	if (!feedState.since.defined()) {
+		Value u = getInitialUpdateSeq();
+		feedState.since = u;
+	}
 
 	Distributor dist(this);
-	this->operator >> (dist);
+	while (!feedState.canceled.load()) {
+		try {
+			Changes chg(db.receiveChanges(feedState));
+			while (chg.hasItems() && !feedState.canceled.load()) {
+				try {
+					dist(chg.getNext());
+				} catch (...) {
+					onException();
+				}
+			}
+		} catch (...) {
+			onException();
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+	}
+}
+
+void ChangesDistributor::onException() {
+	try {
+		throw;
+	} catch (std::exception &e) {
+		logError("Couchit change distributor - Exception: $1", e.what());
+	}
 }
 
 void ChangesDistributor::sync() {
 
-	Value s = getInitialUpdateSeq();
-	ChangesFeed chf(*this);
+	if (!feedState.since.defined()) {
+		Value u = getInitialUpdateSeq();
+		feedState.since = u;
+	}
+
+	auto tm = feedState.timeout;
+	feedState.timeout = 0;
 	Distributor dist(this);
-	chf.since(s);
-	chf.setTimeout(0);
-	chf >> dist;
-	since(chf.getLastSeq());
+	while (!feedState.canceled.load()) {
+		try {
+			Changes chg(db.receiveChanges(feedState));
+			if (chg.empty()) break;
+			while (chg.hasItems() && !feedState.canceled.load()) {
+				try {
+					dist(chg.getNext());
+				} catch (...) {
+					onException();
+				}
+			}
+		} catch (...) {
+			onException();
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+	}
+	feedState.timeout = tm;
 }
 
 
 void ChangesDistributor::runService() {
-	stopService();
 	thr = std::unique_ptr<std::thread> (
 		new std::thread([=]{
-			setTimeout(-1);
 			run();
 	}));
 }
 
-void ChangesDistributor::runService(std::function<bool()> onError) {
-	stopService();
-	exit = false;
-	thr = std::unique_ptr<std::thread> (
-			new std::thread([=]{
-
-				setTimeout(-1);
-				bool goon = true;
-				while (goon && !exit) {
-					try {
-						run();
-						goon = false;
-					} catch (...) {
-						goon = onError();
-					}
-				}
-	}));
+void ChangesDistributor::runService(std::function<bool()> ) {
+	runService();
 
 }
 
@@ -278,23 +312,65 @@ ChangesDistributor::~ChangesDistributor() {
 	stopService();
 }
 
-ChangesDistributor::ChangesDistributor(ChangesFeed &&feed):ChangesFeed(std::move(feed)) {}
-
 
 void ChangesDistributor::stopService() {
 	exit = true;
 	if (thr != nullptr) {
-		cancelWait();
+		db.abortReceiveChanges(feedState);
 		thr->join();
 		thr = nullptr;
 	}
 }
 
-ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs)
-	:ChangesFeed(db)
+ChangesDistributor::ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState)
+	:db(db),feedState(std::move(feedState))
 {
-	includeDocs(include_docs);
 }
 
+ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs)
+	:db(db)
+{
+	feedState.include_docs = include_docs;
+	feedState.timeout = 50000;
+}
+
+CouchDB::ChangeFeedState::ChangeFeedState(ChangeFeedState && other)
+:since(std::move(other.since))
+,filter_spec(std::move(other.filter_spec))
+,extra_args(std::move(other.extra_args))
+,filter(std::move(other.filter))
+,include_docs (std::move(other.include_docs ))
+,conflicts (std::move(other.conflicts ))
+,attachments(std::move(other.attachments))
+,descending (std::move(other.descending ))
+,timeout (std::move(other.timeout ))
+,limit (std::move(other.limit  ))
+,batching(other.batching)
+,poll_interval(other.poll_interval)
+,connection (std::move(connection ))
+,canceled(false)
+,last_request_time(other.last_request_time)
+{}
+
+CouchDB::ChangeFeedState::ChangeFeedState(const ChangeFeedState & other)
+:since(other.since)
+,filter_spec(other.filter_spec)
+,extra_args(other.extra_args)
+,filter(other.filter)
+,include_docs (other.include_docs )
+,conflicts (other.conflicts )
+,attachments(other.attachments)
+,descending (other.descending )
+,timeout (other.timeout )
+,limit (other.limit  )
+,batching(other.batching)
+,poll_interval(other.poll_interval)
+,connection (nullptr )
+,canceled(false)
+,last_request_time(std::chrono::system_clock::from_time_t(0))
+{}
+CouchDB::ChangeFeedState::ChangeFeedState()
+:last_request_time(std::chrono::system_clock::from_time_t(0))
+{}
 
 }
