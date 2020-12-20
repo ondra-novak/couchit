@@ -747,6 +747,7 @@ public:
 
 	typedef std::unique_ptr<Connection, ConnectionDeleter> PConnection;
 
+
 	///Retrieve connection to perform direct requests
 	/** Direct requests such as requestGET and requestPUT need
 	 * to be called with connection object. The object also
@@ -831,6 +832,94 @@ public:
 	 * @return
 	 */
 	Value requestDELETE(PConnection &conn, Value *headers = nullptr, Flags flags = 0);
+
+
+	enum class Filter {
+		///no filter
+		no_filter,
+		///list of documents in filter_spec
+		docids,
+		///selector in filter_spec
+		selector,
+		///design document filter (doc/filter)
+		custom,
+		///view name
+		view,
+		///receive only design docs
+		design
+	};
+
+
+	///New implementation for receiving changes
+	/** Due to very buggy implementation of continuous feed, this is
+	 * simplified version for streaming changes using longpoll feature.
+	 * You can repeatedly call the function receiveChanges while keeping
+	 * this state - or you can use ChangesDistributor or ChangesReader
+	 */
+	struct ChangeFeedState {
+
+		///specify sequence number since to read changes
+		/** This field is updated after each call, so you can read multiple changes */
+		json::Value since = Value();
+		///filter specification (depend on filter)
+		json::Value filter_spec = Value();
+		///extra arguments
+		json::Value extra_args = Value();
+		///filter type
+		Filter filter = Filter::no_filter;
+		///set true to include docs
+		bool include_docs =false;
+		///set true to include conflicts
+		bool conflicts = false;
+		///set true to include attachments
+		bool attachments = false;
+		///set true to read changes in reverse order
+		bool descending = false;
+		///set timeout for waiting to changes
+		unsigned int timeout = 0;
+		///set maximum count of changes read by single call
+		unsigned int limit = ~0;
+		///allow batching - this means, that seqNumber can be null, thus don't need to be stored
+		bool batching = true;
+		///Specifies minimal poll interval in milliseconds when changes not comming in batches
+		/** Adds sleep between cycles if interval would be lower. It doesn't affect performance
+		 * if there are a lot of changes
+		 */
+		unsigned int poll_interval=0;
+
+		///internally used to store current connection
+		/**Note that if you no longer need to receive changes, destroy this object or
+		 * set this pointer to nullptr, otherwise single connection is still reserved
+		 */
+		PConnection connection = nullptr;
+		///is set to true, when request has been canceled
+		std::atomic<bool> canceled = false;
+
+		std::chrono::system_clock::time_point last_request_time;
+
+
+
+		ChangeFeedState();
+		ChangeFeedState(ChangeFeedState && other);
+		ChangeFeedState(const ChangeFeedState & other);
+	};
+
+	///Receives changes
+	/**
+	 * @param feedState state of feed
+	 * @return received changes
+	 *
+	 * @note function blocks operation until the request is fullfilled or canceled
+	 */
+	Changes receiveChanges(ChangeFeedState &feedState);
+
+	///Cancels pending receiveChanges
+	/**
+	 * @param feedState pending state.
+	 *
+	 */
+	static void abortReceiveChanges(ChangeFeedState &feedState);
+
 
 
 protected:
