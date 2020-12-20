@@ -198,18 +198,41 @@ void BatchWrite::worker() {
 				logDebug("couchit: Batch get $1 documents", gets.size());
 				try {
 					Result res = db.createQuery(View::conflicts| View::includeDocs).keys(gets).exec();
-					auto iter = read_cbs.begin();
-					for (Row rw: res) {
-						Document doc;
-						if (rw.error.defined()) {
-							doc.setID(rw.key);
-							(*iter)(doc);
-						} else {
-							doc.setBaseObject(rw.doc);
-							(*iter)(doc);
+					if (res.empty()) {
+						auto iter = read_cbs.begin();
+						for (Value x: gets) {
+							Document doc;
+							doc.setID(x);
+							try {
+								(*iter)(doc);
+							} catch (std::exception &e) {
+								logError("couchit: Batch get exception: doc=$1: $2", x.getString(), e.what());
+							} catch (...) {
+								logError("couchit: Batch get exception: doc=$1: unknown", x.getString());
+							}
+							++iter;
 						}
-						++iter;
-					}
+ 					} else {
+						auto iter = read_cbs.begin();
+						for (Row rw: res) {
+							Document doc;
+							try {
+								if (rw.error.defined()) {
+									doc.setID(rw.key);
+									(*iter)(doc);
+								} else {
+									doc.setBaseObject(rw.doc);
+									(*iter)(doc);
+								}
+							} catch (std::exception &e) {
+								logError("couchit: Batch get exception: doc=$1: $2",rw.key.getString(), e.what());
+							} catch (...) {
+								logError("couchit: Batch get exception: doc=$1: unknown",rw.key.getString());
+							}
+
+							++iter;
+						}
+ 					}
 				} catch (...) {
 					onException();
 					auto iter = read_cbs.begin();
