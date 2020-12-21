@@ -255,7 +255,8 @@ void MemView::onChange(const ChangeEvent& doc) {
 		}
 
 	}
-	updateSeq = doc.seqId;
+	if (doc.seqId.hasValue())
+		updateSeq = doc.seqId;
 	onUpdate();
 }
 
