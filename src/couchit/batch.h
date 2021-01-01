@@ -63,11 +63,11 @@ public:
 	void get(const json::String docId, ReadCallback &&cb);
 
 protected:
-	enum Mode {
-		batch_put,
-		batch_replicate,
-		batch_get,
-		thread_exit
+	enum Mode { //number specifies priority
+		batch_put = 3,
+		batch_replicate = 2,
+		thread_exit = 1,
+		batch_get = 0,
 	};
 
 	class Msg {
@@ -79,9 +79,19 @@ protected:
 		Msg(const json::String &docid, ReadCallback &&cb);
 		Msg():mode(thread_exit) {}
 
+		bool operator<(const Msg &msg) const {
+			return static_cast<int>(mode) < static_cast<int>(msg.mode);
+		}
+
 	};
 
-	class Queue : public ondra_shared::MsgQueue<Msg> {
+	class priority_queue: public std::priority_queue<Msg> {
+	public:
+		using std::priority_queue<Msg>::priority_queue;
+		auto front() const {return top();}
+	};
+
+	class Queue : public ondra_shared::MsgQueue<Msg, priority_queue > {
 	public:
 		std::recursive_mutex &getLock() {return this->lock;}
 	};
