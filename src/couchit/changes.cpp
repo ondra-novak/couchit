@@ -347,7 +347,7 @@ CouchDB::ChangeFeedState::ChangeFeedState(ChangeFeedState && other)
 ,limit (std::move(other.limit  ))
 ,batching(other.batching)
 ,poll_interval(other.poll_interval)
-,connection (std::move(connection ))
+,connection (std::move(other.connection ))
 ,canceled(false)
 ,last_request_time(other.last_request_time)
 {}

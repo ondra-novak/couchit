@@ -314,6 +314,7 @@ protected:
 	std::size_t iotimeout = 120000;
 	Filter filter = Filter("");
 	Value docFilter;
+	Value selectorFilter;
 	Object filterArgs;
 	bool forceIncludeDocs = false;
 	bool forceReversed = false;
