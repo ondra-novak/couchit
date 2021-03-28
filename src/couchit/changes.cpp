@@ -24,9 +24,20 @@ ChangeEvent::ChangeEvent(const Value& allData)
 ,id(allData["id"].getString())
 ,revisions(allData["changes"])
 ,deleted(allData["deleted"].getBool())
+,idle(false)
 ,doc(allData["doc"])
 {
 }
+
+
+ChangeEvent::ChangeEvent(_IdleEvent, const json::Value seqId)
+:Value(nullptr)
+,seqId(seqId)
+,deleted(false)
+,idle(true){
+}
+
+
 
 Changes::Changes(Value jsonResult)
 :Value(jsonResult),pos(0),sz(jsonResult.size())
@@ -174,13 +185,10 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChan
 
 void ChangesDistributor::remove(RegistrationID regid) {
 	std::unique_lock<std::recursive_mutex> _(lock);
-	auto e = observers.end();
-	for (auto b = observers.begin(); b != e; ++b) {
-		if (b->get() == regid) {
-			observers.erase(b);
-			break;
-		}
-	}
+	auto iter = std::remove_if(observers.begin(), observers.end(), [&](const auto &b) {
+		return b.get() == regid;
+	});
+	observers.erase(iter, observers.end());
 
 }
 
@@ -207,30 +215,27 @@ Value ChangesDistributor::getInitialUpdateSeq() const {
 	if (z.defined()) return z; else return "now";
 }
 
-class ChangesDistributor::Distributor {
-public:
 
-	Distributor(ChangesDistributor *_this):_this(_this) {}
-	bool operator()(const ChangeEvent &doc) const {
+void ChangesDistributor::broadcast(const ChangeEvent &doc) {
 
-		std::vector<RegistrationID> toRemove;
-		std::unique_lock<std::recursive_mutex> _(_this->lock);
-		for (auto &&x : _this->observers) {
-			bool r =x->onEvent(doc);
-			if (!r) {
-				RegistrationID reg = x.get();
-				toRemove.push_back(reg);
-			}
+	std::vector<RegistrationID> toRemove;
+	std::unique_lock<std::recursive_mutex> _(lock);
+	for (auto &&x : observers) {
+		bool r = true;
+		try {
+			r =x->onEvent(doc);
+		}  catch (...) {
+			onException();
 		}
-		for (auto &&x: toRemove) {
-			_this->remove(x);
+		if (!r) {
+			RegistrationID reg = x.get();
+			toRemove.push_back(reg);
 		}
-		return true;
-
 	}
-protected:
-	ChangesDistributor *_this;
-};
+	for (auto &&x: toRemove) {
+		remove(x);
+	}
+}
 
 void ChangesDistributor::run() {
 
@@ -240,15 +245,27 @@ void ChangesDistributor::run() {
 		feedState.since = u;
 	}
 
-	Distributor dist(this);
 	while (!feedState.canceled.load()) {
 		try {
 			Changes chg(db.receiveChanges(feedState));
-			while (chg.hasItems() && !feedState.canceled.load()) {
-				try {
-					dist(chg.getNext());
-				} catch (...) {
-					onException();
+			if (feedState.canceled.load()) {
+				break;
+			}else if (chg.empty()) {
+				if (enable_idle) {
+					ChangeEvent ev(ChangeEvent::_IdleEvent::idleEvent, feedState.since);
+					try {
+						broadcast(ev);
+					} catch (...) {
+						onException();
+					}
+				}
+			} else {
+				while (chg.hasItems()) {
+					try {
+						broadcast(chg.getNext());
+					} catch (...) {
+						onException();
+					}
 				}
 			}
 		} catch (...) {
@@ -275,14 +292,13 @@ void ChangesDistributor::sync() {
 
 	auto tm = feedState.timeout;
 	feedState.timeout = 0;
-	Distributor dist(this);
 	while (!feedState.canceled.load()) {
 		try {
 			Changes chg(db.receiveChanges(feedState));
 			if (chg.empty()) break;
 			while (chg.hasItems() && !feedState.canceled.load()) {
 				try {
-					dist(chg.getNext());
+					broadcast(chg.getNext());
 				} catch (...) {
 					onException();
 				}
@@ -303,10 +319,6 @@ void ChangesDistributor::runService() {
 	}));
 }
 
-void ChangesDistributor::runService(std::function<bool()> ) {
-	runService();
-
-}
 
 ChangesDistributor::~ChangesDistributor() {
 	stopService();
@@ -322,13 +334,13 @@ void ChangesDistributor::stopService() {
 	}
 }
 
-ChangesDistributor::ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState)
-	:db(db),feedState(std::move(feedState))
+ChangesDistributor::ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState, bool enable_idle)
+	:db(db),feedState(std::move(feedState)), enable_idle(enable_idle)
 {
 }
 
-ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs)
-	:db(db)
+ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs, bool enable_idle)
+	:db(db), enable_idle(enable_idle)
 {
 	feedState.include_docs = include_docs;
 	feedState.timeout = 50000;

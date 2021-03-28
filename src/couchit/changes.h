@@ -352,8 +352,8 @@ public:
 	typedef const IChangeEventObserver *RegistrationID;
 	constexpr static RegistrationID noreg = nullptr;
 
-	explicit ChangesDistributor(CouchDB &db, bool include_docs = true);
-	ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState);
+	explicit ChangesDistributor(CouchDB &db, bool include_docs = true, bool enable_idle = false);
+	ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState, bool enable_idle = false);
 
 
 	///Add observer as reference
@@ -406,14 +406,8 @@ public:
 	void run();
 
 
-	///Runs as service thread (deprecated)
-	void runService();
 	///Runs as service thread
-	/**
-	 * @param onError function called when exception happen.
-	 * Function must return true to retry, or false to exit thread
-	 */
-	void runService(std::function<bool()> onError);
+	void runService();
 
 	///stops the service thread
 	void stopService();
@@ -436,9 +430,13 @@ protected:
 	std::vector<PObserver> observers;
 	std::unique_ptr<std::thread> thr;
 	bool exit = false;
+	bool enable_idle = false;
 	mutable std::recursive_mutex lock;
 
-	class Distributor;
+	void broadcast(const ChangeEvent &doc);
+
+
+	//class Distributor;
 
 
 };
