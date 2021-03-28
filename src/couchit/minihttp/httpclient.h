@@ -155,7 +155,7 @@ protected:
 	json::Value customHeaders;
 	json::Value responseHeaders;
 	uintptr_t curTimeout;
-	bool keepAlive;
+	bool keepAlive = false;
 	int curStatus;
 	bool headersSent;
 	CancelFunction cancelFunction;
