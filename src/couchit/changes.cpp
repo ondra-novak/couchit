@@ -170,9 +170,15 @@ static void stdLeaveObserver(IChangeEventObserver *) {
 }
 
 ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeEventObserver &observer) {
-	return add(PObserver(&observer, &stdLeaveObserver));
+	return add(PObserver(&observer, &stdLeaveObserver), {});
+}
+ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeEventObserver &observer, const FilterDef &flt) {
+	return add(PObserver(&observer, &stdLeaveObserver), flt);
 }
 ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer) {
+	return add(std::move(observer),{});
+}
+ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer, const FilterDef &flt) {
 	if (observer == nullptr) return nullptr;
 
 	RegistrationID id;
@@ -184,6 +190,9 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer)
 		feedState.timeout = 0;
 		feedState.include_docs = true;
 		feedState.since = since;
+		feedState.conflicts = true;
+		feedState.filter = flt.filterType;
+		feedState.filter_spec = flt.filterParams;
 		Changes chg = db.receiveChanges(feedState);
 		while (!chg.empty()) {
 			for (ChangeEvent ev: chg) {
@@ -216,7 +225,10 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer)
 	return id;
 }
 ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChangeEventObserver> &&observer) {
-	return add(PObserver(observer.release(), &stdDeleteObserver));
+	return add(PObserver(observer.release(), &stdDeleteObserver), {});
+}
+ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChangeEventObserver> &&observer, const FilterDef &flt) {
+	return add(PObserver(observer.release(), &stdDeleteObserver), flt);
 }
 
 
@@ -347,6 +359,7 @@ ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs, bool enab
 	feedState.limit = 1;
 	feedState.descending = true;
 	feedState.timeout = 0;
+	feedState.conflicts = true;
 	db.receiveChanges(feedState);
 	feedState.limit = ~0;
 	feedState.descending = false;

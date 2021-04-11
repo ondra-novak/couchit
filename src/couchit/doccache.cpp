@@ -83,6 +83,7 @@ Value DocCache::get(StrViewA name) {
 }
 
 void DocCache::update(const ChangeEvent &ev) {
+	if (ev.idle) return;
 	Sync _(lock);
 	auto f = dataMap.find(ev.id);
 	if (config.precache || f != dataMap.end()) {

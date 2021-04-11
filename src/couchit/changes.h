@@ -356,6 +356,16 @@ public:
 	explicit ChangesDistributor(CouchDB &db, bool include_docs = true, bool enable_idle = false);
 	ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState, bool enable_idle = false);
 
+	///Defines filter for faster sync
+	/**
+	 * This can improve sync speed, allowing to filter results on the server. However, the filter is applied only during initial sync. Once
+	 * the sync is done, the filtering must be performed inside of event function
+	 */
+	struct FilterDef {
+		CouchDB::Filter filterType = CouchDB::Filter::no_filter;
+		json::Value filterParams = json::undefined;
+		FilterDef() = default;
+	};
 
 	///Add observer as reference
 	/** Using refernece means, that caller keeps ownership. Once the distributor is destroyed, the observer
@@ -364,6 +374,7 @@ public:
 	 * @return registration identification for the function remove()
 	 */
 	RegistrationID add(IChangeEventObserver &observer);
+	RegistrationID add(IChangeEventObserver &observer, const FilterDef &flg);
 	///Add observer using unique pointer with custom deleter
 	/**
 	 * @param observer unique pointer to observer. The function moves the observer with the custom deleter
@@ -371,6 +382,7 @@ public:
 	 * @return registration identification for the function remove()
 	 */
 	RegistrationID add(PObserver &&observer);
+	RegistrationID add(PObserver &&observer, const FilterDef &flt);
 	///Add observer using uniqoe pointer with standard deletion
 	/**
 	* @param observer unique pointer to observer. The function moves the observer to the distributor
@@ -378,6 +390,7 @@ public:
 	* @return registration identification for the function remove()
 	*/
 	RegistrationID add(std::unique_ptr<IChangeEventObserver> &&observer);
+	RegistrationID add(std::unique_ptr<IChangeEventObserver> &&observer, const FilterDef &flt);
 
 	///Removes the observer identified by its registration id
 	/**
@@ -408,7 +421,11 @@ public:
 
 	template<typename Fn>
 	RegistrationID addFn(Fn &&fn) {
-		return add(std::unique_ptr<IChangeEventObserver>(new ChangeObserverFromFn<Fn>(std::forward<Fn>(fn))));
+		return addFn(std::forward<Fn>(fn),json::Value(),{});
+	}
+	template<typename Fn>
+	RegistrationID addFn(Fn &&fn, json::Value since, const FilterDef &flt) {
+		return add(std::unique_ptr<IChangeEventObserver>(new ChangeObserverFromFn<Fn>(std::forward<Fn>(fn),since)), flt);
 	}
 
 	virtual void onException();
