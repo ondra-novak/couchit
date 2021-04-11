@@ -162,9 +162,46 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(IChangeEventObserver 
 	return add(PObserver(&observer, &stdLeaveObserver));
 }
 ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer) {
-	std::unique_lock<std::recursive_mutex> _(lock);
-	RegistrationID id = observer.get();
-	observers.push_back(std::move(observer));
+	if (observer == nullptr) return nullptr;
+
+	RegistrationID id;
+
+	auto since = observer->getLastKnownSeqID();
+	if (since.defined()) {
+		if (since == nullptr) since = "0";
+		CouchDB::ChangeFeedState feedState;
+		feedState.timeout = 0;
+		feedState.include_docs = true;
+		feedState.since = since;
+		Changes chg = db.receiveChanges(feedState);
+		while (!chg.empty()) {
+			for (ChangeEvent ev: chg) {
+				if (!observer->onEvent(ev)) {
+					return nullptr;
+				}
+			}
+			chg = db.receiveChanges(feedState);
+		}
+		std::unique_lock<std::recursive_mutex> _(lock);
+		chg = db.receiveChanges(feedState);
+		while (!chg.empty()) {
+			for (ChangeEvent ev: chg) {
+				if (!observer->onEvent(ev)) {
+					return nullptr;
+				}
+				filterOut[json::Value({ev.id, ev.revisions})].push_back(observer.get());
+			}
+			chg = db.receiveChanges(feedState);
+		}
+
+		id = observer.get();
+		observers.push_back(std::move(observer));
+	} else {
+		std::unique_lock<std::recursive_mutex> _(lock);
+		id = observer.get();
+		observers.push_back(std::move(observer));
+	}
+
 	return id;
 }
 ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChangeEventObserver> &&observer) {
@@ -185,28 +222,6 @@ void ChangesDistributor::remove(RegistrationID regid) {
 }
 
 
-Value ChangesDistributor::getInitialUpdateSeq() const {
-	Value z;
-
-	std::unique_lock<std::recursive_mutex> _(lock);
-	for (auto &&x: observers) {
-		Value a = x->getLastKnownSeqID();
-		if (a.defined()) {
-			if (a.isNull()) return "0";
-			if (z.defined()) {
-				SeqNumber seq_cur(z);
-				SeqNumber seq_now(a);
-				if (seq_cur > seq_now) {
-					z = a;
-				}
-			} else {
-				z = a;
-			}
-		}
-	}
-	if (z.defined()) return z; else return "now";
-}
-
 class ChangesDistributor::Distributor {
 public:
 
@@ -215,11 +230,30 @@ public:
 
 		std::vector<RegistrationID> toRemove;
 		std::unique_lock<std::recursive_mutex> _(_this->lock);
-		for (auto &&x : _this->observers) {
-			bool r =x->onEvent(doc);
-			if (!r) {
-				RegistrationID reg = x.get();
-				toRemove.push_back(reg);
+
+
+		if (_this->filterOut.empty()) {
+
+			for (auto &&x : _this->observers) {
+				bool r =x->onEvent(doc);
+				if (!r) {
+					RegistrationID reg = x.get();
+					toRemove.push_back(reg);
+				}
+			}
+		} else {
+			std::vector<const IChangeEventObserver *> empty, *flt;
+			auto iter = _this->filterOut.find(json::Value({doc.id, doc.revisions}));
+			if (iter != _this->filterOut.end()) flt = &iter->second;
+			else flt = &empty;
+			for (auto &&x : _this->observers) {
+				if (std::find(flt->begin(), flt->end(), x.get()) == flt->end()) {
+					bool r =x->onEvent(doc);
+					if (!r) {
+						RegistrationID reg = x.get();
+						toRemove.push_back(reg);
+					}
+				}
 			}
 		}
 		for (auto &&x: toRemove) {
@@ -234,16 +268,11 @@ protected:
 
 void ChangesDistributor::run() {
 
-
-	if (!feedState.since.defined()) {
-		Value u = getInitialUpdateSeq();
-		feedState.since = u;
-	}
-
 	Distributor dist(this);
 	while (!feedState.canceled.load()) {
 		try {
 			Changes chg(db.receiveChanges(feedState));
+			std::lock_guard _(lock);
 			while (chg.hasItems() && !feedState.canceled.load()) {
 				try {
 					dist(chg.getNext());
@@ -251,6 +280,7 @@ void ChangesDistributor::run() {
 					onException();
 				}
 			}
+			filterOut.clear();
 		} catch (...) {
 			onException();
 			std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -267,32 +297,7 @@ void ChangesDistributor::onException() {
 }
 
 void ChangesDistributor::sync() {
-
-	if (!feedState.since.defined()) {
-		Value u = getInitialUpdateSeq();
-		feedState.since = u;
-	}
-
-	auto tm = feedState.timeout;
-	feedState.timeout = 0;
-	Distributor dist(this);
-	while (!feedState.canceled.load()) {
-		try {
-			Changes chg(db.receiveChanges(feedState));
-			if (chg.empty()) break;
-			while (chg.hasItems() && !feedState.canceled.load()) {
-				try {
-					dist(chg.getNext());
-				} catch (...) {
-					onException();
-				}
-			}
-		} catch (...) {
-			onException();
-			std::this_thread::sleep_for(std::chrono::seconds(1));
-		}
-	}
-	feedState.timeout = tm;
+	//does nothing, because sync is called during connection
 }
 
 
@@ -325,13 +330,21 @@ void ChangesDistributor::stopService() {
 ChangesDistributor::ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState)
 	:db(db),feedState(std::move(feedState))
 {
+
 }
 
 ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs)
 	:db(db)
 {
+	feedState.limit = 1;
+	feedState.descending = true;
+	feedState.timeout = 0;
+	db.receiveChanges(feedState);
+	feedState.limit = ~0;
+	feedState.descending = false;
 	feedState.include_docs = include_docs;
 	feedState.timeout = 50000;
+
 }
 
 CouchDB::ChangeFeedState::ChangeFeedState(ChangeFeedState && other)

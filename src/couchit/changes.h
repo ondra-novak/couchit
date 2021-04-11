@@ -11,6 +11,7 @@
 #include <couchit/changeevent.h>
 #include  <memory>
 #include  <mutex>
+#include <unordered_map>
 
 
 #include "minihttp/cancelFunction.h"
@@ -385,15 +386,6 @@ public:
 	 */
 	void remove(RegistrationID reg_id);
 
-	///Retrieves the initial updateSeq calculated using all observers.
-	/**
-	 * @return updateSeq.
-	 *
-	 * @note return value is primarily usefull for the function since() because it can eventually return
-	 * "0" which means to start over, or "now" which means start from here.
-	 */
-	Value getInitialUpdateSeq() const;
-
 	///Synchronizes distributor with current database state
 	/** Function must be called before the service is installed. The function
 	 * blocks execution until the distribution is synchronized.
@@ -434,11 +426,17 @@ protected:
 	CouchDB &db;
 	CouchDB::ChangeFeedState feedState;
 	std::vector<PObserver> observers;
+
+	/*During connecting new handler, extra events can be read, which can reappear after connecion is established. This map filters out events
+	 * for particular observers (because they already saw it)
+	 */
+	std::unordered_map<json::Value, std::vector<const IChangeEventObserver *> > filterOut;
 	std::unique_ptr<std::thread> thr;
 	bool exit = false;
 	mutable std::recursive_mutex lock;
 
 	class Distributor;
+
 
 
 };
