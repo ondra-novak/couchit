@@ -24,9 +24,20 @@ ChangeEvent::ChangeEvent(const Value& allData)
 ,id(allData["id"].getString())
 ,revisions(allData["changes"])
 ,deleted(allData["deleted"].getBool())
+,idle(false)
 ,doc(allData["doc"])
 {
 }
+
+
+ChangeEvent::ChangeEvent(_IdleEvent, const json::Value seqId)
+:Value(nullptr)
+,seqId(seqId)
+,deleted(false)
+,idle(true){
+}
+
+
 
 Changes::Changes(Value jsonResult)
 :Value(jsonResult),pos(0),sz(jsonResult.size())
@@ -211,73 +222,74 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(std::unique_ptr<IChan
 
 void ChangesDistributor::remove(RegistrationID regid) {
 	std::unique_lock<std::recursive_mutex> _(lock);
-	auto e = observers.end();
-	for (auto b = observers.begin(); b != e; ++b) {
-		if (b->get() == regid) {
-			observers.erase(b);
-			break;
-		}
-	}
+	auto iter = std::remove_if(observers.begin(), observers.end(), [&](const auto &b) {
+		return b.get() == regid;
+	});
+	observers.erase(iter, observers.end());
 
 }
 
 
-class ChangesDistributor::Distributor {
-public:
 
-	Distributor(ChangesDistributor *_this):_this(_this) {}
-	bool operator()(const ChangeEvent &doc) const {
+void ChangesDistributor::broadcast(const ChangeEvent &doc) {
 
-		std::vector<RegistrationID> toRemove;
-		std::unique_lock<std::recursive_mutex> _(_this->lock);
+	std::vector<RegistrationID> toRemove;
+	std::unique_lock<std::recursive_mutex> _(lock);
 
 
-		if (_this->filterOut.empty()) {
+	if (filterOut.empty()) {
 
-			for (auto &&x : _this->observers) {
+		for (auto &&x : observers) {
+			bool r =x->onEvent(doc);
+			if (!r) {
+				RegistrationID reg = x.get();
+				toRemove.push_back(reg);
+			}
+		}
+	} else {
+		std::vector<const IChangeEventObserver *> empty, *flt;
+		auto iter = filterOut.find(json::Value({doc.id, doc.revisions}));
+		if (iter != filterOut.end()) flt = &iter->second;
+		else flt = &empty;
+		for (auto &&x : observers) {
+			if (std::find(flt->begin(), flt->end(), x.get()) == flt->end()) {
 				bool r =x->onEvent(doc);
 				if (!r) {
 					RegistrationID reg = x.get();
 					toRemove.push_back(reg);
 				}
 			}
-		} else {
-			std::vector<const IChangeEventObserver *> empty, *flt;
-			auto iter = _this->filterOut.find(json::Value({doc.id, doc.revisions}));
-			if (iter != _this->filterOut.end()) flt = &iter->second;
-			else flt = &empty;
-			for (auto &&x : _this->observers) {
-				if (std::find(flt->begin(), flt->end(), x.get()) == flt->end()) {
-					bool r =x->onEvent(doc);
-					if (!r) {
-						RegistrationID reg = x.get();
-						toRemove.push_back(reg);
-					}
-				}
-			}
 		}
-		for (auto &&x: toRemove) {
-			_this->remove(x);
-		}
-		return true;
-
 	}
-protected:
-	ChangesDistributor *_this;
-};
+	for (auto &&x: toRemove) {
+		remove(x);
+	}
+}
 
 void ChangesDistributor::run() {
 
-	Distributor dist(this);
 	while (!feedState.canceled.load()) {
 		try {
 			Changes chg(db.receiveChanges(feedState));
 			std::lock_guard _(lock);
-			while (chg.hasItems() && !feedState.canceled.load()) {
-				try {
-					dist(chg.getNext());
-				} catch (...) {
-					onException();
+			if (feedState.canceled.load()) {
+				break;
+			}else if (chg.empty()) {
+				if (enable_idle) {
+					ChangeEvent ev(ChangeEvent::_IdleEvent::idleEvent, feedState.since);
+					try {
+						broadcast(ev);
+					} catch (...) {
+						onException();
+					}
+				}
+			} else {
+				while (chg.hasItems()) {
+					try {
+						broadcast(chg.getNext());
+					} catch (...) {
+						onException();
+					}
 				}
 			}
 			filterOut.clear();
@@ -308,10 +320,6 @@ void ChangesDistributor::runService() {
 	}));
 }
 
-void ChangesDistributor::runService(std::function<bool()> ) {
-	runService();
-
-}
 
 ChangesDistributor::~ChangesDistributor() {
 	stopService();
@@ -327,14 +335,14 @@ void ChangesDistributor::stopService() {
 	}
 }
 
-ChangesDistributor::ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState)
-	:db(db),feedState(std::move(feedState))
+ChangesDistributor::ChangesDistributor(CouchDB &db, CouchDB::ChangeFeedState &&feedState, bool enable_idle)
+	:db(db),feedState(std::move(feedState)), enable_idle(enable_idle)
 {
 
 }
 
-ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs)
-	:db(db)
+ChangesDistributor::ChangesDistributor(CouchDB &db, bool include_docs, bool enable_idle)
+	:db(db), enable_idle(enable_idle)
 {
 	feedState.limit = 1;
 	feedState.descending = true;

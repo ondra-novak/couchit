@@ -37,7 +37,6 @@ public:
 	 * already known recods
 	 * */
 	virtual json::Value getLastKnownSeqID() const = 0;
-
 };
 
 
