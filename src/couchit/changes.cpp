@@ -195,23 +195,28 @@ ChangesDistributor::RegistrationID ChangesDistributor::add(PObserver &&observer,
 		feedState.filter_spec = flt.filterParams;
 		Changes chg = db.receiveChanges(feedState);
 		while (!chg.empty()) {
+			//read next changes before processing these onces
+			//because processing can generate additional changes
+			Changes ch2 = db.receiveChanges(feedState);
 			for (ChangeEvent ev: chg) {
 				if (!observer->onEvent(ev)) {
 					return nullptr;
 				}
 			}
-			chg = db.receiveChanges(feedState);
+			chg = ch2;
+
 		}
 		std::unique_lock<std::recursive_mutex> _(lock);
 		chg = db.receiveChanges(feedState);
 		while (!chg.empty()) {
+			Changes ch2 = db.receiveChanges(feedState);
 			for (ChangeEvent ev: chg) {
 				if (!observer->onEvent(ev)) {
 					return nullptr;
 				}
 				filterOut[json::Value({ev.id, ev.revisions})].push_back(observer.get());
 			}
-			chg = db.receiveChanges(feedState);
+			chg = ch2;
 		}
 
 		id = observer.get();
