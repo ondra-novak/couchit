@@ -25,11 +25,11 @@ public:
 protected:
 
 	Fn input;
-	std::vector<char> linebuff;
+	std::string linebuff;
 
 
-	StrViewA readLine();
-	StrViewA trim(const StrViewA &str);
+	std::string_view readLine();
+	std::string_view trim(const std::string_view &str);
 
 
 };
@@ -40,18 +40,18 @@ inline json::Value couchit::HeaderRead<Fn>::parseHeaders() {
 	json::Object collect;
 	bool stline = false;
 	do {
-		StrViewA line = trim(readLine());
+		std::string_view line = trim(readLine());
 		if (line.empty()) {
 			if (stline) break;
 			else continue;
 		}
 
-		std::size_t pos = line.indexOf(":",0);
+		std::size_t pos = line.find(':');
 		if (pos != line.npos) {
-			StrViewA field = line.substr(0,pos);
-			StrViewA value = line.substr(pos+1);
-			StrViewA cfield = trim(field);
-			StrViewA cvalue = trim(value);
+			std::string_view field = line.substr(0,pos);
+			std::string_view value = line.substr(pos+1);
+			std::string_view cfield = trim(field);
+			std::string_view cvalue = trim(value);
 			collect.set(cfield,cvalue);
 		} else if (line.substr(0,6) == "HTTP/1" && !stline) {
 				stline = true;
@@ -71,9 +71,9 @@ inline json::Value couchit::HeaderRead<Fn>::parseHeaders() {
 					else
 						return v;
 				});
-				collect("_version",starr[0]);
-				collect("_status",starr[1]);
-				collect("_message",starr[2]);
+				collect.set("_version",starr[0]);
+				collect.set("_status",starr[1]);
+				collect.set("_message",starr[2]);
 		} else {
 			return Value();
 		}
@@ -83,24 +83,24 @@ inline json::Value couchit::HeaderRead<Fn>::parseHeaders() {
 }
 
 template<typename Fn>
-inline StrViewA HeaderRead<Fn>::readLine() {
+inline std::string_view HeaderRead<Fn>::readLine() {
 	linebuff.clear();
 	int i = input();
 	while (i != -1) {
 		linebuff.push_back((char)i);
-		StrViewA l(linebuff);
-		if (StrViewA(l.substr(l.length-2,2)) == StrViewA("\r\n"))
-			return l.substr(0,l.length-2);
+		std::string_view l(linebuff);
+		if (l.substr(l.length()-2,2) == "\r\n")
+			return l.substr(0,l.length()-2);
 		i = input();
 	}
-	return StrViewA("EOF");
+	return std::string_view("EOF");
 }
 
 template<typename Fn>
-inline StrViewA HeaderRead<Fn>::trim(const StrViewA &str) {
+inline std::string_view HeaderRead<Fn>::trim(const std::string_view &str) {
 	std::size_t p1 = 0;
-	while (p1<str.length && isspace(str[p1])) p1++;
-	std::size_t p2 = str.length;
+	while (p1<str.length() && isspace(str[p1])) p1++;
+	std::size_t p2 = str.length();
 	while (p2>0 && isspace(str[p2-1])) p2--;
 	return str.substr(p1,p2-p1);
 

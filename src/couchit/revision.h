@@ -23,7 +23,7 @@ public:
 	Revision(const Value &rev);
 
 	std::size_t getRevId() const {return revId;}
-	StrViewA getTag() const {return StrViewA(revTag).substr(revTagOffs);}
+	std::string_view getTag() const {return std::string_view(revTag).substr(revTagOffs);}
 
 	String toString() const;
 

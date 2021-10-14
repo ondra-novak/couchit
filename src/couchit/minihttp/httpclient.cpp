@@ -20,12 +20,12 @@ HttpClient::HttpClient()
 {
 }
 
-HttpClient::HttpClient(StrViewA userAgent)
+HttpClient::HttpClient(std::string_view userAgent)
 	:userAgent(userAgent),curTimeout(70000)
 {
 }
 
-HttpClient& HttpClient::open(StrViewA url, StrViewA method, bool keepAlive) {
+HttpClient& HttpClient::open(std::string_view url, std::string_view method, bool keepAlive) {
 	close();
 	this->keepAlive = keepAlive;
 
@@ -33,7 +33,7 @@ HttpClient& HttpClient::open(StrViewA url, StrViewA method, bool keepAlive) {
 	json::String newTarget;
 
 	if (url.substr(0,7) == "http://") {
-		StrViewA u1 = url.substr(7);
+		std::string_view u1 = url.substr(7);
 		newTarget = crackURL(u1);
 	} else {
 		newTarget = custromPotocol(url);
@@ -115,8 +115,8 @@ int HttpClient::send() {
 	return readResponse();
 }
 
-int HttpClient::send(const StrViewA& body) {
-	return send(body.data,body.length);
+int HttpClient::send(const std::string_view& body) {
+	return send(body.data(),body.length());
 }
 
 int HttpClient::send(const void* body, std::size_t body_length) {
@@ -186,35 +186,35 @@ void HttpClient::initRequest(bool haveBody, std::size_t contentLength) {
 	}
 
 	json::Object hdr(customHeaders);
-	hdr("_method",reqMethod)
-	   ("_uri",curPath)
-	   ("_version","HTTP/1.1")
-	   ("Host",curTarget)
-	   ("User-Agent",userAgent);
+	hdr.set("_method",reqMethod);
+	hdr.set("_uri",curPath);
+	hdr.set("_version","HTTP/1.1");
+	hdr.set("Host",curTarget);
+	hdr.set("User-Agent",userAgent);
 
 	if (haveBody) {
 		if (contentLength == std::size_t(-1)) {
-			hdr("Transfer-Encoding","chunked");
+			hdr.set("Transfer-Encoding","chunked");
 		} else {
-			hdr("Content-Length",contentLength);
+			hdr.set("Content-Length",contentLength);
 		}
 	}
 
 	if (!keepAlive) {
-		hdr("Connection","close");
+		hdr.set("Connection","close");
 	}
 
 	if (!auth.empty()) {
 		String authstr((auth.length()+2)*4/3+7,[&](char *c) {
 			char *s = c;
-			StrViewA basic("Basic ");
+			std::string_view basic("Basic ");
 			for (auto x: basic) *c++ = x;
-			json::base64->encodeBinaryValue(BinaryView(auth.str()),[&](StrViewA z){
+			json::base64->encodeBinaryValue(map_str2bin(auth.str()),[&](std::string_view z){
 				for (auto x: z) *c++=x;
 			});
 			return c - s;
 		});
-		hdr("Authorization", authstr);
+		hdr.set("Authorization", authstr);
 	}
 
 	OutputStream stream(conn);
@@ -250,7 +250,7 @@ int HttpClient::readResponse() {
 			auto x =  stream->read(nonblock);
 			auto rest = x.substr(limit);
 			x = x.substr(0,limit);
-			limit = limit-x.length;
+			limit = limit-x.length();
 			stream->putBack(rest);
 
 			return x;
@@ -287,7 +287,7 @@ int HttpClient::readResponse() {
 	responseHeaders = v;
 
 	curStatus = v["_status"].getUInt();
-	StrViewA te = v["Transfer-Encoding"].getString();
+	std::string_view te = v["Transfer-Encoding"].getString();
 	if (te == "chunked") {
 		responseData = new ChunkedInputStream(InputStream(conn));
 	} else {
@@ -324,13 +324,13 @@ void HttpClient::connectTarget() {
 	conn = NetworkConnection::connect(curTarget,80);
 }
 
-json::String HttpClient::crackURL(StrViewA urlWithoutProtocol) {
+json::String HttpClient::crackURL(std::string_view urlWithoutProtocol) {
 	json::String newTarget;
-	std::size_t p1 = urlWithoutProtocol.indexOf("/",0);
+	std::size_t p1 = urlWithoutProtocol.find('/');
 	if (p1 != urlWithoutProtocol.npos) {
-		StrViewA adom = urlWithoutProtocol.substr(0,p1);
-		StrViewA path = urlWithoutProtocol.substr(p1);
-		std::size_t p2 = adom.indexOf("@",0);
+		std::string_view adom = urlWithoutProtocol.substr(0,p1);
+		std::string_view path = urlWithoutProtocol.substr(p1);
+		std::size_t p2 = adom.find('@');
 		if (p2 != adom.npos) {
 			auth = adom.substr(0,p2);
 			newTarget = adom.substr(p2+1);
@@ -372,7 +372,7 @@ json::String HttpClient::getStatusMessage() {
 	return String(responseHeaders["_message"]);
 }
 
-json::String HttpClient::custromPotocol(StrViewA) {
+json::String HttpClient::custromPotocol(std::string_view) {
 	return json::String();
 }
 

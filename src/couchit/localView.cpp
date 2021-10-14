@@ -188,12 +188,12 @@ Value LocalView::getDocument(const String &docId) const {
 }
 
 
-Value LocalView::reduce(const RowsWithKeys &r) const {
-	return linkedView->reduce(r);
+Value LocalView::reduce(RowWithKey_Iterator begin, RowWithKey_Iterator end) const {
+	return linkedView->reduce(begin,end);
 }
 
-Value LocalView::rereduce(const ReducedRows &r) const {
-	return linkedView->rereduce(r);
+Value LocalView::rereduce(ReducedRow_Iterator begin, ReducedRow_Iterator end) const {
+	return linkedView->rereduce(begin,end);
 }
 
 void LocalView::addDocLk(const String &docId, const Value &doc, const Value& key, const Value& value) {
@@ -231,10 +231,11 @@ Value LocalView::searchKeys(const Value &keys, std::size_t groupLevel) const {
 				group.push_back(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
 			}
 		}
-		return Object("rows",Array().add(
-					Object("key",nullptr)
-			      	  ("value",reduce(StringView<RowWithKey>(group.data(),group.size())))
-				));
+		return Object{{"rows",Value(json::array,{
+					Object{
+						{"key",nullptr},
+						{"value",reduce(&group[0],&group[group.size()])}}})
+		}};
 	} else if (groupLevel != ((std::size_t)-1)) {
 		Array rows;
 		for (auto &&key : keys) {
@@ -243,25 +244,26 @@ Value LocalView::searchKeys(const Value &keys, std::size_t groupLevel) const {
 
 				group.push_back(RowWithKey(kv.first.docId, kv.first.key,kv.second.value));
 			}
-			rows.add(Object("key",key)
-						("value",reduce(StringView<RowWithKey>(group.data(),group.size()))));
+			rows.push_back(Object{
+				{"key",key},
+				{"value",reduce(group.data(),group.data()+group.size())}
+			});
 			group.clear();
 		}
-		return Object("rows",rows);
+		return Object{{"rows",rows}};
 	} else {
 		Array rows;
 		for (auto &&key : keys) {
 			for (auto &&kv : iterRange(keyToValueMap.lower_bound(KeyAndDocId(key, Query::minString)),
 						   keyToValueMap.upper_bound(KeyAndDocId(key, Query::maxString)))) {
 
-				rows.add(Object("key",kv.first.key)
-							("value",kv.second.value)
-							("id",kv.first.docId)
-							("doc",kv.second.doc));
+				rows.push_back(Object{{"key",kv.first.key},
+					{"value",kv.second.value},
+					{"id",kv.first.docId},
+					{"doc",kv.second.doc}});
 			}
 		}
-		return Object("rows",rows)
-		 	 ("total_rows",keyToValueMap.size());
+		return Object({{"rows",rows},{"total_rows",keyToValueMap.size()}});
 	}
 
 }
@@ -301,7 +303,7 @@ static Value sliceKey(const Value &key, std::size_t groupLevel) {
 		if (key.size() <= groupLevel) return key;
 		Array out;
 		for (std::size_t i = 0; i < groupLevel; i++)
-			out.add(key[i]);
+			out.push_back(key[i]);
 		return out;
 	} else {
 		return key;
@@ -357,17 +359,17 @@ Value LocalView::searchRange2(R &&range, std::size_t groupLevel, std::size_t off
 			//if reached offset, start to add items to the result
 			if (p >= offset) {
 				//add item
-				rows.add(Object("id",kv.first.docId)
-					    ("key",kv.first.key)
-						("value",kv.second.value)
-						("doc",kv.second.doc));
+				rows.push_back(Object{{"id",kv.first.docId},
+					{"key",kv.first.key},
+					{"value",kv.second.value},
+					{"doc",kv.second.doc}});
 			}
 			//count processed rows
 			++p;
 		}
 		//finished - generate result
-		return Object("rows",rows)
-				("total_rows",keyToValueMap.size());
+		return Object{{"rows",rows},
+			{"total_rows",keyToValueMap.size()}};
 	} else {
 		//grouping active, prepare empty group
 		std::vector<RowWithKey> group;
@@ -384,8 +386,8 @@ Value LocalView::searchRange2(R &&range, std::size_t groupLevel, std::size_t off
 					//skip if offset is not reached
 					if (p >= offset) {
 						//add row after running reduce
-						rows.push_back(Object("key",grKey)
-								("value",reduce(StringView<RowWithKey>(group.data(),group.size()))));
+						rows.push_back(Object{{"key",grKey},
+								{"value",reduce(group.data(),group.data()+group.size())}});
 					}
 					//clear the group
 					group.clear();
@@ -401,11 +403,11 @@ Value LocalView::searchRange2(R &&range, std::size_t groupLevel, std::size_t off
 		//finalize last group
 		//when we are in limit, when group is not empty and when offset was reached
 		if (p < totalLimit && !group.empty() && p >= offset) {
-			rows.add(Object("key",grKey)
-					("value",reduce(StringView<RowWithKey>(group.data(),group.size()))));
+			rows.push_back(Object{{"key",grKey},
+						{"value",reduce(group.data(),group.data()+group.size())}});
 		}
 		//finalise result
-		return Object("rows",rows);
+		return Object{{"rows",rows}};
 	}
 }
 
@@ -423,8 +425,8 @@ bool excludeEnd) const {
 	KeyAndDocId start(startKey,startDoc);
 	KeyAndDocId end(endKey,endDoc);
 	if (start.compare(end) > 0) {
-		return Object("rows",json::array)
-				("total_rows",keyToValueMap.size());
+		return Object{{"rows",json::array},
+			{"total_rows",keyToValueMap.size()}};
 	}
 
 	if (descending) {

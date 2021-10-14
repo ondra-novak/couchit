@@ -42,7 +42,7 @@ class DefaultUIDGen: public IIDGen {
 public:
 	typedef std::random_device Rand;
 
-	virtual StrViewA operator()(Buffer &buffer, const StrViewA &prefix) override;
+	virtual std::string_view operator()(Buffer &buffer, const std::string_view &prefix) override;
 
 	///Generates UID statically
 	/**
@@ -55,14 +55,14 @@ public:
 	 *   match requested length. It requires to have randomGen not null
 	 * @return result is string reference to the buffer
 	 */
-	static StrViewA generateUID(Buffer &buffer,
-			StrViewA prefix,
+	static std::string_view generateUID(Buffer &buffer,
+			std::string_view prefix,
 			std::size_t timeparam, std::size_t counterparam,
 			Rand *randomGen, std::size_t totalCount=20);
 
 	static DefaultUIDGen &getInstance();
 
-	virtual String operator()(const StrViewA &prefix) override;
+	virtual String operator()(const std::string_view &prefix) override;
 	DefaultUIDGen();
 
 protected:

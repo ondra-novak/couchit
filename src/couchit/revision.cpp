@@ -24,7 +24,7 @@ Revision::Revision(std::size_t revId, const String &revTag)
 
 Revision::Revision(const String &rev) {
 	std::size_t sep = rev.indexOf("-");
-	if (sep == StrViewA::npos) {
+	if (sep == std::string_view::npos) {
 		revId = 0;
 		revTag = rev;
 		revTagOffs = 0;
@@ -44,7 +44,7 @@ String Revision::toString() const {
 		char buff[50];
 		BufferOutput out(buff);
 		auto size = unsignedToString<BufferOutput &>(out,revId,50,10);
-		return String( {StrViewA(buff,size),"-",getTag()} );
+		return String( {std::string_view(buff,size),"-",getTag()} );
 	}
 }
 

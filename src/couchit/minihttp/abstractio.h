@@ -67,7 +67,7 @@ public:
 	 * possible (this value is also returned when the buffer is not empty)
 	 */
 	static bool isEof(const json::BinaryView &buffer) {
-		return buffer.data == eofConst.data;
+		return buffer.data() == eofConst.data();
 	}
 
 	///read some data from the stream
@@ -195,8 +195,8 @@ public:
 			json::BinaryView c = doWrite(b, nonblock);
 			if (!c.empty()) {
 				if (c != b) {
-					std::memmove(availBuff.buff, c.data, c.length);
-					wrpos = c.length;
+					std::memmove(availBuff.buff, c.data(), c.length());
+					wrpos = c.length();
 				}
 			} else {
 				wrpos = 0;
@@ -239,11 +239,11 @@ public:
 	 * If there is error during the writting, the exception is thrown
 	 */
 	json::BinaryView write(const json::BinaryView &data, bool nonblock = false) {
-		Buffer b = getBuffer(data.length, nonblock);
-		if (b.size >= data.length) {
+		Buffer b = getBuffer(data.length(), nonblock);
+		if (b.size >= data.length()) {
 
-			std::size_t towr = std::min(b.size, data.length);
-			std::memmove(b.buff,data.data, towr);
+			std::size_t towr = std::min(b.size, data.length());
+			std::memmove(b.buff,data.data(), towr);
 			commit(towr);
 			return data.substr(towr);
 		} else {

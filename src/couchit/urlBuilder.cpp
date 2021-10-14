@@ -21,7 +21,7 @@ static std::vector<V> &operator+=(std::vector<V> &v, const X &x) {
 	return v;
 }
 
-void couchit::UrlBuilder::init(StrViewA basicUrl, StrViewA dbname, StrViewA resourcePath) {
+void couchit::UrlBuilder::init(std::string_view basicUrl, std::string_view dbname, std::string_view resourcePath) {
 	buffer.clear();
 	if (resourcePath.empty()) {
 		buffer += basicUrl;
@@ -46,21 +46,21 @@ public:
 	void operator()(char c) {buffer.push_back(c);}
 };
 }
-UrlBuilder &couchit::UrlBuilder::add(StrViewA path) {
+UrlBuilder &couchit::UrlBuilder::add(std::string_view path) {
 	buffer.push_back(curSep);
 	UrlEncoder enc;
 	enc(json::fromString(path), PutToBuffer(buffer));
 	return *this;
 }
 
-UrlBuilder &couchit::UrlBuilder::add(StrViewA key, StrViewA value) {
+UrlBuilder &couchit::UrlBuilder::add(std::string_view key, std::string_view value) {
 	addKey(key);
 	UrlEncoder enc;
 	enc(json::fromString(value), PutToBuffer(buffer));
 	return *this;
 }
 
-UrlBuilder &couchit::UrlBuilder::addJson(StrViewA key, Value value) {
+UrlBuilder &couchit::UrlBuilder::addJson(std::string_view key, Value value) {
 	if (!value.defined()) return *this;
 	addKey(key);
 	UrlEncoder enc;
@@ -74,13 +74,13 @@ void UrlBuilder::init() {
 
 }
 
-UrlBuilder& UrlBuilder::add(StrViewA key, std::size_t value) {
+UrlBuilder& UrlBuilder::add(std::string_view key, std::size_t value) {
 	addKey(key);
 	unsignedToString( PutToBuffer(buffer),value,21,10);
 	return *this;
 }
 
-void UrlBuilder::addKey(const StrViewA& key) {
+void UrlBuilder::addKey(const std::string_view& key) {
 	if (curSep == '/') curSep = '?'; else curSep = '&';
 	UrlEncoder enc;
 	buffer.push_back(curSep);

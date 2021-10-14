@@ -26,7 +26,7 @@ inline unsigned int getWideFromUtf8(Fn &fn) {
 }
 
 
-CompareResult compareStringsUnicode(StrViewA str1, StrViewA str2) {
+CompareResult compareStringsUnicode(std::string_view str1, std::string_view str2) {
 	auto iter1 = json::fromString(str1);
 	auto iter2 = json::fromString(str2);
 

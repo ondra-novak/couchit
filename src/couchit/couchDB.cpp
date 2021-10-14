@@ -41,7 +41,7 @@ namespace couchit {
 
 
 
-StrViewA CouchDB::fldTimestamp("~timestamp");
+std::string_view CouchDB::fldTimestamp("~timestamp");
 std::size_t CouchDB::maxSerializedKeysSizeForGETRequest = 1024;
 
 
@@ -56,8 +56,8 @@ CouchDB::CouchDB(const Config& cfg)
 
 {
 	if (!cfg.authInfo.username.empty()) {
-		authObj = Object("name",cfg.authInfo.username)
-						("password",cfg.authInfo.password);
+		authObj = Object{{"name",cfg.authInfo.username},
+			{"password",cfg.authInfo.password}};
 	}
 }
 
@@ -173,7 +173,7 @@ static std::string generateNodeID() {
 	throw std::runtime_error("Unable to generate node_id");
 }
 
-Value CouchDB::getLocal(const StrViewA &localId, std::size_t flags) {
+Value CouchDB::getLocal(const std::string_view &localId, std::size_t flags) {
 	if (flags & flgNodeLocal) {
 		if (cfg.node_id.empty()) {
 			static std::string localId =generateNodeID();
@@ -181,7 +181,7 @@ Value CouchDB::getLocal(const StrViewA &localId, std::size_t flags) {
 		}
 		std::string id = cfg.node_id;
 		id.push_back(':');
-		id.append(localId.data, localId.length);
+		id.append(localId);
 		return getLocal(id, flags & ~flgNodeLocal);
 	}
 	PConnection conn = getConnection("_local");
@@ -190,27 +190,27 @@ Value CouchDB::getLocal(const StrViewA &localId, std::size_t flags) {
 		return requestGET(conn,nullptr, flags & (flgDisableCache|flgRefreshCache));
 	} catch (const RequestError &e) {
 		if (e.getCode() == 404 && (flags & flgCreateNew)) {
-			return Object("_id",String({"_local/",localId}));
+			return Object{{"_id",String({"_local/",localId})}};
 		}
 		else throw;
 	}
 }
 
-StrViewA CouchDB::lkGenUID() const {
-	return uidGen(uidBuffer,StrViewA());
+std::string_view CouchDB::lkGenUID() const {
+	return uidGen(uidBuffer,std::string_view());
 }
 
-StrViewA CouchDB::lkGenUID(StrViewA prefix) const {
+std::string_view CouchDB::lkGenUID(std::string_view prefix) const {
 	return uidGen(uidBuffer,prefix);
 }
 
-Value CouchDB::get(const StrViewA &docId, const StrViewA & revId, std::size_t flags) {
+Value CouchDB::get(const std::string_view &docId, const std::string_view & revId, std::size_t flags) {
 	if (flags & flgNodeLocal) {
 		if (cfg.node_id.empty()) {
 			static std::string localId =generateNodeID();
 			cfg.node_id = localId;
 		}
-		std::string id = docId;
+		std::string id ( docId);
 		id.push_back(':');
 		id.append(cfg.node_id);
 		return get(id, flags & ~flgNodeLocal);
@@ -234,7 +234,7 @@ Value CouchDB::get(const StrViewA &docId, const StrViewA & revId, std::size_t fl
 	} catch (const RequestError &e) {
 		if (e.getCode() == 404) {
 			if (flags & flgCreateNew) {
-				return Object("_id",docId);
+				return Object{{"_id",docId}};
 			} else if (flags & flgNullIfMissing) {
 				return nullptr;
 			}
@@ -243,21 +243,21 @@ Value CouchDB::get(const StrViewA &docId, const StrViewA & revId, std::size_t fl
 	}
 }
 
-Value CouchDB::get(const StrViewA &docId, std::size_t flags) {
-	return get(docId, StrViewA(), flags);
+Value CouchDB::get(const std::string_view &docId, std::size_t flags) {
+	return get(docId, std::string_view(), flags);
 }
 
 
-UpdateResult CouchDB::execUpdateProc(StrViewA updateHandlerPath, StrViewA documentId,
+UpdateResult CouchDB::execUpdateProc(std::string_view updateHandlerPath, std::string_view documentId,
 		Value arguments) {
 	PConnection conn = getConnection(updateHandlerPath);
 	conn->add(documentId);
 	for (auto &&v:arguments) {
-		StrViewA key = v.getKey();
+		std::string_view key = v.getKey();
 		String vstr = v.toString();
 		conn->add(key,vstr);
 	}
-	Value h(Object("Accept","*/*"));
+	Value h(Object{{"Accept","*/*"}});
 	Value v = requestPUT(conn, nullptr, &h, flgStoreHeaders);
 	lksqid.markOld();
 	String rev (h["X-Couch-Update-NewRev"]);
@@ -270,17 +270,17 @@ UpdateResult CouchDB::execUpdateProc(StrViewA updateHandlerPath, StrViewA docume
 
 }
 
-ShowResult CouchDB::execShowProc(const StrViewA &showHandlerPath, const StrViewA &documentId,
+ShowResult CouchDB::execShowProc(const std::string_view &showHandlerPath, const std::string_view &documentId,
 		const Value &arguments, std::size_t flags) {
 
 	PConnection conn = getConnection(showHandlerPath);
 	conn->add(documentId);
 	for (auto &&v:arguments) {
-		StrViewA key = v.getKey();
+		std::string_view key = v.getKey();
 		String vstr = v.toString();
 		conn->add(key,vstr);
 	}
-	Value h(Object("Accept","*/*"));
+	Value h(Object{{"Accept","*/*"}});
 	Value v = requestGET(conn,&h,flags|flgStoreHeaders);
 	String ctt(h["content-type"]);
 	if (ctt != "application/json") {
@@ -293,10 +293,10 @@ ShowResult CouchDB::execShowProc(const StrViewA &showHandlerPath, const StrViewA
 }
 
 
-Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType) {
+Upload CouchDB::putAttachment(const Value &document, const std::string_view &attachmentName, const std::string_view &contentType) {
 
-	StrViewA documentId = document["_id"].getString();
-	StrViewA revId = document["_rev"].getString();
+	std::string_view documentId = document["_id"].getString();
+	std::string_view revId = document["_rev"].getString();
 	PConnection conn = getConnection();
 	conn->add(documentId);
 	conn->add(attachmentName);
@@ -338,7 +338,7 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 
 					}
 					http.close();
-					StrViewA url(*urlline);
+					std::string_view url(*urlline);
 					throw RequestError(url,status, http.getStatusMessage(), errorVal);
 				} else {
 					Value v = Value::parse(http.getResponse());
@@ -360,14 +360,14 @@ Upload CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 		//open request
 		conn->http.open(conn->getUrl(),"PUT",true);
 		//send header
-		conn->http.setHeaders(Object("Content-Type",contentType)("Cookie",getToken()));
+		conn->http.setHeaders(Object{{"Content-Type",contentType},{"Cookie",getToken()}});
 		//create upload object
 		return Upload(new UploadClass(std::move(conn)));
 
 
 }
 
-String CouchDB::putAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData) {
+String CouchDB::putAttachment(const Value &document, const std::string_view &attachmentName, const AttachmentDataRef &attachmentData) {
 
 	Upload upld = putAttachment(document,attachmentName,attachmentData.contentType);
 	upld.write(BinaryView(attachmentData));
@@ -377,21 +377,21 @@ String CouchDB::putAttachment(const Value &document, const StrViewA &attachmentN
 
 Value CouchDB::genUIDValue() const {
 	LockGuard _(lock);
-	return StrViewA(lkGenUID());
+	return std::string_view(lkGenUID());
 }
 
-Value CouchDB::genUIDValue(StrViewA prefix)  const {
+Value CouchDB::genUIDValue(std::string_view prefix)  const {
 	LockGuard _(lock);
 	return lkGenUID(prefix);
 }
 
 
 Document CouchDB::newDocument() {
-	return Document(lkGenUID(),StrViewA());
+	return Document(lkGenUID(),std::string_view());
 }
 
-Document CouchDB::newDocument(const StrViewA &prefix) {
-	return Document(lkGenUID(StrViewA(prefix)),StrViewA());
+Document CouchDB::newDocument(const std::string_view &prefix) {
+	return Document(lkGenUID(std::string_view(prefix)),std::string_view());
 }
 
 template<typename Fn>
@@ -508,7 +508,7 @@ bool CouchDB::putDesignDocument(const Value &content, DesignDocUpdateRule update
 			errItem.errorDetails = Object();
 			errItem.errorType = "conflict";
 			errItem.reason = "ddurCheck in effect, cannot update design document";
-			throw UpdateException(StringView<UpdateException::ErrorItem>(&errItem,1));
+			throw UpdateException(std::vector<UpdateException::ErrorItem>(1,errItem));
 		}
 
 		if (updateRule == ddurOverwrite) {
@@ -554,7 +554,7 @@ bool CouchDB::putDesignDocument(const std::string &pathname, DesignDocUpdateRule
 		UpdateException::ErrorItem err;
 		err.errorType = "not found";
 		err.reason = String({"Failed to open file: ",pathname});
-		throw UpdateException(StringView<UpdateException::ErrorItem>(&err,1));
+		throw UpdateException(std::vector<UpdateException::ErrorItem>(1,err));
 	}
 	return putDesignDocument(parseDesignDocument(json::fromStream(infile)), updateRule);
 }
@@ -563,7 +563,7 @@ bool CouchDB::putDesignDocument(const std::string &pathname, DesignDocUpdateRule
 bool  CouchDB::putDesignDocument(const char* content,
 		std::size_t contentLen, DesignDocUpdateRule updateRule) {
 
-	StrViewA ctt(content, contentLen);
+	std::string_view ctt(content, contentLen);
 	return putDesignDocument(parseDesignDocument(json::fromString(ctt)), updateRule);
 
 }
@@ -573,7 +573,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 		return retry([&]{
 			std::unique_lock<std::recursive_mutex> _(state.initLock);
 			Value jsonBody;
-			StrViewA method = "GET";
+			std::string_view method = "GET";
 			if (state.curConn != nullptr) {
 				throw std::runtime_error("Changes feed is already in progress");
 			}
@@ -588,12 +588,12 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 			if (feed.filterInUse) {
 				const ::couchit::Filter& flt = feed.filter;
 				if (!flt.viewPath.empty()) {
-					StrViewA fltpath = flt.viewPath;
-					StrViewA ddocName;
-					StrViewA filterName;
+					std::string_view fltpath = flt.viewPath;
+					std::string_view ddocName;
+					std::string_view filterName;
 					bool isView = false;
-					auto iter = fltpath.split("/");
-					StrViewA x = iter();
+					Split iter (fltpath,"/");
+					std::string_view x = iter();
 					if (x == "_design")
 						x = iter();
 
@@ -632,7 +632,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 				}
 				for (auto&& itm : flt.args) {
 					if (!feed.filterArgs[itm.getKey()].defined()) {
-						conn->add(StrViewA(itm.getKey()), StrViewA(itm.toString()));
+						conn->add(std::string_view(itm.getKey()), std::string_view(itm.toString()));
 					}
 				}
 			} else {
@@ -650,7 +650,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 					} else {
 						docIds = feed.docFilter;
 					}
-					jsonBody = Object("doc_ids", docIds);
+					jsonBody = Object{{"doc_ids", docIds}};
 					method="POST";
 				}
 			}
@@ -658,7 +658,7 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 
 			for (auto&& v : feed.filterArgs) {
 				String val = v.toString();
-				StrViewA key = v.getKey();
+				std::string_view key = v.getKey();
 				conn->add(key, val);
 			}
 			conn->http.open(conn->getUrl(), method, true);
@@ -668,7 +668,11 @@ int CouchDB::initChangesFeed(const PConnection& conn, ChangesFeed& feed) {
 			try {
 
 				conn->http.setTimeout(feed.iotimeout);
-				conn->http.setHeaders(Object("Accept", "application/json")("Cookie", getToken())("Content-Type","application/json"));
+				conn->http.setHeaders(Object{
+					{"Accept", "application/json"},
+					{"Cookie", getToken()},
+					{"Content-Type","application/json"}
+				});
 				OutputStream out(nullptr);
 				if (jsonBody.defined()) {
 						out = conn->http.beginBody();
@@ -842,13 +846,13 @@ protected:
 };
 
 
-Download CouchDB::downloadAttachmentCont(PConnection &conn, const StrViewA &etag) {
+Download CouchDB::downloadAttachmentCont(PConnection &conn, const std::string_view &etag) {
 
 	return retry([&]{
 		conn->http.open(conn->getUrl(), "GET", true);
 		Object hdr;
-		hdr("Cookie", getToken());
-		if (!etag.empty()) hdr("If-None-Match",etag);
+		hdr.set("Cookie", getToken());
+		if (!etag.empty()) hdr.set("If-None-Match",etag);
 		conn->http.setHeaders(hdr);
 		int status = conn->http.send();
 
@@ -870,15 +874,15 @@ Download CouchDB::downloadAttachmentCont(PConnection &conn, const StrViewA &etag
 
 }
 
-Download CouchDB::getAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag) {
+Download CouchDB::getAttachment(const Document &document, const std::string_view &attachmentName,  const std::string_view &etag) {
 
-	StrViewA documentId = document["_id"].getString();
-	StrViewA revId = document["_rev"].getString();
+	std::string_view documentId = document["_id"].getString();
+	std::string_view revId = document["_rev"].getString();
 
 	return getAttachment(documentId, attachmentName, etag, revId);
 }
 
-Download CouchDB::getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag, const StrViewA &rev) {
+Download CouchDB::getAttachment(const std::string_view &docId, const std::string_view &attachmentName,  const std::string_view &etag, const std::string_view &rev) {
 
 	PConnection url = getConnection("");
 	url->add(docId);
@@ -902,10 +906,10 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 	PConnection conn = owner.getConnection(r.view.viewPath);
 
-	StrViewA startKey = "startkey";
-	StrViewA endKey = "endkey";
-	StrViewA startKeyDocId = "startkey_docid";
-	StrViewA endKeyDocId = "endkey_docid";
+	std::string_view startKey = "startkey";
+	std::string_view endKey = "endkey";
+	std::string_view startKeyDocId = "startkey_docid";
+	std::string_view endKeyDocId = "endkey_docid";
 
 
 	bool desc = (r.view.flags & View::reverseOrder) != 0;
@@ -929,16 +933,18 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 							} else {
 								String ser = Value(r.keys).stringify();
 								if (ser.length() > maxSerializedKeysSizeForGETRequest ) {
-									postBody = Object("keys",r.keys);
+									postBody = Object{{"keys",r.keys}};
 								} else {
 									conn->add("keys",ser);
 								}
 							}
 						} else {
-							return Object("total_rows",0)
-									("offset",0)
-									("rows",json::array)
-									("update_seq",owner.getLastKnownSeqNumber().toValue());
+							return Object{
+								{"total_rows",0},
+								{"offset",0},
+								{"rows",json::array},
+								{"update_seq",owner.getLastKnownSeqNumber().toValue()}
+							};
 						}
 						break;
 		case qmKeyRange: {
@@ -947,11 +953,11 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 							conn->addJson(startKey,start);
 							conn->addJson(endKey,end);
 							if (r.docIdFromGetKey) {
-								StrViewA startDocId = start.getKey();
+								std::string_view startDocId = start.getKey();
 								if (!startDocId.empty()) {
 									conn->add(startKeyDocId, startDocId);
 								}
-								StrViewA endDocId = end.getKey();
+								std::string_view endDocId = end.getKey();
 								if (!endDocId.empty()) {
 									conn->add(endKeyDocId, endDocId);
 								}
@@ -1014,10 +1020,10 @@ Value CouchDB::Queryable::executeQuery(const QueryRequest& r) {
 
 	if (r.view.args.type() == json::object) {
 		for(auto &&item: r.view.args) {
-			conn->add(StrViewA(item.getKey()),StrViewA(item.toString()));
+			conn->add(std::string_view(item.getKey()),std::string_view(item.toString()));
 		}
 	} else if (r.view.args.defined()) {
-		conn->add("args",StrViewA(r.view.args.toString()));
+		conn->add("args",std::string_view(r.view.args.toString()));
 	}
 
 	Value result;
@@ -1055,7 +1061,7 @@ Value CouchDB::bulkUpload(const Value docs, bool replication ) {
 		Value res1 = bulkUpload(splt.first);
 		Value res2 = bulkUpload(splt.second);
 		Array res(res1);
-		res.addSet(res2);
+		res.append(res2);
 		return res;
 
 	} else if (docs.size() < cfg.minBulkSizeDocs) {
@@ -1077,7 +1083,9 @@ Value CouchDB::bulkUpload(const Value docs, bool replication ) {
 				}
 				results.push_back(r);
 			} catch (RequestError &e) {
-				results.push_back(Object(e.getExtraInfo())("id",id));
+				Object x(e.getExtraInfo());
+				x.set("id",id);
+				results.push_back(x);
 			}
 
 		}
@@ -1112,7 +1120,7 @@ bool CouchDB::put(Document& doc, const WriteOptions &opts, bool no_exception) {
 
 
 
-CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath, bool fresh) {
+CouchDB::PConnection CouchDB::getConnection(std::string_view resourcePath, bool fresh) {
 	if (magic != magic_const) {
 		logFatal("Magic const damaged");
 		abort();
@@ -1133,7 +1141,7 @@ CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath, bool fresh) {
 		lastPoolCheck = now;
 	}
 
-	if (cfg.databaseName.empty() && resourcePath.substr(0,1) != StrViewA("/"))
+	if (cfg.databaseName.empty() && resourcePath.substr(0,1) != std::string_view("/"))
 		throw std::runtime_error("No database selected");
 
 	if (curConnections >= cfg.maxConnections) {
@@ -1168,7 +1176,7 @@ CouchDB::PConnection CouchDB::getConnection(StrViewA resourcePath, bool fresh) {
 	return b;
 }
 
-void CouchDB::setUrl(PConnection &conn, StrViewA resourcePath) {
+void CouchDB::setUrl(PConnection &conn, std::string_view resourcePath) {
 	conn->init(cfg.baseUrl,cfg.databaseName,resourcePath);
 }
 void CouchDB::releaseConnection(Connection* b) {
@@ -1201,7 +1209,7 @@ Value CouchDB::parseResponseBin(PConnection& conn) {
 }
 
 
-Value CouchDB::postRequest(PConnection& conn, const StrViewA &cacheKey, Value *headers, std::size_t flags) {
+Value CouchDB::postRequest(PConnection& conn, const std::string_view &cacheKey, Value *headers, std::size_t flags) {
 	HttpClient &http = conn->http;
 	int status = http.getStatus();
 	if (status/100 != 2) {
@@ -1252,16 +1260,16 @@ Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) 
 	return retry([&]{
 		bool usecache = (flags & flgDisableCache) == 0 && cfg.cache != nullptr;
 
-		StrViewA path = conn->getUrl();
-		StrViewA cacheKey;
+		std::string_view path = conn->getUrl();
+		std::string_view cacheKey;
 
 		if (usecache) {
 			std::size_t baseUrlLen = cfg.baseUrl.length();
 			std::size_t databaseLen = cfg.databaseName.length();
 			std::size_t prefixLen = baseUrlLen+databaseLen+1;
 
-			if (path.substr(0,baseUrlLen) != StrViewA(cfg.baseUrl)
-				|| path.substr(baseUrlLen, databaseLen) != StrViewA(cfg.databaseName)) {
+			if (path.substr(0,baseUrlLen) != std::string_view(cfg.baseUrl)
+				|| path.substr(baseUrlLen, databaseLen) != std::string_view(cfg.databaseName)) {
 				usecache = false;
 			} else {
 				cacheKey = path.substr(prefixLen);
@@ -1286,12 +1294,12 @@ Value CouchDB::requestGET(PConnection& conn, Value* headers, std::size_t flags) 
 			redirectRetry = false;
 			Object hdr(headers?*headers:Value());
 			if (!hdr["Accept"].defined()) {
-				hdr("Accept","application/binjson, application/json");
+				hdr.set("Accept","application/binjson, application/json");
 			}
 			if (cachedItem.isDefined()) {
-				hdr("If-None-Match", cachedItem.etag);
+				hdr.set("If-None-Match", cachedItem.etag);
 			}
-			if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
+			if ((flags & flgNoAuth) == 0) hdr.set("Cookie", getToken());
 
 			status = http.setHeaders(hdr).send();
 			if (status == 304 && cachedItem.isDefined()) {
@@ -1353,17 +1361,17 @@ Value CouchDB::requestDELETE(PConnection& conn, Value* headers,
 
 	return retry([&]{
 		HttpClient &http = conn->http;
-		StrViewA path = conn->getUrl();
+		std::string_view path = conn->getUrl();
 
 		http.open(path,"DELETE",true);
 		Object hdr(headers?*headers:Value());
 		if (!hdr["Accept"].defined())
-			hdr("Accept","application/binjson, application/json");
+			hdr.set("Accept","application/binjson, application/json");
 
-		if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
+		if ((flags & flgNoAuth) == 0) hdr.set("Cookie", getToken());
 
 		http.setHeaders(hdr).send();
-		return postRequest(conn,StrViewA(),headers,flags);
+		return postRequest(conn,std::string_view(),headers,flags);
 	});
 }
 
@@ -1372,19 +1380,19 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
 	typedef std::uint8_t byte;
 
 	HttpClient &http = conn->http;
-	StrViewA path = conn->getUrl();
+	std::string_view path = conn->getUrl();
 
 
 	http.open(path,methodPost?"POST":"PUT",true);
 	Object hdr(headers?*headers:Value());
 	if (!hdr["Accept"].defined())
-		hdr("Accept","application/binjson, application/json");
-	hdr("Content-Type","application/json");
-	if ((flags & flgNoAuth) == 0) hdr("Cookie", getToken());
+		hdr.set("Accept","application/binjson, application/json");
+	hdr.set("Content-Type","application/json");
+	if ((flags & flgNoAuth) == 0) hdr.set("Cookie", getToken());
 	http.setHeaders(hdr);
 
 	if (data.type() == json::undefined) {
-		http.send(StrViewA());
+		http.send(std::string_view());
 	} else {
 		bool hdrSent = false;
 		byte buffer[4096];
@@ -1412,7 +1420,7 @@ Value CouchDB::jsonPUTPOST(PConnection& conn, bool methodPost,
 		outstr = nullptr;
 		http.send(buffer,bpos);
 	}
-    return postRequest(conn,StrViewA(),headers,flags);
+    return postRequest(conn,std::string_view(),headers,flags);
 }
 
 Value CouchDB::getToken() {
@@ -1433,8 +1441,8 @@ Value CouchDB::getToken() {
 		Value result = requestPOST(conn,authObj,&headers,flgStoreHeaders|flgNoAuth);
 
 		if (result["ok"].getBool()) {
-			StrViewA c = headers["Set-Cookie"].getString();
-			auto splt = c.split(";");
+			std::string_view c = headers["Set-Cookie"].getString();
+			Split splt( c,";");
 			token = splt();
 			tokenExpireTime = now+cfg.tokenTimeout-10;
 			tokenRefreshTime = tokenExpireTime-cfg.tokenTimeout/2;
@@ -1486,7 +1494,7 @@ Value CouchDB::getSerialNr()  {
 
 }
 
-Value CouchDB::getRevisions(const StrViewA docId, Value revisions, Flags flags) {
+Value CouchDB::getRevisions(const std::string_view docId, Value revisions, Flags flags) {
 	PConnection conn = getConnection();
 	conn->add(docId);
 	if (revisions.empty()) conn->add("open_revs","all");
@@ -1515,9 +1523,9 @@ void CouchDB::pruneConflicts(Document& doc) {
 
 		auto revs = doc.object("_revisions");
 		auto ids = revs.array("ids");
-		if (ids.empty()) ids.insert(0, curRev.getRevId());
-		ids.insert(0, newRev.getTag());
-		revs("start", newRev.getRevId());
+		if (ids.empty()) ids.insert(ids.begin(), curRev.getRevId());
+		ids.insert(ids.begin(), newRev.getTag());
+		revs.set("start", newRev.getRevId());
 		doc.setRev(newRev.toString());
 	}
 
@@ -1607,7 +1615,7 @@ Result CouchDB::mget_impl(Array &idlist, Flags flags)  {
 	if (flags & flgRevisions) conn->add("revs","true");
 	if (cfg.readQuorum) conn->add("r",cfg.readQuorum);
 
-	Value req = Object("docs", idlist);
+	Value req = Object{{"docs", idlist}};
 	Array lst;
 	try {
 		Value r = requestPOST(conn, req, nullptr, 0);
@@ -1728,11 +1736,9 @@ Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception
 			if (e.getCode() == 409) {
 				if (no_exception) return nullptr;
 
-				else throw UpdateException(StringView({
-					UpdateException::ErrorItem{
-						"conflict","conflict",wdoc,nullptr
-					}
-				}));
+				else throw UpdateException(std::vector<UpdateException::ErrorItem>(1,
+					{"conflict","conflict",wdoc,nullptr}
+				));
 			} else {
 				throw;
 			}
@@ -1776,7 +1782,7 @@ Changes CouchDB::receiveChanges(ChangeFeedState &feedState) {
 						   c->add("filter","_view");
 						   break;
 		case Filter::selector: c->add("filter","_selector");body = feedState.filter_spec;break;
-		case Filter::docids: c->add("filter","_doc_ids");body = json::Object("doc_ids",feedState.filter_spec);break;
+		case Filter::docids: c->add("filter","_doc_ids");body = json::Object{{"doc_ids",feedState.filter_spec}};break;
 		case Filter::design: c->add("filter","_design");break;
 	}
 	c->add("limit", limit);
@@ -1803,10 +1809,10 @@ Changes CouchDB::receiveChanges(ChangeFeedState &feedState) {
 	}
 	int status;
 	Object headers;
-	headers("Cookie", getToken());
+	headers.set("Cookie", getToken());
 	if (body.defined()) {
 		http.open(url, "POST");
-		headers("Content-Type","application/json");
+		headers.set("Content-Type","application/json");
 		http.setHeaders(headers);
 		status = http.send(body.toString());
 	} else {

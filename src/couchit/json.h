@@ -9,7 +9,7 @@
 #define LIGHTCOUCH_JSON_H_
 
 #include <imtjson/json.h>
-#include <imtjson/stringview.h>
+
 
 namespace couchit {
 
@@ -18,8 +18,8 @@ using namespace json;
 
 static inline Value addToArray(Value v, Value add) {
 	Array c(v);
-	if (c.empty()) c.add(v);
-	c.add(add);
+	if (c.empty()) c.append(v);
+	c.append(add);
 	return c;
 }
 
@@ -27,8 +27,8 @@ static inline Value addSuffix(Value v,const String &suffix) {
 		if (!v.empty()) {
 			Array x(v);
 			std::size_t sz = v.size()-1;
-			x.trunc(sz);
-			x.add(v[sz].toString()+suffix);
+			x.resize(sz);
+			x.append(v[sz].toString()+suffix);
 			return x;
 		} else {
 			return v.toString() + suffix;

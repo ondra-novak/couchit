@@ -15,11 +15,11 @@ namespace couchit {
 Document::Document(const Value& base):json::Object(base) {
 }
 
-StrViewA Document::getID() const {
+std::string_view Document::getID() const {
 	return getIDValue().getString();
 }
 
-StrViewA Document::getRev() const {
+std::string_view Document::getRev() const {
 	return getRevValue().getString();
 }
 
@@ -52,10 +52,10 @@ void Document::setRev(const Value& rev) {
 	set("_rev",rev);
 }
 
-void Document::setDeleted(StringView<StrViewA> fieldsToKept, bool timestamp) {
+void Document::setDeleted(const std::initializer_list<std::string_view> &fieldsToKept, bool timestamp) {
 	json::Object delDoc;
 	for (auto &&fld : fieldsToKept) {
-		delDoc(fld,(*this)[fld]);
+		delDoc.set(fld,(*this)[fld]);
 	}
 	delDoc.set("_deleted",true);
 	setContent(delDoc);
@@ -68,7 +68,7 @@ void Document::enableTimestamp() {
 
 
 
-void Document::deleteAttachment(const StrViewA &name) {
+void Document::deleteAttachment(const std::string_view &name) {
 	object("_attachments").unset(name);
 }
 
@@ -79,15 +79,15 @@ void Document::optimizeAttachments() {
 	}
 }
 
-void Document::inlineAttachment(const StrViewA &name, const AttachmentDataRef &data) {
+void Document::inlineAttachment(const std::string_view &name, const AttachmentDataRef &data) {
 	object("_attachments").set(name,data.toInline());
 }
 
-Value Document::getAttachment(const StrViewA &name) const {
+Value Document::getAttachment(const std::string_view &name) const {
 	return (*this)["_attachments"][name];
 }
 
-Document::Document(const StrViewA& id, const StrViewA& rev) {
+Document::Document(const std::string_view& id, const std::string_view& rev) {
 	set("_id",id);
 	if (!rev.empty()) set("_rev",rev);
 }

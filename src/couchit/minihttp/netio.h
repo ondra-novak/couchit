@@ -9,7 +9,8 @@
 #define LIGHTCOUCH_MINIHTTP_NETIO_H_
 
 #include <imtjson/refcnt.h>
-#include <imtjson/stringview.h>
+#include <imtjson/binary.h>
+#include <string_view>
 #include <stdint.h>
 
 #include "abstractio.h"
@@ -19,13 +20,13 @@
 namespace couchit {
 
 
-using json::StrViewA;
+
 
 
 class NetworkConnection: public AbstractInputStream, public AbstractOutputStream {
 public:
 
-	static NetworkConnection *connect(const StrViewA &addr_ddot_port, int defaultPort);
+	static NetworkConnection *connect(const std::string_view &addr_ddot_port, int defaultPort);
 
 	static ICancelWait *createCancelFunction();
 

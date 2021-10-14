@@ -19,7 +19,7 @@ static const int cmpResultLess = -1;
 static const int cmpResultEqual = 0;
 static const int cmpResultGreater = 1;
 
-CompareResult compareStringsUnicode(StrViewA str1, StrViewA str2);
+CompareResult compareStringsUnicode(std::string_view str1, std::string_view str2);
 CompareResult compareJson(const Value &left, const Value &right);
 
 struct JsonIsLess {

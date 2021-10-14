@@ -6,7 +6,7 @@
  */
 
 #pragma once
-#include <imtjson/stringview.h>
+#include <string_view>
 #include <cstddef>
 
 ///Converts string to number
@@ -15,7 +15,7 @@
  * @param base number base
  * @return converted string, or StrViewA::npos if conversion fails
  */
-inline std::size_t stringToUnsigned(json::StrViewA str, std::size_t base = 10) {
+inline std::size_t stringToUnsigned(std::string_view str, std::size_t base = 10) {
 	std::size_t accum = 0;
 	for (char c : str) {
 		std::size_t d;
@@ -27,10 +27,10 @@ inline std::size_t stringToUnsigned(json::StrViewA str, std::size_t base = 10) {
 			if (base <36 ) d = c - 'a' + 10;
 			else d = c - 'a' + 36;
 		} else {
-			return json::StrViewA::npos;
+			return std::string_view::npos;
 		}
 		if (d >= base)
-			return json::StrViewA::npos;
+			return std::string_view::npos;
 		accum = accum * base + d;
 	}
 	return accum;

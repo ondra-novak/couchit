@@ -20,7 +20,7 @@ public:
 	///sequence number
 	const json::Value seqId;
 	///document id
-	const json::StrViewA id;
+	const std::string_view id;
 	///list of revisions changed
 	const json::Value revisions;
 	///true, if document has been deleted

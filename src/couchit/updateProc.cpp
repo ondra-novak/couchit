@@ -43,7 +43,7 @@ UpdateProc::UpdateProc(const String path):path(path) {
 
 }
 
-UpdateResult UpdateProc::operator ()(CouchDB& db, StrViewA docId, Value arguments) {
+UpdateResult UpdateProc::operator ()(CouchDB& db, std::string_view docId, Value arguments) {
 	return db.execUpdateProc(path,docId,arguments);
 }
 

@@ -73,7 +73,7 @@ protected:
 };
 
 
-NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot_port, int defaultPort) {
+NetworkConnection* couchit::NetworkConnection::connect(const std::string_view &addr_ddot_port, int defaultPort) {
 
 
 	struct addrinfo req;
@@ -84,8 +84,8 @@ NetworkConnection* couchit::NetworkConnection::connect(const StrViewA &addr_ddot
 	struct addrinfo *res;
 
 
-	std::size_t pos = addr_ddot_port.lastIndexOf(":");
-	if (pos != ((std::size_t)-1)) {
+	std::size_t pos = addr_ddot_port.rfind(":");
+	if (pos != addr_ddot_port.npos) {
 
 		json::String host = addr_ddot_port.substr(0,pos);
 		json::String service = addr_ddot_port.substr(pos+1);
@@ -152,7 +152,7 @@ void NetworkConnection::setTimeout(std::uintptr_t timeout) {
 json::BinaryView NetworkConnection::doRead(bool nonblock) {
 	int rc = recv(socket,inputBuff,3000,0);
 	if (rc > 0) {
-//		std::cout << "Read: " << StrViewA(BinaryView(inputBuff,rc)) << std::endl;
+//		std::cout << "Read: " << std::string_view(BinaryView(inputBuff,rc)) << std::endl;
 		return json::BinaryView(inputBuff,rc);
 	} else if (rc == 0) {
 		eofFound = true;
@@ -215,7 +215,7 @@ bool NetworkConnection::doWaitWrite(int  timeout_in_ms) {
 json::BinaryView NetworkConnection::doWrite(const json::BinaryView &data, bool nonblock) {
 	if (data.empty()) return data;
 	if (lastSendError || timeout) return json::BinaryView(0,0);
-	int sent = send(socket, data.data, data.length,0);
+	int sent = send(socket, data.data(), data.length(),0);
 	if (sent < 0) {
 		int err = errno;
 		if (err != EWOULDBLOCK && err != EINTR && err != EAGAIN) {
@@ -224,9 +224,8 @@ json::BinaryView NetworkConnection::doWrite(const json::BinaryView &data, bool n
 		}
 		sent = 0;
 	}
-//	std::cout << "Write: " << StrViewA(BinaryView(data.data,sent)) << std::endl;
 
-	if (nonblock || (std::size_t)sent == data.length) {
+	if (nonblock || (std::size_t)sent == data.length()) {
 		return data.substr(sent);
 	}
 	else {

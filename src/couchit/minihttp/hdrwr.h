@@ -36,7 +36,7 @@ public:
 
 		for (auto c:v) {
 
-			json::StringView<char> key = c.getKey();
+			auto key = c.getKey();
 			if (key.empty() || key[0] == '_') continue;
 			json::String val = c.toString();
 
@@ -52,7 +52,7 @@ public:
 
 protected:
 
-	void writeString(const json::StringView<char> str) {
+	void writeString(const std::string_view &str) {
 		for (auto &&c:str) {
 			if (c < 32) out('.');
 			else out(c);

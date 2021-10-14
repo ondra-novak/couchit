@@ -26,9 +26,9 @@ public:
 	 * @param data reference to binary data
 	 * @param contenType content type
 	 */
-	AttachmentDataRef(const BinaryView &data, const StrViewA &contentType)
+	AttachmentDataRef(const BinaryView &data, const std::string_view &contentType)
 		:BinaryView(data),contentType(contentType) {}
-	const StrViewA contentType;
+	const std::string_view contentType;
 
 	///Converts data to base64 string.
 	String toBase64() const;
@@ -54,7 +54,7 @@ public:
 	 * @param contentType content type
 	 */
 	AttachmentData(const String &data, const String &contentType)
-		:AttachmentDataRef(BinaryView(StrViewA(data)),StrViewA(contentType)),bindata(data),ctx(contentType) {}
+		:AttachmentDataRef(map_str2bin(data.str()),contentType),bindata(data),ctx(contentType) {}
 	///Constructor from JSON value
 	/**
 	 * @param attachment value contains attachment from a document. It required that
@@ -72,7 +72,7 @@ public:
 	 * @param contentType contenr type
 	 * @return attachment object
 	 */
-	static AttachmentData fromBase64(const StrViewA &base64, const StrViewA &contentType);
+	static AttachmentData fromBase64(const std::string_view &base64, const std::string_view &contentType);
 
 private:
 	String bindata;
@@ -205,8 +205,8 @@ public:
 	 */
 	std::size_t read(void *buffer, std::size_t size) {
 		BinaryView x = read();
-		if (size > x.length) size = x.length;
-		std::copy(x.data, x.data+size, reinterpret_cast<unsigned char *>(buffer));
+		if (size > x.length()) size = x.length();
+		std::copy(x.data(), x.data()+size, reinterpret_cast<unsigned char *>(buffer));
 		return size;
 	}
 	///Read from stream

@@ -28,8 +28,7 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, bool recursive) con
 
 	if (curRev.type() == json::object && oldRev.type() == json::object) {
 
-		std::vector<Value> diffData;
-		diffData.reserve(std::max(curRev.size(), oldRev.size()));
+		ValueBuilder diffData(json::object, std::max(curRev.size(), oldRev.size()));
 		auto crit = curRev.begin();
 		auto orit = oldRev.begin();
 		auto cre = curRev.end();
@@ -37,8 +36,8 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, bool recursive) con
 		while (crit != cre && orit != ore) {
 			Value crv = *crit;
 			Value orv = *orit;
-			StrViewA orvk = orv.getKey();
-			StrViewA crvk = crv.getKey();
+			std::string_view orvk = orv.getKey();
+			std::string_view crvk = crv.getKey();
 			int cmpname = crvk.compare(orvk);
 			if (cmpname < 0)  {
 				diffData.push_back(crv);
@@ -49,7 +48,9 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, bool recursive) con
 			} else {
 				if (recursive) {
 					Value d = Value(orvk, makeDiff(crv,orv,false));
-					if (d.defined()) diffData.push_back(d);
+					if (d.defined()) {
+						diffData.push_back(d);
+					}
 				} else if (crv != orv) {
 					diffData.push_back(crv);
 				}
@@ -64,12 +65,13 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, bool recursive) con
 		}
 		while (orit != ore) {
 			Value orv = *orit;
-			StrViewA orvk = orv.getKey();
+			std::string_view orvk = orv.getKey();
 			diffData.push_back(Value(orvk, json::undefined));
 			++orit;
 		}
-		if (diffData.empty()) return json::undefined;
-		else return Value(json::object, diffData,false);
+		Value out = diffData.commit();
+		if (out.empty()) return json::undefined;
+		else return out;
 	} else {
 		if (curRev != oldRev) return curRev;
 		else return json::undefined;
@@ -82,8 +84,7 @@ Value ConflictResolver::makeDiff(Value curRev, Value oldRev, bool recursive) con
 Value ConflictResolver::mergeDiffs(Value baseRev, Value diff1, Value diff2, bool recursive, const Path &path) const {
 	if (diff1.type() == json::object && diff2.type() == json::object) {
 
-		std::vector<Value> diffData;
-		diffData.reserve(diff1.size()+diff2.size());
+		ValueBuilder diffData(json::object, diff1.size()+diff2.size());
 		auto d1it = diff1.begin();
 		auto d2it = diff2.begin();
 		auto d1e = diff1.end();
@@ -91,8 +92,8 @@ Value ConflictResolver::mergeDiffs(Value baseRev, Value diff1, Value diff2, bool
 		while (d1it != d1e && d2it != d2e) {
 			Value d1v = *d1it;
 			Value d2v = *d2it;
-			StrViewA d1vk = d1v.getKey();
-			StrViewA d2vk= d2v.getKey();
+			std::string_view d1vk = d1v.getKey();
+			std::string_view d2vk= d2v.getKey();
 			int cmpname = d1vk.compare(d2vk);
 			if (cmpname < 0)  {
 				diffData.push_back(d1v);
@@ -122,7 +123,7 @@ Value ConflictResolver::mergeDiffs(Value baseRev, Value diff1, Value diff2, bool
 			diffData.push_back(d2v);
 			++d2it;
 		}
-		return Value(json::object, diffData,false);
+		return diffData.commit();
 
 	} else {
 		if (diff1 != diff2) {
@@ -137,8 +138,7 @@ Value ConflictResolver::mergeDiffs(Value baseRev, Value diff1, Value diff2, bool
 Value ConflictResolver::applyDiff(Value curRev, Value diff, bool recursive) const {
 	if (curRev.type() == json::object && diff.type() == json::object) {
 
-		std::vector<Value> diffData;
-		diffData.reserve(curRev.size()+diff.size());
+		ValueBuilder diffData(json::object,curRev.size()+diff.size());
 		auto crit = curRev.begin();
 		auto dfit = diff.begin();
 		auto cre = curRev.end();
@@ -146,8 +146,8 @@ Value ConflictResolver::applyDiff(Value curRev, Value diff, bool recursive) cons
 		while (crit != cre && dfit != dfe) {
 			Value crv = *crit;
 			Value dfv = *dfit;
-			StrViewA crvk = crv.getKey();
-			StrViewA dfvk= dfv.getKey();
+			std::string_view crvk = crv.getKey();
+			std::string_view dfvk= dfv.getKey();
 			int cmpname = crvk.compare(dfvk);
 			if (cmpname < 0)  {
 				diffData.push_back(crv);
@@ -171,7 +171,7 @@ Value ConflictResolver::applyDiff(Value curRev, Value diff, bool recursive) cons
 			diffData.push_back(dfv);
 			++dfit;
 		}
-		return Value(json::object, diffData,true);
+		return diffData.commit();
 
 	} else {
 		return diff;
@@ -262,7 +262,7 @@ void find_attachments_for_download(T &cont, Value curVer, Value newVer, Value re
 	Value curAtt = curVer["_attachments"];
 	Value newAtt = newVer["_attachments"];
 	for (Value v : newAtt) {
-		StrViewA name = v.getKey();
+		std::string_view name = v.getKey();
 		Value c = curAtt[name];
 		if (!c.defined() || c["digest"] != v["digest"]) {
 			AttachmentInfo nfo;
@@ -298,7 +298,7 @@ bool ConflictResolver::resolveAllConflicts(CouchDB& couch, String id,Document& d
 	}
 	Value commonRevs = couch.getRevisions(id, revToDownload, CouchDB::flgRevisions);
 	for (Value x: commonRevs) {
-		if (x.getKey() == "ok"_) {
+		if (x.getKey() == "ok") {
 				commonRevCache[x["_rev"]] =  x;
 		}
 	}
@@ -344,20 +344,22 @@ bool ConflictResolver::resolveAllConflicts(CouchDB& couch, String id,Document& d
 }
 
 
-static json::Value conflictDesignDoc = json::Object
-		("_id","_design/couchit_conflicts")
-		("language","javascript")
-		("views", json::Object
-				("conflicts",json::Object
-						("map","function(doc) {"
+static json::Value conflictDesignDoc = json::Object{
+	{"_id","_design/couchit_conflicts"},
+	{"language","javascript"},
+	{"views", json::Object{
+		{"conflicts",json::Object{
+			{"map","function(doc) {"
 								"if (doc._conflicts) emit(null,null);"
-								"}")
-				))
-		("filters",json::Object
-				("conflicts", "function(doc) {"
+								"}"}
+		}},
+		{"filters",json::Object{
+			{"conflicts", "function(doc) {"
 									"return doc._conflicts;"
-							   "}")
-				);
+							   "}"}
+		}}
+	}}
+};
 
 
 static View conflictView("_design/couchit_conflicts/_view/conflicts");

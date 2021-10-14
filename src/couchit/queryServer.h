@@ -38,7 +38,7 @@ public:
 	 * from the QueryServer's function defintions. Otherwise, you can use constructor without argument
 	 *
 	 */
-	QueryServer(const StrViewA &name);
+	QueryServer(const std::string_view &name);
 
 
 	///Registers view
@@ -153,10 +153,10 @@ public:
 protected:
 
 
-	class StrKey: public StrViewA {
+	class StrKey: public std::string_view {
 	public:
-		StrKey(StrViewA data):StrViewA(data) {}
-		StrKey(const String data):StrViewA(data),data(data) {}
+		StrKey(std::string_view data):std::string_view(data) {}
+		StrKey(const String data):std::string_view(data),data(data) {}
 	protected:
 		String data;
 	};
@@ -203,9 +203,9 @@ private:
 
 	Value compileDesignDocument(const Value &document);
 	template<typename T>
-	Value compileDesignSection(T &reg, const Value &section, StrViewA sectionName);
+	Value compileDesignSection(T &reg, const Value &section, std::string_view sectionName);
 
-	Value createDesignDocument(Object &container, StrViewA fnName, StrViewA &suffix);
+	Value createDesignDocument(Object &container, std::string_view fnName, std::string_view &suffix);
 };
 
 class RestartRuleChangedFile {

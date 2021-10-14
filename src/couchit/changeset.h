@@ -113,7 +113,7 @@ public:
 	/** This function is deprecated and can be slow. To work with commited documents, use getCommited()
 
 	 */
-	String getCommitRev(const StrViewA &docId) const;
+	String getCommitRev(const std::string_view &docId) const;
 
 	///(deprecated) Retrieves revision of the committed document
 	/** This function is deprecated and can be slow. To work with commited documents, use getCommited()
@@ -133,11 +133,11 @@ public:
 	 *
 	 *
 	 */
-	Value getUpdatedDoc(const StrViewA &docId) const;
+	Value getUpdatedDoc(const std::string_view &docId) const;
 
 	///Revets changes made in document docId
 	/** Removes document from the changeset */
-	void revert(const StrViewA &docId);
+	void revert(const std::string_view &docId);
 
 	///Marks current state of changeset
 	/**
@@ -178,13 +178,13 @@ public:
 
 	struct CommitedDoc {
 		//document id
-		StrViewA id;
+		std::string_view id;
 		//new revision
 		String newRev;
 		//original document
 		Value doc;
 
-		CommitedDoc(const StrViewA &id, const String &newRev, const Value &doc)
+		CommitedDoc(const std::string_view &id, const String &newRev, const Value &doc)
 			:id(id),newRev(newRev),doc(doc) {}
 
 		operator Document() const;

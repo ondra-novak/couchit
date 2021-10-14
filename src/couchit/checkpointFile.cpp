@@ -24,8 +24,8 @@ using namespace json;
 class SyncCheckpointFile: public AbstractCheckpoint {
 public:
 
-	SyncCheckpointFile(const std::string &fname, int load_optimize_level)
-		:fname(fname)
+	SyncCheckpointFile(std::string &&fname, int load_optimize_level)
+		:fname(std::move(fname))
 		,load_optimize_level(load_optimize_level) {}
 
 	virtual Value load() const override;
@@ -121,12 +121,12 @@ public:
 	}
 };
 
-PCheckpoint checkpointFile(StrViewA fname, int load_optimize_level) {
-	return new SyncCheckpointFile(fname, load_optimize_level);
+PCheckpoint checkpointFile(std::string_view fname, int load_optimize_level) {
+	return new SyncCheckpointFile(std::string(fname), load_optimize_level);
 }
 
-PCheckpoint asyncCheckpointFile(StrViewA fname, int load_optimize_level) {
-	return new AsyncCheckpointFile(fname, load_optimize_level);
+PCheckpoint asyncCheckpointFile(std::string_view fname, int load_optimize_level) {
+	return new AsyncCheckpointFile(std::string(fname), load_optimize_level);
 }
 
 static Value optimize_object(std::unordered_set<Value> &s, Value v, int max_level) {

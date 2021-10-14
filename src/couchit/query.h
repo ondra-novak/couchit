@@ -52,7 +52,7 @@ public:
 	 */
 	Query &range(const Value &from, const Value &to, std::size_t flags = 0);
 
-	Query &range(const Value &from, const StrViewA &fromDoc, const Value &to, const StrViewA &toDoc, bool exclusiveEnd = false);
+	Query &range(const Value &from, const std::string_view &fromDoc, const Value &to, const std::string_view &toDoc, bool exclusiveEnd = false);
 
 
 	///Defines ranged search as prefix
@@ -75,7 +75,7 @@ public:
 	///Change limit (default is unlimited)
 	Query &limit(std::size_t limit);
 	///Append argument to postprocessing
-	Query &arg(const StrViewA &argname, const 	Value &value);
+	Query &arg(const std::string_view &argname, const 	Value &value);
 	///Reverse order
 	/** The view can be declared with already reversed order. In this
 	 * case the function reverses already reversed order which results to

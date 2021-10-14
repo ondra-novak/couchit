@@ -28,18 +28,13 @@ String RequestError::getWhatMsg() const throw() {
 }
 
 
-UpdateException::UpdateException(const StringView<ErrorItem> &errors)
-{
-	this->errors.reserve(errors.length);
-	for (auto &&x : errors) this->errors.push_back(x);
-}
 UpdateException::UpdateException(std::vector<ErrorItem> &&errors)
 	:errors(std::move(errors))
 {
 
 }
 
-StringView<UpdateException::ErrorItem>  UpdateException::getErrors() const {
+const std::vector<UpdateException::ErrorItem> &UpdateException::getErrors() const {
 	return errors;
 }
 
@@ -97,7 +92,7 @@ String HttpStatusException::getWhatMsg() const throw () {
 
 String couchit::SystemException::getWhatMsg() const throw () {
 	std::ostringstream buff;
-	buff << StrViewA(text) << " errno=" << errn;
+	buff << text.str() << " errno=" << errn;
 	return String(buff.str());
 }
 

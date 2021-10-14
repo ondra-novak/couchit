@@ -32,8 +32,8 @@ public:
 		:ReducedRow (value),docId(docId),key(key) {}
 };
 
-typedef json::StringView<RowWithKey> RowsWithKeys;
-typedef json::StringView<ReducedRow> ReducedRows;
+using RowWithKey_Iterator = const RowWithKey *;
+using ReducedRow_Iterator = const ReducedRow *;
 
 
 

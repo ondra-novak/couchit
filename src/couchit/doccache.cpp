@@ -59,7 +59,7 @@ DocCache::~DocCache() {
 	lock.unlock();
 }
 
-Value DocCache::get(StrViewA name) {
+Value DocCache::get(std::string_view name) {
 	Sync _(lock);
 	auto f = dataMap.find(name);
 	if (f == dataMap.end()) {
@@ -137,7 +137,7 @@ void DocCache::unreg() {
 }
 
 
-std::size_t DocCache::Hash::operator ()(StrViewA data) const {
+std::size_t DocCache::Hash::operator ()(std::string_view data) const {
 	std::size_t val = 0;
 	FNV1a<sizeof(std::size_t)> fnv(val);
 	for (auto &&k: data) fnv(k);

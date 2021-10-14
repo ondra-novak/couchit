@@ -79,14 +79,14 @@ public:
 	 *
 	 *
 	 * */
-	Value get(StrViewA name);
+	Value get(std::string_view name);
 
 	///Retrieves document from the cache or directly asking the database
 	/** Function retrieves document or null if document is not found
 	 *
 	 *
 	 * */
-	Value operator[](StrViewA name) {return get(name);}
+	Value operator[](std::string_view name) {return get(name);}
 
 	///Puts document to the cache.
 	/**
@@ -119,7 +119,7 @@ protected:
 	};
 
 	struct Hash {
-		std::size_t operator()(StrViewA data) const;
+		std::size_t operator()(std::string_view data) const;
 	};
 
 	using DataMap = std::unordered_map<String, Item, Hash>;

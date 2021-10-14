@@ -38,7 +38,7 @@ ShowProc::ShowProc(const String path,bool cacheable):path(path),cacheable(cachea
 
 }
 
-ShowResult ShowProc::operator ()(CouchDB& db, StrViewA docId, Value arguments) {
+ShowResult ShowProc::operator ()(CouchDB& db, std::string_view docId, Value arguments) {
 	return db.execShowProc(path,docId,arguments,cacheable?0:CouchDB::flgDisableCache);
 }
 

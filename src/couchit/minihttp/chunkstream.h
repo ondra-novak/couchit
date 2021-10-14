@@ -19,7 +19,7 @@ protected:
 		auto rest = x.substr(curChunk);
 		x = x.substr(0,curChunk);
 		input->putBack(rest);
-		curChunk-=x.length;
+		curChunk-=x.length();
 		return x;
 	}
 
@@ -100,10 +100,10 @@ protected:
 				return false;
 			}
 
-			chunkLine.append(reinterpret_cast<const char *>(buff.data), buff.length);
+			chunkLine.append(reinterpret_cast<const char *>(buff.data()), buff.length());
 			std::size_t put_back_count;
 			if (parseChunkLine(put_back_count)) {
-				input->putBack(buff.substr(buff.length-put_back_count));
+				input->putBack(buff.substr(buff.length()-put_back_count));
 				chunkLine.clear();
 				return curChunk > 0;
 			}
@@ -114,40 +114,6 @@ protected:
 		return true;
 	}
 
-#if 0
-
-			if (unused) {
-
-			}
-
-			std::size_t  pos = 0;
-			while ((unsigned int)chunkHdrSz < sizeof(chunkHdr) && pos < buff.length) {
-				unsigned char c = buff[pos++];
-				if (isspace(c) && chunkHdrSz == 0)
-					continue;
-
-				chunkHdr[chunkHdrSz++] = c;
-				if (chunkHdrSz > 2 && c == '\n') break;
-			}
-
-			input->commit(pos);
-
-			StrViewA strHdr (chunkHdr, chunkHdrSz);
-			if (strHdr.length>2 && strHdr.substr(strHdr.length-2) == "\r\n") {
-				std::size_t a = ::strtoul(strHdr.data,nullptr,16);
-				curChunk = a;
-				chunkHdrSz = 0;
-				return curChunk > 0;
-			}
-			if (strHdr.length == sizeof(chunkHdr))
-				throw std::runtime_error("Chunk header is too long (50+ bytes)");
-		} while (!nonblock);
-
-		curChunk = 0;
-		return true;
-	}
-
-#endif
 	InputStream input;
 	unsigned int curChunk = 0;
 	std::string chunkLine;
@@ -204,9 +170,9 @@ protected:
 
 	void sendChunk(const json::BinaryView &data) {
 		unsigned char printbuff[50];
-		std::size_t sz = writeChunkSize(printbuff,data.length);
+		std::size_t sz = writeChunkSize(printbuff,data.length());
 		BinaryView chksz(printbuff, sz);
-		BinaryView enter = chksz.substr(chksz.length-2);
+		BinaryView enter = chksz.substr(chksz.length()-2);
 		stream(chksz);
 		stream(data);
 		stream(enter);

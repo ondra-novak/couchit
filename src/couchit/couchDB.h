@@ -55,7 +55,7 @@ public:
 	 * is updated by other way, the timestamp don't need to be updated. Timestamping
 	 * is supported by Changeset class
 	 */
-	static StrViewA fldTimestamp;
+	static std::string_view fldTimestamp;
 
 
 	typedef std::size_t Flags;
@@ -157,7 +157,7 @@ public:
 	 * by multiple threads without loosing return value. However you should avoid to mix getUID and getUIDValue
 	 * in MT environment or use additional synchronization
 	 */
-	Value genUIDValue(StrViewA prefix) const;
+	Value genUIDValue(std::string_view prefix) const;
 
 
 	///Generates new UID
@@ -166,7 +166,7 @@ public:
 
 	///Generates new UID
 	/** Function is alias to genUIDValue() - for compatibility reasons */
-	Value genUID(StrViewA prefix) const {return genUIDValue(prefix);}
+	Value genUID(std::string_view prefix) const {return genUIDValue(prefix);}
 
 
 	///Changes current database
@@ -281,7 +281,7 @@ public:
 	 * stored by put() or by ChangeSet. You can also use get() to access this document if you
 	 * use _ID instead its local name.
 	 */
-	Value getLocal(const StrViewA &localId, Flags flags = 0);
+	Value getLocal(const std::string_view &localId, Flags flags = 0);
 
 	///Retrieves document (by its id)
 	/**
@@ -293,7 +293,7 @@ public:
 	 * @note Retrieveing many documents using this method is slow. You should use Query
 	 * to retrieve multiple documents. However, some document properties are not available through the Query
 	 */
-	Value get(const StrViewA &docId, Flags flags = 0);
+	Value get(const std::string_view &docId, Flags flags = 0);
 
 
 	///Retrieves other revision of the document
@@ -303,7 +303,7 @@ public:
 	 * @param flags can be only flgDisableCache or zero. The default value is recommended.
 	 * @return json with document
 	 */
-	Value get(const StrViewA &docId, const StrViewA &revId, Flags flags = flgDisableCache);
+	Value get(const std::string_view &docId, const std::string_view &revId, Flags flags = flgDisableCache);
 
 	///Asynchronously retrieve document
 	/**
@@ -330,7 +330,7 @@ public:
 	 * @param prefix prefix append to UID - can be used to specify type of the document
 	 * @return Value which can be converted to Document object
 	 */
-	Document newDocument(const StrViewA &prefix);
+	Document newDocument(const std::string_view &prefix);
 
 	///Retrieves pointer to validator
 	/**
@@ -345,7 +345,7 @@ public:
 	 *
 	 * See: UpdateProc
 	 */
-	UpdateResult execUpdateProc(StrViewA updateHaauthInfondlerPath, StrViewA documentId, Value arguments);
+	UpdateResult execUpdateProc(std::string_view updateHaauthInfondlerPath, std::string_view documentId, Value arguments);
 
 
 	///Calls show handler.
@@ -377,7 +377,7 @@ public:
 	 *
 	 * @exception RequestError if function returns any other status then 200 or 201
 	 */
-	ShowResult execShowProc(const StrViewA &showHandlerPath, const StrViewA &documentId, const Value &arguments, Flags flags = 0);
+	ShowResult execShowProc(const std::string_view &showHandlerPath, const std::string_view &documentId, const Value &arguments, Flags flags = 0);
 
 
 	///Uploads attachment with specified document
@@ -389,7 +389,7 @@ public:
 	 * @note The returned object should not be stored for long way, because it blocks whole Couchdb instance
 	 * until the upload is finished
 	 */
-	Upload putAttachment(const Value &document, const StrViewA &attachmentName, const StrViewA &contentType);
+	Upload putAttachment(const Value &document, const std::string_view &attachmentName, const std::string_view &contentType);
 
 	///Uploads attachment with specified document
 	/**
@@ -400,7 +400,7 @@ public:
 	 * @param attachmentData content of attachment
 	 * @return Funtcion returns new revision of the document, if successful.
 	 */
-	String putAttachment(const Value &document, const StrViewA &attachmentName, const AttachmentDataRef &attachmentData);
+	String putAttachment(const Value &document, const std::string_view &attachmentName, const AttachmentDataRef &attachmentData);
 
 	///Downloads attachment
 	/**
@@ -408,7 +408,7 @@ public:
 	 * @param attachmentName name of attachment to retrieve
 	 * @param etag if not empty, function puts string as "if-none-match" header.
 	 */
-	Download getAttachment(const Document &document, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA());
+	Download getAttachment(const Document &document, const std::string_view &attachmentName,  const std::string_view &etag=std::string_view());
 
 	///Downloads latest attachments
 	/** Allows to easily download the latest attachment by given docId an dattachmentName
@@ -419,7 +419,7 @@ public:
 	 * @param rev (optional) revision, if empty, latest revision is used
 	 * @return download object
 	 */
-	Download getAttachment(const StrViewA &docId, const StrViewA &attachmentName,  const StrViewA &etag=StrViewA(), const StrViewA &rev = StrViewA());
+	Download getAttachment(const std::string_view &docId, const std::string_view &attachmentName,  const std::string_view &etag=std::string_view(), const std::string_view &rev = std::string_view());
 
 
 	///For function updateDesignDocument
@@ -579,7 +579,7 @@ public:
 	 * HTTP api. However, the key used as document status is perserved and you can optain it by
 	 * calling function getKey(). Also note that missing document is not stored as object.
 	 */
-	Value getRevisions(const StrViewA docId, Value revisions, Flags flags);
+	Value getRevisions(const std::string_view docId, Value revisions, Flags flags);
 
 
 	///Updates document and removes all conflicts
@@ -602,12 +602,12 @@ public:
 	///Item used in function mget
 	struct MGetItem {
 		///contains id of document
-		StrViewA id;
+		std::string_view id;
 		///contains revision, it can be empty for latest revision
-		StrViewA rev;
+		std::string_view rev;
 
 		template<typename T>
-		static StrViewA getId(const T &x) {
+		static std::string_view getId(const T &x) {
 			if constexpr(std::is_class<T>::value) {
 				return x.id;
 			} else {
@@ -615,11 +615,11 @@ public:
 			}
 		}
 		template<typename T>
-		static StrViewA getRev(const T &x) {
+		static std::string_view getRev(const T &x) {
 			if constexpr(std::is_class<T>::value) {
 				return x.rev;
 			} else {
-				return StrViewA();
+				return std::string_view();
 			}
 		}
 
@@ -639,12 +639,12 @@ public:
 
 		while (begin != end) {
 			const auto &x = *begin;
-			StrViewA rev = MGetItem::getRev(x);
-			StrViewA id = MGetItem::getId(x);
+			std::string_view rev = MGetItem::getRev(x);
+			std::string_view id = MGetItem::getId(x);
 			if (rev.empty()) {
-				req.push_back(Object("id", id));
+				req.push_back(Object{{"id", id}});
 			} else {
-				req.push_back(Object("id", id)("rev", rev));
+				req.push_back(Object{{"id", id},{"rev", rev}});
 			}
 			++begin;
 		}
@@ -684,7 +684,7 @@ protected:
 	Value authObj;
 
 
-	Value jsonPUTPOST(bool methodPost, const StrViewA &path, Value data, Value *headers, Flags flags);
+	Value jsonPUTPOST(bool methodPost, const std::string_view &path, Value data, Value *headers, Flags flags);
 
 
 	friend class ChangesFeed;
@@ -724,7 +724,7 @@ public:
 
 		Connection();
 
-		StrViewA getUrl() const {return UrlBuilder::operator json::StringView<char>();}
+		std::string_view getUrl() const {return UrlBuilder::operator std::string_view();}
 		String lastConnectError;
 
 	protected:
@@ -768,7 +768,7 @@ public:
 	 * allows to use CouchDB instance by multiple threads, where each
 	 * thread acquired connection
 	 */
-	PConnection getConnection(StrViewA resourcePath = StrViewA(), bool fresh = false);
+	PConnection getConnection(std::string_view resourcePath = std::string_view(), bool fresh = false);
 
 	///Allows to reuse connection to additional request
 	/** Function just sets the url of the connection to be in relation
@@ -781,7 +781,7 @@ public:
 	 * refers current database.
 	 *
 	 */
-	void setUrl(PConnection &conn, StrViewA resourcePath = StrViewA());
+	void setUrl(PConnection &conn, std::string_view resourcePath = std::string_view());
 
 
 	///Perform GET request from the database
@@ -930,11 +930,11 @@ protected:
 	Value jsonPUTPOST(PConnection &conn, bool methodPost, Value data, Value *headers, Flags flags);
 
 	void handleUnexpectedStatus(PConnection& conn);
-	Download downloadAttachmentCont(PConnection &conn, const StrViewA &etag);
+	Download downloadAttachmentCont(PConnection &conn, const std::string_view &etag);
 	static Value parseResponse(PConnection &conn);
 	static Value parseResponseBin(PConnection &conn);
 	void releaseConnection(Connection *b);
-	Value postRequest(PConnection &conn, const StrViewA &cacheKey, Value *headers, Flags flags);
+	Value postRequest(PConnection &conn, const std::string_view &cacheKey, Value *headers, Flags flags);
 	Value getToken();
 	void setupHttpConn(HttpClient &http, Flags flags);
 
@@ -951,7 +951,7 @@ private:
 	 * lost in time of return
 	 *
 	 */
-	StrViewA lkGenUID() const;
+	std::string_view lkGenUID() const;
 
 	///Generates new UID using preconfigured generator
 	/**See Config how to setup custom generator
@@ -961,7 +961,7 @@ private:
 	 * should immediatelly create a copy. Function itself is MT safe, however the reference can be
 	 * lost in time of return
 	 */
-	StrViewA lkGenUID(StrViewA prefix) const;
+	std::string_view lkGenUID(std::string_view prefix) const;
 
 	Result mget_impl(Array &req, Flags flags = 0);
 

@@ -16,22 +16,22 @@ namespace couchit {
 
 String AttachmentDataRef::toBase64() const {
 	std::ostringstream out;
-	json::base64->encodeBinaryValue(BinaryView(*this), [&](StrViewA c){
-		out.write(c.data, c.length);
+	json::base64->encodeBinaryValue(BinaryView(*this), [&](std::string_view c){
+		out.write(c.data(), c.length());
 	});
 	return out.str();
 }
 
 Value AttachmentDataRef::toInline() const {
-	return Object("content_type",contentType)
-			   ("data",toBase64());
+	return Object{{"content_type",contentType},
+		{"data",toBase64()}};
 }
 
 AttachmentData::AttachmentData(const Value &attachment)
 	:AttachmentDataRef(BinaryView(nullptr, 0), attachment["content_type"].getString())
 {
 
-	AttachmentData x = fromBase64(attachment["data"].getString(),StrViewA());
+	AttachmentData x = fromBase64(attachment["data"].getString(),std::string_view());
 	bindata = x.bindata;
 }
 
@@ -52,13 +52,13 @@ AttachmentData::AttachmentData(Download&& dwn):AttachmentDataRef(BinaryView(0,0)
 
 	bindata = String(Value(PValue::staticCast(data)));
 	BinaryView &x = (*this);
-	x = BinaryView(bindata.str());
+	x = map_str2bin(bindata.str());
 
 
 }
 
 
-AttachmentData AttachmentData::fromBase64(const StrViewA &base64, const StrViewA &contentType) {
+AttachmentData AttachmentData::fromBase64(const std::string_view &base64, const std::string_view &contentType) {
 	Value v = json::base64->decodeBinaryValue(base64);
 	return AttachmentData(String(v),contentType);
 }
@@ -76,7 +76,7 @@ Value Download::json() {
 	BinaryView data;
 	std::size_t pos = 0;
 	Value x =  Value::parse([&]{
-		if (pos >= data.length) {
+		if (pos >= data.length()) {
 			data = this->read();
 			pos = 0;
 			if (data.empty()) return -1;

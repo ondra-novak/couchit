@@ -247,9 +247,9 @@ protected:
 	 * until it is implemented)
 	 *
 	 */
-	virtual Value reduce(const RowsWithKeys &items) const;
+	virtual Value reduce(RowWithKey_Iterator begin, RowWithKey_Iterator end) const;
 
-	virtual Value rereduce(const ReducedRows &items) const;
+	virtual Value rereduce(ReducedRow_Iterator begin, ReducedRow_Iterator end) const;
 
 
 

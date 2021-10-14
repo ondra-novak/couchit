@@ -36,22 +36,22 @@ public:
 	 * @param id id of document
 	 * @param rev revision. It can be empty for new document
 	 */
-	Document(const StrViewA &id, const StrViewA &rev);
+	Document(const std::string_view &id, const std::string_view &rev);
 
 
 	///Retrieves current document ID. Empty if missing
-	StrViewA getID() const;
+	std::string_view getID() const;
 	///Retrieves current document revision ID. Empty if missing
-	StrViewA getRev() const;
+	std::string_view getRev() const;
 
 	///Retrieves current document ID. Function returns null if missing
 	Value getIDValue() const;
 	///Retrieves current document revision ID. Function returns null if missing
 	Value getRevValue() const;
 
-	void deleteAttachment(const StrViewA &name);
-	void inlineAttachment(const StrViewA &name, const AttachmentDataRef &data);
-	Value getAttachment(const StrViewA &name) const;
+	void deleteAttachment(const std::string_view &name);
+	void inlineAttachment(const std::string_view &name, const AttachmentDataRef &data);
+	Value getAttachment(const std::string_view &name) const;
 	void optimizeAttachments();
 
 
@@ -69,7 +69,7 @@ public:
 	///Sets document deleted
 	/** Document marked as deleted updated through Changeset object will be deleted. You
 	 * can specify which fields will be kept.
-	 * @param fieldsToKept list of fields that will be kept. It is important for filtered replication.
+	 * @param fieldsToKeep list of fields that will be kept. It is important for filtered replication.
 	 * It is not good idea to keep whole document, because it still wastes a space
 	 *
 	 * @param timestamp if set true, the deleted document will have timestamp of deletion. It
@@ -77,7 +77,7 @@ public:
 	 * old the deleted document is. You can also let the replication to skip very old deleted
 	 * documents so it is safe to purge them.
 	 */
-	void setDeleted(StringView<StrViewA> fieldsToKept = StringView<StrViewA>(), bool timestamp=true);
+	void setDeleted(const std::initializer_list<std::string_view> &fieldsToKeep={}, bool timestamp=true);
 
 	///Enables timestamping of changes
 	/** Document with timestamps carries field, which contains timestamp of last update. Once this is

@@ -14,9 +14,9 @@ namespace couchit {
 
 std::size_t QueryCache::maxlru = 4;
 
-static std::uintptr_t hashUrl(StrViewA url) {
+static std::uintptr_t hashUrl(std::string_view url) {
 	typedef FNV1a<sizeof(std::uintptr_t)> HashFn;
-	std::size_t sz = url.length,pos = 0;
+	std::size_t sz = url.length(),pos = 0;
 	return HashFn::hash([&]() -> int {
 		if (pos < sz) return (unsigned char)url[pos++];
 		else return -1;
@@ -25,7 +25,7 @@ static std::uintptr_t hashUrl(StrViewA url) {
 }
 
 
-QueryCache::CachedItem QueryCache::find(StrViewA url) {
+QueryCache::CachedItem QueryCache::find(std::string_view url) {
 
 	Sync _(lock);
 
@@ -50,7 +50,7 @@ void QueryCache::set(const CachedItem& item) {
 	}
 
 	itemMap.erase(item.url);
-	itemMap.insert(std::make_pair(StrViewA(item.url), item));
+	itemMap.insert(std::make_pair(std::string_view(item.url), item));
 
 }
 
@@ -73,7 +73,7 @@ QueryCache::~QueryCache() {
 
 
 
-std::size_t QueryCache::CalcHash::operator()(const StrViewA str) const
+std::size_t QueryCache::CalcHash::operator()(const std::string_view str) const
 {
 	return hashUrl(str);
 }

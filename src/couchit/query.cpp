@@ -7,11 +7,11 @@ namespace couchit {
 
 template class JoinedQuery<json::Value (*)(json::Value),json::Value (*)(json::Value),json::Value (*)(json::Value,json::Value) >;
 
-const StrViewA maxStrViewA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
+const std::string_view maxStrViewA("\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF\xEF\xBF\xBF");
 
 
 const Value Query::minKey(nullptr);
-const Value Query::maxKey(Object(maxStrViewA,maxStrViewA));
+const Value Query::maxKey(Object{{maxStrViewA,maxStrViewA}});
 const String Query::maxString(maxStrViewA);
 const String Query::minString("");
 
@@ -31,14 +31,14 @@ Query& Query::keys(const Value& v) {
 Query& Query::prefixKey(const Value& v) {
 	request.mode = qmKeyPrefix;
 	request.keys.clear();
-	request.keys.add(v);
+	request.keys.push_back(v);
 	return *this;
 }
 
 Query& Query::prefixString(const Value& v) {
 	request.mode = qmStringPrefix;
 	request.keys.clear();
-	request.keys.add(v);
+	request.keys.push_back(v);
 	return *this;
 }
 
@@ -52,7 +52,7 @@ Query& Query::limit(std::size_t limit) {
 	return *this;
 }
 
-Query& Query::arg(const StrViewA& argname, const Value& value) {
+Query& Query::arg(const std::string_view& argname, const Value& value) {
 	request.ppargs.set(argname,value);
 	return *this;
 }
@@ -96,31 +96,31 @@ Query& Query::reset() {
 Query& Query::key(const Value& v) {
 	request.mode = qmKeyList;
 	request.keys.clear();
-	request.keys.add(v);
+	request.keys.push_back(v);
 	return *this;
 }
 
 Query& Query::range(const Value& from, const Value& to, std::size_t flags) {
 	request.mode = qmKeyRange;
 	request.keys.clear();
-	request.keys.add(from);
-	request.keys.add(to);
+	request.keys.push_back(from);
+	request.keys.push_back(to);
 	request.docIdFromGetKey = (flags & docIdFromGetKey) != 0;
 	request.exclude_end = (flags & excludeEnd) != 0;
 	return *this;
 }
 
-Query& Query::range(const Value& from, const StrViewA& fromDoc,
-		const Value& to, const StrViewA& toDoc, bool exclusiveEnd) {
+Query& Query::range(const Value& from, const std::string_view& fromDoc,
+		const Value& to, const std::string_view& toDoc, bool exclusiveEnd) {
 	request.mode = qmKeyRange;
 	request.keys.clear();
 	if (fromDoc.empty() && toDoc.empty()) {
-		request.keys.add(from);
-		request.keys.add(to);
+		request.keys.push_back(from);
+		request.keys.push_back(to);
 		request.docIdFromGetKey = false;
 	} else {
-		request.keys.add(Value(fromDoc,from));
-		request.keys.add(Value(toDoc,to));
+		request.keys.push_back(Value(fromDoc,from));
+		request.keys.push_back(Value(toDoc,to));
 		request.docIdFromGetKey = true;
 	}
 	request.exclude_end = exclusiveEnd;

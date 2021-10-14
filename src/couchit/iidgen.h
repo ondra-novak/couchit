@@ -32,9 +32,9 @@ namespace couchit {
 		 *  @param prefix allows specify prefix - it is used to encode type of the object
 		 * @return const-string contains newly generated UID. It can be created inside of the buffer.
 		 */
-		virtual StrViewA operator()(Buffer &buffer, const StrViewA &prefix) = 0;
+		virtual std::string_view operator()(Buffer &buffer, const std::string_view &prefix) = 0;
 
-		virtual String operator()(const StrViewA &prefix) = 0;
+		virtual String operator()(const std::string_view &prefix) = 0;
 	};
 
 

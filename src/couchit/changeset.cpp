@@ -59,13 +59,13 @@ Changeset& Changeset::commit(CouchDB& db) {
 			adj.set(CouchDB::fldTimestamp,now);
 		}
 
-		docsToCommit.add(adj);
+		docsToCommit.push_back(adj);
 		Value conflicts = adj["_conflicts"];
 		if (conflicts.defined()) {
 			for (Value s: conflicts) {
-				docsToCommit.push_back(Object("_id",doc["_id"])
-									  ("_rev",doc["_rev"])
-									  ("_deleted",true));
+				docsToCommit.push_back(Object{{"_id",doc["_id"]},
+					{"_rev",doc["_rev"]},
+					{"_deleted",true}});
 
 			}
 		}
@@ -108,7 +108,7 @@ Changeset& Changeset::commit(CouchDB& db) {
 	}
 
 
-	if (!errors.empty()) throw UpdateException(errors);
+	if (!errors.empty()) throw UpdateException(std::move(errors));
 
 	return *this;
 
@@ -116,7 +116,7 @@ Changeset& Changeset::commit(CouchDB& db) {
 }
 
 
-void Changeset::revert(const StrViewA &docId) {
+void Changeset::revert(const std::string_view &docId) {
 	auto iter = scheduledDocs.rbegin();
 	while (iter != scheduledDocs.rend()) {
 		if ((*iter)["_id"].getString() == docId) {
@@ -149,7 +149,7 @@ Changeset& Changeset::erase(const String &docId, const String &revId) {
 	return *this;
 }
 
-String Changeset::getCommitRev(const StrViewA& docId) const {
+String Changeset::getCommitRev(const std::string_view& docId) const {
 
 	for (auto &&x: commitedDocs) {
 		if (x.id == docId) return x.newRev;
@@ -187,7 +187,7 @@ Changeset::CommitedDoc::operator Document() const {
 	return d;
 }
 
-Value Changeset::getUpdatedDoc(const StrViewA& docId) const {
+Value Changeset::getUpdatedDoc(const std::string_view& docId) const {
 	for (auto &&x: commitedDocs) {
 		if (x.id == docId)
 			return x.doc.replace("_rev", x.newRev);

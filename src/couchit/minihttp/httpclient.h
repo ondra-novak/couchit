@@ -19,7 +19,7 @@ class HttpClient {
 public:
 
 	HttpClient();
-	HttpClient(StrViewA userAgent);
+	HttpClient(std::string_view userAgent);
 
 	///Opens http connection
 	/**
@@ -35,7 +35,7 @@ public:
 	 * @return reference to this object that allows to make chains
 	 *
 	 */
-	HttpClient &open(StrViewA url, StrViewA method, bool keepAlive = true);
+	HttpClient &open(std::string_view url, std::string_view method, bool keepAlive = true);
 
 	///Sets i/o timeout
 	void setTimeout(std::uintptr_t timeoutInMS);
@@ -87,7 +87,7 @@ public:
 	 *
 	 * @note if the body has been started by beginBody(), the function ignores the argument
 	 */
-	int send(const StrViewA &body);
+	int send(const std::string_view &body);
 	///Sends the request with the prepared body
 	/**
 	 * @param body pointer to binary body
@@ -172,8 +172,8 @@ protected:
 
 
 	virtual void connectTarget();
-	virtual json::String crackURL(StrViewA urlWithoutProtocol);
-	virtual json::String custromPotocol(StrViewA url);
+	virtual json::String crackURL(std::string_view urlWithoutProtocol);
+	virtual json::String custromPotocol(std::string_view url);
 
 	void initConnection();
 

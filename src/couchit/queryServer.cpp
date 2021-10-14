@@ -14,12 +14,12 @@
 
 
 #include "changeset.h"
-#include "namedEnum.h"
+#include <imtjson/namedEnum.h>
 #include "num2str.h"
 
 namespace couchit {
 
-QueryServer::QueryServer(const StrViewA &name):qserverName(name) {}
+QueryServer::QueryServer(const std::string_view &name):qserverName(name) {}
 
 
 
@@ -47,26 +47,26 @@ enum DDocCommand {
 	ddcmdViews,
 };
 
-static NamedEnumDef<Command> commandsDef[] = {
-		{cmdReset, "reset"},
-		{cmdAddLib, "add_lib"},
-		{cmdAddFun, "add_fun"},
-		{cmdMapDoc, "map_doc"},
-		{cmdReduce, "reduce"},
-		{cmdReReduce, "rereduce"},
-		{cmdDDoc, "ddoc"}
-};
-static NamedEnum<Command> commands(commandsDef);
+using json::NamedEnum;
 
-static NamedEnumDef<DDocCommand> ddocCommandsDef[] = {
-		{ddcmdShows,"shows"},
-		{ddcmdLists,"lists"},
-		{ddcmdUpdates,"updates"},
-		{ddcmdFilters,"filters"},
-		{ddcmdViews,"views"}
-};
+static NamedEnum<Command> commands({
+	{cmdReset, "reset"},
+	{cmdAddLib, "add_lib"},
+	{cmdAddFun, "add_fun"},
+	{cmdMapDoc, "map_doc"},
+	{cmdReduce, "reduce"},
+	{cmdReReduce, "rereduce"},
+	{cmdDDoc, "ddoc"}
+});
 
-static NamedEnum<DDocCommand> ddocCommands(ddocCommandsDef);
+
+static NamedEnum<DDocCommand> ddocCommands({
+	{ddcmdShows,"shows"},
+	{ddcmdLists,"lists"},
+	{ddcmdUpdates,"updates"},
+	{ddcmdFilters,"filters"},
+	{ddcmdViews,"views"}
+});
 
 
 int couchit::QueryServer::runDispatch(std::istream &in, std::ostream &out) {
@@ -119,12 +119,12 @@ Value QueryServer::commandAddLib(const Value& ) {
 	throw QueryServerError("unsupported","You cannot add lib to native C++ query server");
 }
 
-static std::pair<StrViewA,std::size_t> extractVersion(const StrViewA &name) {
-	std::size_t versep = name.indexOf("@",0);
-	if (versep == ((std::size_t)-1))
+static std::pair<std::string_view,std::size_t> extractVersion(const std::string_view &name) {
+	std::size_t versep = name.find('@');
+	if (versep == name.npos)
 		throw QueryServerError("no_version_defined", "View definition must contain version marker @version");
-	StrViewA ver = name.substr(versep+1);
-	StrViewA rawname = name.substr(0,versep);
+	std::string_view ver = name.substr(versep+1);
+	std::string_view rawname = name.substr(0,versep);
 	Value verid = Value::fromString(ver);
 	if (verid.type() != json::number) {
 		throw QueryServerError("invald version", "Version must be number");
@@ -154,20 +154,20 @@ Value QueryServer::commandMapDoc(const Value& req) {
 		Emit(Array &container):container(container) {}
 
 		virtual void operator()() override {
-			container.add( {nullptr,nullptr} );
+			container.push_back( {nullptr,nullptr} );
 		}
 
 		virtual void operator()(const Value &key) override {
 			if (key.defined())
-				container.add( {key,nullptr} );
+				container.push_back( {key,nullptr} );
 		}
 
 		virtual void operator()(const Value &key, const Value &value) override {
 			if (key.defined()) {
 				if (value.defined())
-					container.add( {key,value} );
+					container.push_back( {key,value} );
 				else
-					container.add({key,nullptr});
+					container.push_back({key,nullptr});
 			}
 		}
 	};
@@ -203,7 +203,7 @@ Value QueryServer::commandReduce(const Value& req) {
 	}
 
 	for (auto &&val: fnlist) {
-		StrViewA name = extractVersion(val.getString()).first;
+		std::string_view name = extractVersion(val.getString()).first;
 		auto fniter = views.find(name);
 		if (fniter == views.end() ) {
 			throw QueryServerError("not_found",String({"Reduce Function '",name,"' not found"}));
@@ -212,7 +212,7 @@ Value QueryServer::commandReduce(const Value& req) {
 		if (view.reduceMode() != AbstractViewBase::rmFunction) {
 			throw QueryServerError("invalid_view",String({"Specified view '",name,"' doesn't define reduce function"}));
 		}
-		output.add(view.reduce(rowBuffer));
+		output.push_back(view.reduce(rowBuffer.data(),rowBuffer.data()+rowBuffer.size()));
 	}
 	rowBuffer.clear();
 	return {true,output};
@@ -228,7 +228,7 @@ Value QueryServer::commandReReduce(const Value& req) {
 	}
 
 	for (auto &&val: fnlist) {
-		StrViewA name = extractVersion(val.getString()).first;
+		std::string_view name = extractVersion(val.getString()).first;
 
 		auto fniter = views.find(name);
 		if (fniter == views.end() ) {
@@ -238,7 +238,7 @@ Value QueryServer::commandReReduce(const Value& req) {
 		if (view.reduceMode() != AbstractViewBase::rmFunction) {
 			throw QueryServerError("invalid_view",String({"Specified view '",name,"' doesn't define reduce function"}));
 		}
-		output.add(view.rereduce(valueBuffer));
+		output.push_back(view.rereduce(valueBuffer.data(), valueBuffer.data()+valueBuffer.size()));
 	}
 	rowBuffer.clear();
 	return {true,output};
@@ -301,11 +301,11 @@ Value createCompiledFnRef(T &fnRef) {
 
 
 template<typename T>
-Value QueryServer::compileDesignSection(T &reg, const Value &section, StrViewA sectionName) {
+Value QueryServer::compileDesignSection(T &reg, const Value &section, std::string_view sectionName) {
 
 	Object out;
 	for(auto value: section){
-		StrViewA itemname = value.getKey();
+		std::string_view itemname = value.getKey();
 		bool inmap = false;
 		if (value.type() == json::object) {
 			value = value["map"];
@@ -314,7 +314,7 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, StrViewA s
 		}
 		auto verId = extractVersion(value.getString());
 
-		auto fnptr = reg.find(StrKey(StrViewA(verId.first)));
+		auto fnptr = reg.find(StrKey(std::string_view(verId.first)));
 		if (fnptr == reg.end()) {
 			throw QueryServerError("not_found",String({"Function '",verId.first,"' in section '",sectionName,"' not found"}));
 		}
@@ -339,11 +339,11 @@ Value QueryServer::compileDesignSection(T &reg, const Value &section, StrViewA s
 
 
 Value QueryServer::commandDDoc(const Value& req, std::istream &input, std::ostream &output) {
-	StrViewA docid = req[1].getString();
+	std::string_view docid = req[1].getString();
 	if (docid == "new") {
 		//cache new document
 
-		StrViewA docid = req[2].getString();
+		std::string_view docid = req[2].getString();
 		Value ddoc = req[3];
 
 		Value compiledDDoc = compileDesignDocument(ddoc);
@@ -429,11 +429,11 @@ Value QueryServer::commandList(const Value& fn, const Value& args, std::istream 
 			return {"end",chunks};
 		}
 
-		virtual void send(StrViewA text) {
-			chunks.add(text);
+		virtual void send(std::string_view text) {
+			chunks.push_back(text);
 		}
 		virtual void send(Value jsonValue) {
-			chunks.add(jsonValue.stringify());
+			chunks.push_back(jsonValue.stringify());
 		}
 		virtual Value getViewHeader() const {
 			return viewHeader;
@@ -496,7 +496,7 @@ Value QueryServer::commandView(const Value& fn,
 	docs.forEach([&](const Value &v){
 		FakeEmit emit;
 		mapDocFn.map(Document(v), emit);
-		results.add(emit.result);
+		results.push_back(emit.result);
 		return true;
 	});
 
@@ -509,7 +509,7 @@ Value QueryServer::commandFilter(const Value& fn, const Value& args) {
 	Value docs= args[0];
 	Array results;
 	docs.forEach([&](const Value &doc) {
-		results.add(filterFn.run(Document(doc), args[1]));
+		results.push_back(filterFn.run(Document(doc), args[1]));
 		return true;
 	});
 
@@ -541,11 +541,11 @@ void QueryServer::setRestartRule(const RestartRule& rule) {
 }
 
 
-Value QueryServer::createDesignDocument(Object &container, StrViewA fnName, StrViewA &suffix) {
-	std::size_t pos = fnName.indexOf("/",0);
-	StrViewA docName;
+Value QueryServer::createDesignDocument(Object &container, std::string_view fnName, std::string_view &suffix) {
+	std::size_t pos = fnName.find('/');
+	std::string_view docName;
 
-	if (pos== ((std::size_t)-1)) {
+	if (pos== fnName.npos) {
 		docName = qserverName;
 		suffix = fnName;
 	} else {
@@ -553,13 +553,13 @@ Value QueryServer::createDesignDocument(Object &container, StrViewA fnName, StrV
 		suffix = fnName.substr(pos+1);
 	}
 
-	StrViewA strDocName(docName);
+	std::string_view strDocName(docName);
 	//pick named object
 	Value doc = container[strDocName];
 	if (!doc.defined()) {
 		Object obj;
-		obj("_id",Value(String("_design/")+String(strDocName)))
-			("language",qserverName);
+		obj.set("_id",Value(String("_design/")+String(strDocName)));
+		obj.set("language",qserverName);
 		doc = obj;
 		container.set(strDocName,doc);
 		///pick name object
@@ -570,8 +570,8 @@ Value QueryServer::createDesignDocument(Object &container, StrViewA fnName, StrV
 
 }
 
-Value createVersionedRef(StrViewA name, std::size_t ver) {
-	return String(21+name.length,[&](char *c) {
+Value createVersionedRef(std::string_view name, std::size_t ver) {
+	return String(21+name.length(),[&](char *c) {
 		char *s = c;
 		for (char x: name) *c++ = x;
 		*c++='@';
@@ -583,64 +583,64 @@ Value createVersionedRef(StrViewA name, std::size_t ver) {
 Value QueryServer::generateDesignDocuments() {
 	Object ddocs;
 	for (auto &&kv : views) {
-		StrViewA itemName;
+		std::string_view itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.first, itemName);
 		Object ddocobj(ddoc);
 		{
 			auto sub1 = ddocobj.object("views");
 			auto view = sub1.object(itemName);
-			view("map",createVersionedRef(kv.first,kv.second->version()));
+			view.set("map",createVersionedRef(kv.first,kv.second->version()));
 			switch (kv.second->reduceMode()) {
 			case AbstractViewBase::rmNone:break;
 			case AbstractViewBase::rmFunction:
-				view("reduce", createVersionedRef(kv.first, kv.second->version()));break;
+				view.set("reduce", createVersionedRef(kv.first, kv.second->version()));break;
 			case AbstractViewBase::rmSum:
-				view("reduce","_sum");break;
+				view.set("reduce","_sum");break;
 			case AbstractViewBase::rmCount:
-				view("reduce","_count");break;
+				view.set("reduce","_count");break;
 			case AbstractViewBase::rmStats:
-				view("reduce","_stats");break;
+				view.set("reduce","_stats");break;
 			}
 		}
-		ddocs.set(StrViewA(ddoc.getKey()), ddocobj);
+		ddocs.set(std::string_view(ddoc.getKey()), ddocobj);
 	}
 
 	for (auto &&kv : lists) {
-		StrViewA itemName;
+		std::string_view itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.first,itemName);
 		Object e(ddoc);
-		e.object("lists")(itemName, createVersionedRef(kv.first,kv.second->version()));
+		e.object("lists").set(itemName, createVersionedRef(kv.first,kv.second->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
 	for (auto &&kv : shows) {
-		StrViewA itemName;
+		std::string_view itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.first,itemName);
 		Object e(ddoc);
-		e.object("shows")(itemName, createVersionedRef(kv.first,kv.second->version()));
+		e.object("shows").set(itemName, createVersionedRef(kv.first,kv.second->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
 	for (auto &&kv : updates) {
-		StrViewA itemName;
+		std::string_view itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.first,itemName);
 		Object e(ddoc);
-		e.object("updates")(itemName, createVersionedRef(kv.first,kv.second->version()));
+		e.object("updates").set(itemName, createVersionedRef(kv.first,kv.second->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 
 	for (auto &&kv : filters) {
-		StrViewA itemName;
+		std::string_view itemName;
 		Value ddoc = createDesignDocument(ddocs,kv.first,itemName);
 		Object e(ddoc);
-		e.object("filters")(itemName, createVersionedRef(kv.first,kv.second->version()));
+		e.object("filters").set(itemName, createVersionedRef(kv.first,kv.second->version()));
 		ddocs.set(ddoc.getKey(),e);
 	}
 	Value ddocv = ddocs;
 	Array output;
 
 	for (Value doc: ddocv) {
-		output.add(doc);
+		output.push_back(doc);
 	}
 
 

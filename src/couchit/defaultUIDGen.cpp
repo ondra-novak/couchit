@@ -14,7 +14,7 @@ namespace couchit {
 
 
 
-	StrViewA DefaultUIDGen::operator ()(Buffer &buffer, const StrViewA &prefix) {
+	std::string_view DefaultUIDGen::operator ()(Buffer &buffer, const std::string_view &prefix) {
 
 		Sync _(lock);
 		time_t now;
@@ -34,7 +34,7 @@ static void writeBaseX(IIDGen::Buffer &buffer, std::size_t val, unsigned int dig
 	}
 }
 
-StrViewA DefaultUIDGen::generateUID(Buffer& buffer, StrViewA prefix,
+std::string_view DefaultUIDGen::generateUID(Buffer& buffer, std::string_view prefix,
 		std::size_t timeparam, std::size_t counterparam, Rand* randomGen,
 		std::size_t totalCount) {
 
@@ -44,12 +44,12 @@ StrViewA DefaultUIDGen::generateUID(Buffer& buffer, StrViewA prefix,
 	writeBaseX(buffer,  timeparam, 6, 62);
 	writeBaseX(buffer,  counterparam, 4, 62);
 	if (randomGen) {
-		while (buffer.size() < totalCount+prefix.length) {
+		while (buffer.size() < totalCount+prefix.length()) {
 			writeBaseX(buffer, (*randomGen)() % 62, 1, 62);
 		}
 	}
 
-	return StrViewA(buffer.data(), buffer.size());
+	return std::string_view(buffer.data(), buffer.size());
 }
 
 DefaultUIDGen &DefaultUIDGen::getInstance() {
@@ -57,7 +57,7 @@ DefaultUIDGen &DefaultUIDGen::getInstance() {
 	return instance;
 }
 
-String DefaultUIDGen::operator()(const StrViewA &prefix) {
+String DefaultUIDGen::operator()(const std::string_view &prefix) {
 	Buffer buff;
 	return operator()(buff, prefix);
 }

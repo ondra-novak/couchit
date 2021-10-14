@@ -281,9 +281,9 @@ Value JoinedQuery<BindFn,AgrFn,MergeFn>::QObj::executeQuery(const QueryRequest &
 	for (std::size_t i = 0; i < sz; i++) {
 		out.push_back(mergeFn(res[i],resultMap[i]));
 	}
-	return Object("rows",out)
-				("total_rows",res.getTotal())
-				("offset",res.getOffset());
+	return Object{{"rows",out},
+				{"total_rows",res.getTotal()},
+				{"offset",res.getOffset()}};
 }
 
 

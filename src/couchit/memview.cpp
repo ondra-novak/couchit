@@ -9,10 +9,10 @@ namespace couchit {
 
 MemView::RRow MemView::makeRow(String id, Value key, Value value, Value doc) {
 	Object out;
-	out.set("id",id)
-			("key",key)
-			("value",value)
-			("doc",doc);
+	out.set({{"id",id},
+		{"key",key},
+		{"value",value},
+		{"doc",doc}});
 	return RRow(out);
 
 }
@@ -143,7 +143,7 @@ Value MemView::runQuery(const QueryRequest& r) const {
 		if (k.type() == json::array) {
 			Array hlp(k);
 			String tail ({hlp[hlp.size()-1].toString(), Query::maxString});
-			hlp.erase(hlp.size()-1);
+			hlp.pop_back();
 			hlp.push_back(tail);
 			to = hlp;
 		}
@@ -167,7 +167,7 @@ Value MemView::runQuery(const QueryRequest& r) const {
 	if (viewDef.listFn != nullptr) out = viewDef.listFn(out);
 
 
-	return Object("rows",out)("total", keyToValueMap.size());
+	return Object{{"rows",out},{"total", keyToValueMap.size()}};
 
 }
 
@@ -203,7 +203,7 @@ Value MemView::runDocQuery(const QueryRequest& r) const {
 	if (viewDef.listFn != nullptr) out = viewDef.listFn(out);
 
 
-	return Object("rows",out)("total", keyToValueMap.size());
+	return Object{{"rows",out},{"total", keyToValueMap.size()}};
 
 }
 
@@ -377,7 +377,7 @@ void MemView::makeCheckpoint(PCheckpoint chkpStore) {
 		}
 	}
 
-	Value d  = Object("updateSeq",updateSeq)("rows",out)("serial",chkSrNr);
+	Value d  = Object{{"updateSeq",updateSeq},{"rows",out},{"serial",chkSrNr}};
 	chkpStore->store(d);
 
 }
@@ -574,7 +574,7 @@ void MemReduce::update() {
 				Value reduced = reduceFn(res, false);
 				KeyAndDocId kdi(v, String());
 				if (reduced.defined()) {
-					keyToValueMap[kdi] = RRow(Object("value",reduced)("key",v));
+					keyToValueMap[kdi] = RRow(Object{{"value",reduced},{"key",v}});
 				} else {
 					keyToValueMap.erase(kdi);
 				}
@@ -599,7 +599,7 @@ void MemReduce::update() {
 					Sync _(lock);
 					Value reduced = reduceFn(res, true);
 					if (reduced.defined()) {
-						keyToValueMap[kdi] = RRow(Object("value",reduced)("key",v));
+						keyToValueMap[kdi] = RRow(Object{{"value",reduced},{"key",v}});
 					}
 				}
 			}

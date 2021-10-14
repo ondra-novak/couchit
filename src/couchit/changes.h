@@ -165,7 +165,7 @@ public:
 	 * @return
 	 */
 	template<typename T>
-	ChangesFeed& arg(StrViewA key, T value);
+	ChangesFeed& arg(std::string_view key, T value);
 	///Limit output for max count result
 	/**
 	 * @param count count of results to be in output. Specify ((std::size_t)-1) to remove limit
@@ -334,7 +334,7 @@ protected:
 
 
 template<typename T>
-inline ChangesFeed& couchit::ChangesFeed::arg(StrViewA key, T value) {
+inline ChangesFeed& couchit::ChangesFeed::arg(std::string_view key, T value) {
 
 	filterArgs.set(key, value);
 	return *this;

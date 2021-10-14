@@ -70,7 +70,7 @@ public:
 	};
 
 	///search for url in the cache
-	CachedItem  find(StrViewA url);
+	CachedItem  find(std::string_view url);
 
 	///set content to cache (override if exists)
 	void set(const CachedItem &item);
@@ -91,10 +91,10 @@ protected:
 
 
 	struct CalcHash {
-		std::size_t operator()(const StrViewA str) const;
+		std::size_t operator()(const std::string_view str) const;
 	};
 
-	typedef std::unordered_map<StrViewA, CachedItem, CalcHash  > ItemMap;
+	typedef std::unordered_map<std::string_view, CachedItem, CalcHash  > ItemMap;
 
 	ItemMap itemMap;
 

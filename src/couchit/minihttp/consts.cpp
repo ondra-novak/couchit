@@ -5,8 +5,9 @@
  *      Author: ondra
  */
 
-#include <imtjson/stringview.h>
 
+
+#include <imtjson/binary.h>
 #include "abstractio.h"
 
 namespace couchit {

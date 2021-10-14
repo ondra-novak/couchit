@@ -80,9 +80,8 @@ public:
 	};
 
 
-	UpdateException(const StringView<ErrorItem> &errors);
 	UpdateException(std::vector<ErrorItem> &&errors);
-	StringView<ErrorItem> getErrors() const;
+	const std::vector<ErrorItem> &getErrors() const;
 	const ErrorItem &getError(std::size_t index) const;
 	std::size_t getErrorCnt() const;
 
