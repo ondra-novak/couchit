@@ -248,8 +248,9 @@ int HttpClient::readResponse() {
 			if (limit == 0) return eofConst;
 
 			auto x =  stream->read(nonblock);
-			auto rest = x.substr(limit);
-			x = x.substr(0,limit);
+			auto l = std::min(limit, x.length());
+			auto rest = x.substr(l);
+			x = x.substr(0,l);
 			limit = limit-x.length();
 			stream->putBack(rest);
 

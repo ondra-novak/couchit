@@ -89,7 +89,7 @@ inline std::string_view HeaderRead<Fn>::readLine() {
 	while (i != -1) {
 		linebuff.push_back((char)i);
 		std::string_view l(linebuff);
-		if (l.substr(l.length()-2,2) == "\r\n")
+		if (l.length()>1 && l.substr(l.length()-2,2) == "\r\n")
 			return l.substr(0,l.length()-2);
 		i = input();
 	}

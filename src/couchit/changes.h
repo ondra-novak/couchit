@@ -414,6 +414,9 @@ public:
 	///Runs as service thread
 	void runService();
 
+	template<typename Fn>
+	void runService(Fn &&initFn);
+
 	///stops the service thread
 	void stopService();
 
@@ -455,8 +458,18 @@ protected:
 
 
 };
+
+template<typename Fn>
+inline void couchit::ChangesDistributor::runService(Fn &&initFn) {
+	thr = std::unique_ptr<std::thread> (
+		new std::thread([=,initFn=std::move(initFn)]{
+			initFn();
+			run();
+	}));
+
 }
 
+}
 
 
 #endif /* LIBS_LIGHTCOUCH_SRC_LIGHTCOUCH_CHANGEDDOC_H_ */
