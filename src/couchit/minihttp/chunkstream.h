@@ -16,8 +16,8 @@ protected:
 
 	json::BinaryView readChunkPart(bool nonblock) {
 		auto x = input->read(nonblock);
-		auto rest = x.substr(curChunk);
-		x = x.substr(0,curChunk);
+		auto rest = x.substr(std::min<std::size_t>(curChunk,x.length()));
+		x = x.substr(0,x.length()-rest.length());
 		input->putBack(rest);
 		curChunk-=x.length();
 		return x;
