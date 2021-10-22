@@ -192,7 +192,7 @@ public:
 	std::vector<unsigned char> load() {
 		std::vector<unsigned char> buffer;
 		buffer.resize(length);
-		this->read(buffer.data(),length);
+		this->readAll(buffer.data(),length);
 		return buffer;
 	}
 
@@ -206,31 +206,23 @@ public:
 	std::size_t read(void *buffer, std::size_t size) {
 		BinaryView x = read();
 		if (size > x.length()) size = x.length();
+		putBack(x.substr(size));
 		std::copy(x.data(), x.data()+size, reinterpret_cast<unsigned char *>(buffer));
 		return size;
 	}
-	///Read from stream
-	/**
-	 * Deprecated.
-	 *
-	 * Function reads data from the stream.
-	 * @param processed count of bytes processed during previous read
-	 * @return buffer including unprocessed bytes
-	 *
-	 */
-	[[deprecated]]
-	BinaryView read(std::size_t processed) {
-		BinaryView x;
-		if (processed == 0) {
-			x = read();
-			putBack(x);
-			return x;
-		} else {
-			x = read();
-			x = x.substr(processed);
-			putBack(x);
+
+	std::size_t readAll(void *buffer, std::size_t size) {
+		unsigned char *p = reinterpret_cast<unsigned char *>(buffer);
+		std::size_t s = size;
+		while (s) {
+			BinaryView x = read();
+			std::size_t rd = std::min(x.size(), s);
+			if (rd < x.size()) putBack(x.substr(rd));
+			std::copy(x.data(), x.data()+rd, p);
+			p+=rd;
+			s -= rd;
 		}
-		return x;
+		return size-s;
 	}
 
 	Value json();
