@@ -97,6 +97,7 @@ Changeset& Changeset::commit(CouchDB& db) {
 				UpdateException::ErrorItem e;
 
 				e.errorDetails = item;
+				e.docid = id;
 				e.document = *siter;
 				e.errorType = String(err);
 				e.reason = String(item["reason"]);

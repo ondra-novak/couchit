@@ -74,6 +74,7 @@ public:
 	struct ErrorItem {
 		String errorType;
 		String reason;
+		String docid;
 		Value document;
 		Value errorDetails;
 		bool isConflict() const;

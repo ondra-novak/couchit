@@ -505,6 +505,7 @@ bool CouchDB::putDesignDocument(const Value &content, DesignDocUpdateRule update
 		if (updateRule == ddurCheck) {
 			UpdateException::ErrorItem errItem;
 			errItem.document = content;
+			errItem.docid = newddoc.getID();
 			errItem.errorDetails = Object();
 			errItem.errorType = "conflict";
 			errItem.reason = "ddurCheck in effect, cannot update design document";
@@ -1737,7 +1738,7 @@ Value CouchDB::put(const Value &doc, const WriteOptions &opts, bool no_exception
 				if (no_exception) return nullptr;
 
 				else throw UpdateException(std::vector<UpdateException::ErrorItem>(1,
-					{"conflict","conflict",wdoc,nullptr}
+					{"conflict","conflict",wdoc["_id"].toString(),wdoc,nullptr}
 				));
 			} else {
 				throw;
